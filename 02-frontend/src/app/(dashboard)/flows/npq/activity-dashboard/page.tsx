@@ -66,7 +66,7 @@ export default function ActivityDashboardPage() {
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">新产品导入活动管理看板</h1>
-            <p className="mt-1 text-sm text-muted-foreground">查看母任务闭环、阶段进度、风险和角色按时完成率。</p>
+            <p className="mt-1 text-sm text-muted-foreground">查看项目活动闭环、阶段进度、风险和角色按时完成率。</p>
           </div>
           <Button variant="outline" onClick={() => loadDashboard(projectId)}>
             <RefreshCw className="mr-1 h-4 w-4" /> 刷新
@@ -89,10 +89,10 @@ export default function ActivityDashboardPage() {
         ) : (
           <>
             <div className="mb-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <MetricCard icon={<BarChart3 className="h-4 w-4" />} label="母任务完成率" value={`${data.parentCompletionRate}%`} sub={`${data.closedParents}/${data.totalParents}`} />
-              <MetricCard icon={<Flag className="h-4 w-4" />} label="待NPQ关闭" value={String(data.pendingClose)} sub="母任务" />
-              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="逾期母任务" value={String(data.overdueParents)} sub="需跟进" tone="amber" />
-              <MetricCard icon={<ShieldAlert className="h-4 w-4" />} label="阻塞母任务" value={String(data.blockedParents)} sub="需协调" tone="red" />
+              <MetricCard icon={<BarChart3 className="h-4 w-4" />} label="项目活动完成率" value={`${data.parentCompletionRate}%`} sub={`${data.closedParents}/${data.totalParents}`} />
+              <MetricCard icon={<Flag className="h-4 w-4" />} label="待NPQ关闭" value={String(data.pendingClose)} sub="项目活动" />
+              <MetricCard icon={<Clock3 className="h-4 w-4" />} label="逾期项目活动" value={String(data.overdueParents)} sub="需跟进" tone="amber" />
+              <MetricCard icon={<ShieldAlert className="h-4 w-4" />} label="阻塞项目活动" value={String(data.blockedParents)} sub="需协调" tone="red" />
               <MetricCard icon={<Layers3 className="h-4 w-4" />} label="阶段数量" value={String(data.stageCompletion.length)} sub="TR 分组" />
               <MetricCard icon={<BarChart3 className="h-4 w-4" />} label="角色分组" value={String(data.roleOnTime.length)} sub="按时完成率" />
             </div>

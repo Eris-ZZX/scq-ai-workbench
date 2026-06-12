@@ -15,7 +15,7 @@ export type TaskStatus = 'todo' | 'in_progress' | 'done';
 /** 任务优先级 */
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
-/** 新产品导入活动母任务状态 */
+/** 新产品导入项目活动状态 */
 export type ActivityParentStatus = 'not_started' | 'in_progress' | 'pending_npq_close' | 'closed';
 
 /** 新产品导入活动子任务状态 */

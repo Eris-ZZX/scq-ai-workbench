@@ -23,7 +23,7 @@ const typeLabel: Record<string, string> = {
   overdue: '逾期',
   missing_attachment: '待补交付件',
   responsibility: '责任项',
-  pending_parent_close: '待关闭母任务',
+  pending_parent_close: '待关闭项目活动',
 };
 
 export default function MyTodosPage() {

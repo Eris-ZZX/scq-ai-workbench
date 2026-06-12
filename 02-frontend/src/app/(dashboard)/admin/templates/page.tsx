@@ -219,7 +219,7 @@ export default function AdminTemplatesPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-[300px_minmax(0,1fr)_300px] gap-4">
+        <div className="grid grid-cols-[300px_minmax(0,1fr)] gap-4">
           <aside className="rounded-lg border border-border bg-white">
             <div className="border-b border-border px-4 py-3 text-sm font-medium">模板</div>
             <div className="max-h-[calc(100vh-170px)] overflow-auto p-2">
@@ -240,7 +240,7 @@ export default function AdminTemplatesPage() {
                   </div>
                   <div className="mt-2 flex gap-3 text-xs text-muted-foreground">
                     <span>{template.stats.stageCount} 阶段</span>
-                    <span>{template.stats.parentCount} 母任务</span>
+                    <span>{template.stats.parentCount} 项目活动</span>
                     <span>{template.stats.childCount} 子任务</span>
                   </div>
                 </button>
@@ -248,10 +248,53 @@ export default function AdminTemplatesPage() {
             </div>
           </aside>
 
+          <div className="min-w-0 space-y-4">
+          <section className="rounded-lg border border-border bg-white">
+            <div className="border-b border-border px-4 py-3 text-sm font-medium">模板信息</div>
+            <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-medium text-muted-foreground">
+                  名称
+                  <input
+                    className="mt-1 h-9 w-full rounded border border-border px-2 text-sm text-foreground"
+                    defaultValue={selectedSet?.name}
+                    onBlur={(event) => selectedSet && event.target.value !== selectedSet.name && patch('updateSet', { id: selectedSet.id, name: event.target.value })}
+                  />
+                </label>
+                <label className="block text-xs font-medium text-muted-foreground sm:col-span-2">
+                  描述
+                  <textarea
+                    className="mt-1 min-h-20 w-full rounded border border-border px-2 py-2 text-sm text-foreground"
+                    defaultValue={selectedSet?.description ?? ''}
+                    onBlur={(event) => selectedSet && event.target.value !== (selectedSet.description ?? '') && patch('updateSet', { id: selectedSet.id, description: event.target.value })}
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded border border-border p-3">
+                  <div className="text-xs text-muted-foreground">版本</div>
+                  <div className="mt-1 font-semibold">{selectedSet?.versions.length ?? 0}</div>
+                </div>
+                <div className="rounded border border-border p-3">
+                  <div className="text-xs text-muted-foreground">状态</div>
+                  <div className="mt-1 font-semibold">{selectedSet?.isActive ? '启用' : '停用'}</div>
+                </div>
+                <div className="rounded border border-border p-3">
+                  <div className="text-xs text-muted-foreground">项目活动</div>
+                  <div className="mt-1 font-semibold">{selectedSet?.stats.parentCount ?? 0}</div>
+                </div>
+                <div className="rounded border border-border p-3">
+                  <div className="text-xs text-muted-foreground">子任务</div>
+                  <div className="mt-1 font-semibold">{selectedSet?.stats.childCount ?? 0}</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <main className="min-w-0 rounded-lg border border-border bg-white">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold">{selectedSet?.name ?? '暂无模板'}</div>
+                <div className="truncate text-sm font-semibold">活动模板</div>
                 <div className="mt-1 text-xs text-muted-foreground">{selectedSet?.code}</div>
               </div>
               <div className="flex gap-2">
@@ -335,7 +378,7 @@ export default function AdminTemplatesPage() {
                                 className={iconButtonClass()}
                                 onClick={() => patch('updateParent', { id: parent.id, name: parent.name, plannedOffsetDays: parent.plannedOffsetDays ?? 30 })}
                                 disabled={saving}
-                                title="保存母任务"
+                                title="保存项目活动"
                               >
                                 <Save className="h-4 w-4" />
                               </button>
@@ -442,12 +485,12 @@ export default function AdminTemplatesPage() {
                         <div className="flex gap-2 px-4 py-3">
                           <input
                             className="h-9 flex-1 rounded border border-border px-2 text-sm"
-                            placeholder="新增母任务"
+                            placeholder="新增项目活动"
                             value={parentForm[stage.id] ?? ''}
                             onChange={(event) => setParentForm((prev) => ({ ...prev, [stage.id]: event.target.value }))}
                           />
-                          <button className={iconButtonClass()} onClick={() => addParent(stage.id)} disabled={saving} title="新增母任务">
-                            <Plus className="h-4 w-4" />母任务
+                          <button className={iconButtonClass()} onClick={() => addParent(stage.id)} disabled={saving} title="新增项目活动">
+                            <Plus className="h-4 w-4" />项目活动
                           </button>
                         </div>
                       )}
@@ -457,46 +500,7 @@ export default function AdminTemplatesPage() {
               </div>
             </div>
           </main>
-
-          <aside className="rounded-lg border border-border bg-white">
-            <div className="border-b border-border px-4 py-3 text-sm font-medium">属性</div>
-            <div className="space-y-4 p-4">
-              <label className="block text-xs font-medium text-muted-foreground">
-                名称
-                <input
-                  className="mt-1 h-9 w-full rounded border border-border px-2 text-sm text-foreground"
-                  defaultValue={selectedSet?.name}
-                  onBlur={(event) => selectedSet && event.target.value !== selectedSet.name && patch('updateSet', { id: selectedSet.id, name: event.target.value })}
-                />
-              </label>
-              <label className="block text-xs font-medium text-muted-foreground">
-                描述
-                <textarea
-                  className="mt-1 min-h-24 w-full rounded border border-border px-2 py-2 text-sm text-foreground"
-                  defaultValue={selectedSet?.description ?? ''}
-                  onBlur={(event) => selectedSet && event.target.value !== (selectedSet.description ?? '') && patch('updateSet', { id: selectedSet.id, description: event.target.value })}
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded border border-border p-3">
-                  <div className="text-xs text-muted-foreground">版本</div>
-                  <div className="mt-1 font-semibold">{selectedSet?.versions.length ?? 0}</div>
-                </div>
-                <div className="rounded border border-border p-3">
-                  <div className="text-xs text-muted-foreground">状态</div>
-                  <div className="mt-1 font-semibold">{selectedSet?.isActive ? '启用' : '停用'}</div>
-                </div>
-                <div className="rounded border border-border p-3">
-                  <div className="text-xs text-muted-foreground">母任务</div>
-                  <div className="mt-1 font-semibold">{selectedSet?.stats.parentCount ?? 0}</div>
-                </div>
-                <div className="rounded border border-border p-3">
-                  <div className="text-xs text-muted-foreground">子任务</div>
-                  <div className="mt-1 font-semibold">{selectedSet?.stats.childCount ?? 0}</div>
-                </div>
-              </div>
-            </div>
-          </aside>
+          </div>
         </div>
       </div>
     </div>

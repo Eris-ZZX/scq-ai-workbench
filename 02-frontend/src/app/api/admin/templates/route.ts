@@ -255,7 +255,7 @@ export async function POST(request: Request) {
     if (action === 'addParent') {
       const stageId = cleanText(body.stageId);
       const name = cleanText(body.name);
-      if (!stageId || !name) return NextResponse.json({ error: '缺少阶段或母任务名称' }, { status: 400 });
+      if (!stageId || !name) return NextResponse.json({ error: '缺少阶段或项目活动名称' }, { status: 400 });
       const count = await prisma.activityTemplateParent.count({ where: { stageId } });
       const parent = await prisma.activityTemplateParent.create({
         data: { stageId, name, sortOrder: count + 1, plannedOffsetDays: Number(body.plannedOffsetDays) || null },
@@ -267,7 +267,7 @@ export async function POST(request: Request) {
       const parentId = cleanText(body.parentId);
       const title = cleanText(body.title);
       const roleGroup = cleanText(body.roleGroup);
-      if (!parentId || !title || !roleGroup) return NextResponse.json({ error: '缺少母任务、子任务或岗位' }, { status: 400 });
+      if (!parentId || !title || !roleGroup) return NextResponse.json({ error: '缺少项目活动、子任务或岗位' }, { status: 400 });
       const role = await prisma.positionRole.findUnique({ where: { code: roleGroup } });
       const count = await prisma.activityTemplateChild.count({ where: { parentId } });
       const child = await prisma.activityTemplateChild.create({

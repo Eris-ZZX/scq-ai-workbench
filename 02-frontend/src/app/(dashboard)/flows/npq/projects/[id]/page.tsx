@@ -333,7 +333,7 @@ export default function ProjectDetailPage() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-semibold">TR 阶段门</h2>
-              <p className="mt-1 text-xs text-muted-foreground">母任务已关闭且无阻塞时可直接通过；存在未关闭或阻塞项时需填写条件放行说明。</p>
+              <p className="mt-1 text-xs text-muted-foreground">项目活动已关闭且无阻塞时可直接通过；存在未关闭或阻塞项时需填写条件放行说明。</p>
             </div>
             <span className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">{project.stageGateStatus}</span>
           </div>
@@ -353,7 +353,7 @@ export default function ProjectDetailPage() {
                       </span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      母任务 {gate.stats.total} / 未关闭 {gate.stats.open} / 阻塞 {gate.stats.blocked}
+                      项目活动 {gate.stats.total} / 未关闭 {gate.stats.open} / 阻塞 {gate.stats.blocked}
                     </span>
                   </div>
                   <textarea

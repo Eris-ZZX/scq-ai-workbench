@@ -72,7 +72,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const needsCondition = openParents.length > 0 || blockedParents.length > 0;
   const note = body.conditionReleaseNote?.trim() || null;
   if (needsCondition && !note) {
-    return NextResponse.json({ error: '存在未关闭或阻塞母任务时，需要填写条件放行说明' }, { status: 422 });
+    return NextResponse.json({ error: '存在未关闭或阻塞项目活动时，需要填写条件放行说明' }, { status: 422 });
   }
 
   const nextStage = nextStageOf(stage);

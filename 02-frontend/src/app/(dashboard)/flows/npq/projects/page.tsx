@@ -166,7 +166,7 @@ export default function ProjectListPage() {
                       <span className="font-medium">{template.name}</span>
                       {form.activityTemplateSetId === template.id && <Check className="h-4 w-4 text-ws-blue" />}
                     </div>
-                    <div className="mt-2 text-xs text-muted-foreground">v{template.version} / {template.stats.stageCount} 阶段 / {template.stats.parentCount} 母任务 / {template.stats.childCount} 子任务</div>
+                    <div className="mt-2 text-xs text-muted-foreground">v{template.version} / {template.stats.stageCount} 阶段 / {template.stats.parentCount} 项目活动 / {template.stats.childCount} 子任务</div>
                   </button>
                 ))}
               </div>
@@ -193,7 +193,7 @@ export default function ProjectListPage() {
                 <Summary label="项目名称" value={form.name || '-'} />
                 <Summary label="活动模板" value={selectedTemplate ? `${selectedTemplate.name} v${selectedTemplate.version}` : '-'} />
                 <Summary label="任命岗位" value={`${Object.values(form.assignments).filter(Boolean).length}/${positions.length}`} />
-                <Summary label="将生成" value={selectedTemplate ? `${selectedTemplate.stats.parentCount} 母任务` : '-'} />
+                <Summary label="将生成" value={selectedTemplate ? `${selectedTemplate.stats.parentCount} 项目活动` : '-'} />
                 <Summary label="子任务" value={selectedTemplate ? `${selectedTemplate.stats.childCount} 子任务` : '-'} />
                 <Summary label="规则" value="绑定最新发布版并生成项目快照" />
               </div>

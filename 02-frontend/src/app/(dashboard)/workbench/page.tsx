@@ -440,7 +440,7 @@ function WorkbenchDrawer({
     setSaving(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? '母任务关闭失败');
+      setError(data.error ?? '项目活动关闭失败');
       return;
     }
     await onAction();
@@ -484,9 +484,9 @@ function WorkbenchDrawer({
       {todo.type === 'pending_parent_close' ? (
         <div className="space-y-4">
           <div className="rounded-md border bg-green-50 p-3 text-sm text-green-800">
-            母任务下的涉及子任务已完成，等待 NPQ 最终关闭。
+            项目活动下的涉及子任务已完成，等待 NPQ 最终关闭。
           </div>
-          {canManage && <Button disabled={saving} onClick={closeParent}><ShieldCheck className="mr-1 h-4 w-4" /> 关闭母任务</Button>}
+          {canManage && <Button disabled={saving} onClick={closeParent}><ShieldCheck className="mr-1 h-4 w-4" /> 关闭项目活动</Button>}
         </div>
       ) : todo.type === 'stage_gate' ? (
         <div className="space-y-4">
