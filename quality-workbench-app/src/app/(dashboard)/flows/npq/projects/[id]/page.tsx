@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Plus, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type Position = { id: string; code: string; name: string; roleGroup: string; sortOrder: number };
 type ProjectMember = {
   role: string;
   userId: string;
@@ -20,13 +19,7 @@ type ProjectMember = {
     };
   };
 };
-type PositionAssignment = {
-  id: string;
-  positionRoleId: string;
-  userId: string;
-  positionRole: { id: string; code: string; name: string; roleGroup: string };
-  user: { id: string; username: string; displayName: string };
-};
+
 type StageGate = {
   id: string;
   stage: string;
@@ -35,6 +28,7 @@ type StageGate = {
   conditionReleaseNote: string | null;
   stats: { total: number; open: number; blocked: number };
 };
+
 type WorkbenchTodo = {
   id: string;
   type: string;
@@ -44,11 +38,13 @@ type WorkbenchTodo = {
   ownerRole: string;
   dueAt: string | null;
 };
+
 type WorkbenchProjectGroup = {
   projectId: string;
   todoCount: number;
   todos: WorkbenchTodo[];
 };
+
 type Project = {
   id: string;
   name: string;
@@ -60,11 +56,10 @@ type Project = {
   stages: { id: string; name: string; status: string; order: number; blockedReason?: string | null; completedAt?: string | null }[];
   tasks: { id: string; title: string; status: string; stageId: string | null }[];
   members: ProjectMember[];
-  positionAssignments: PositionAssignment[];
   _count: { tasks: number };
 };
 
-const STAGE_STATUS_MAP: Record<string, { label: string; color: string }> = {
+const stageStatusMap: Record<string, { label: string; color: string }> = {
   pending: { label: '待开始', color: 'bg-gray-200 text-gray-600' },
   in_progress: { label: '进行中', color: 'bg-blue-100 text-blue-700' },
   completed: { label: '已完成', color: 'bg-green-100 text-green-700' },
@@ -75,39 +70,37 @@ export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
-  const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingStage, setEditingStage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [canAssignPositions, setCanAssignPositions] = useState(false);
   const [canPassStageGate, setCanPassStageGate] = useState(false);
   const [stageGates, setStageGates] = useState<StageGate[]>([]);
   const [gateNotes, setGateNotes] = useState<Record<string, string>>({});
   const [projectTodos, setProjectTodos] = useState<WorkbenchTodo[]>([]);
 
-  async function loadProject() {
+  const loadProject = useCallback(async () => {
     try {
-      const [projectRes, positionsRes] = await Promise.all([
-        fetch(`/api/npq/projects/${id}`),
-        fetch('/api/npq/positions'),
-      ]);
-      if (projectRes.ok) setProject(await projectRes.json());
-      else router.push('/flows/npq/projects');
-      if (positionsRes.ok) setPositions(await positionsRes.json());
-      const [permissionRes, gateRes] = await Promise.all([
-        fetch(`/api/npq/permissions?projectId=${id}&actions=project.assign_positions,stage_gate.pass`),
+      const projectRes = await fetch(`/api/npq/projects/${id}`);
+      if (!projectRes.ok) {
+        router.push('/workbench');
+        return;
+      }
+      setProject(await projectRes.json());
+
+      const [permissionRes, gateRes, workbenchRes] = await Promise.all([
+        fetch(`/api/npq/permissions?projectId=${id}&actions=stage_gate.pass`),
         fetch(`/api/npq/projects/${id}/stage-gates`),
+        fetch(`/api/npq/workbench?projectId=${id}`),
       ]);
+
       if (permissionRes.ok) {
         const permissions = await permissionRes.json();
-        setCanAssignPositions(Boolean(permissions['project.assign_positions']));
         setCanPassStageGate(Boolean(permissions['stage_gate.pass']));
       }
       if (gateRes.ok) {
         const data = await gateRes.json();
         setStageGates(data.gates ?? []);
       }
-      const workbenchRes = await fetch(`/api/npq/workbench?projectId=${id}`);
       if (workbenchRes.ok) {
         const data = await workbenchRes.json();
         const group = (data.projectTodos as WorkbenchProjectGroup[] | undefined)?.find((item) => item.projectId === id);
@@ -117,10 +110,14 @@ export default function ProjectDetailPage() {
       setErrorMsg('加载失败');
     }
     setLoading(false);
-  }
+  }, [id, router]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { loadProject(); }, [id]);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadProject();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadProject]);
 
   async function updateStageStatus(stageId: string, status: string) {
     const res = await fetch(`/api/npq/projects/${id}/stages/${stageId}`, {
@@ -128,58 +125,37 @@ export default function ProjectDetailPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
-    if (!res.ok) { setErrorMsg('状态更新失败'); return; }
-    loadProject();
+    if (!res.ok) {
+      setErrorMsg('状态更新失败');
+      return;
+    }
+    await loadProject();
     setEditingStage(null);
   }
 
   async function addStage() {
-    const name = prompt('新阶段名称：');
+    const name = prompt('新阶段名称:');
     if (!name) return;
     const res = await fetch(`/api/npq/projects/${id}/stages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
-    if (!res.ok) { setErrorMsg('添加阶段失败'); return; }
-    loadProject();
+    if (!res.ok) {
+      setErrorMsg('添加阶段失败');
+      return;
+    }
+    await loadProject();
   }
 
   async function deleteStage(stageId: string) {
     if (!confirm('删除此阶段？关联的任务将保留。')) return;
     const res = await fetch(`/api/npq/projects/${id}/stages/${stageId}`, { method: 'DELETE' });
-    if (!res.ok) { setErrorMsg('删除阶段失败'); return; }
-    loadProject();
-  }
-
-  async function addMember() {
-    const userId = prompt('输入要添加的用户 ID：');
-    if (!userId) return;
-    const res = await fetch(`/api/npq/projects/${id}/members`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId }),
-    });
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(data.error ?? '添加失败');
+      setErrorMsg('删除阶段失败');
       return;
     }
-    loadProject();
-  }
-
-  async function assignPosition(positionRoleId: string, userId: string) {
-    const res = await fetch(`/api/npq/projects/${id}/members`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ positionRoleId, userId: userId || null }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setErrorMsg(data.error ?? '岗位任命失败');
-      return;
-    }
-    loadProject();
+    await loadProject();
   }
 
   async function updateStatus(newStatus: string) {
@@ -188,8 +164,11 @@ export default function ProjectDetailPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     });
-    if (!res.ok) { setErrorMsg('状态更新失败'); return; }
-    loadProject();
+    if (!res.ok) {
+      setErrorMsg('状态更新失败');
+      return;
+    }
+    await loadProject();
   }
 
   async function passStageGate(stage: string) {
@@ -204,7 +183,7 @@ export default function ProjectDetailPage() {
       return;
     }
     setGateNotes((current) => ({ ...current, [stage]: '' }));
-    loadProject();
+    await loadProject();
   }
 
   if (loading) return <div className="p-8 text-muted-foreground">加载中...</div>;
@@ -212,16 +191,15 @@ export default function ProjectDetailPage() {
 
   const completedStages = project.stages.filter((stage) => stage.status === 'completed').length;
   const progressPct = project.stages.length > 0 ? Math.round((completedStages / project.stages.length) * 100) : 0;
-  const assignmentsByPosition = new Map(project.positionAssignments.map((item) => [item.positionRoleId, item]));
 
   return (
     <div className="min-h-screen bg-ws-content-bg">
       <div className="mx-auto max-w-6xl px-6 py-8">
         <button
-          onClick={() => router.push('/flows/npq/projects')}
+          onClick={() => router.push('/workbench')}
           className="mb-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> 返回项目列表
+          <ArrowLeft className="h-4 w-4" /> 返回工作台
         </button>
 
         {errorMsg && (
@@ -245,17 +223,14 @@ export default function ProjectDetailPage() {
               <span className="text-xs text-muted-foreground">{project.stages.length} 阶段 / {project._count.tasks} 任务 / {project.members.length} 成员</span>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={addMember}><Users className="mr-1 h-3 w-3" />添加成员</Button>
-            <Button size="sm" onClick={addStage}><Plus className="mr-1 h-3 w-3" />添加阶段</Button>
-          </div>
+          <Button size="sm" onClick={addStage}><Plus className="mr-1 h-3 w-3" />添加阶段</Button>
         </div>
 
-        <div className="mb-6 rounded-lg border border-border bg-white p-4">
+        <section className="mb-6 rounded-lg border border-border bg-white p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-semibold">当前项目待处理事项</h2>
-              <p className="mt-1 text-xs text-muted-foreground">优先处理逾期、阻塞、退回和待关闭活动；点击后回到工作台抽屉处理。</p>
+              <p className="mt-1 text-xs text-muted-foreground">优先处理逾期、阻塞、退回和待关闭活动，点击后回到工作台处理。</p>
             </div>
             <Link href="/workbench" className="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary">
               打开工作台
@@ -284,52 +259,19 @@ export default function ProjectDetailPage() {
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        <div className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="rounded-lg border border-border bg-white p-4">
-            <div className="mb-2 flex justify-between text-sm">
-              <span className="font-medium">阶段进度</span>
-              <span className="text-muted-foreground">{completedStages}/{project.stages.length} / {progressPct}%</span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
-            </div>
+        <section className="mb-6 rounded-lg border border-border bg-white p-4">
+          <div className="mb-2 flex justify-between text-sm">
+            <span className="font-medium">阶段进度</span>
+            <span className="text-muted-foreground">{completedStages}/{project.stages.length} / {progressPct}%</span>
           </div>
-
-          <div className="rounded-lg border border-border bg-white p-4">
-            <div className="mb-3 text-sm font-medium">岗位任命</div>
-            <div className="space-y-2">
-              {positions.map((position) => {
-                const assigned = assignmentsByPosition.get(position.id);
-                const eligibleMembers = project.members.filter((member) => member.user.positionBinding?.positionRoleId === position.id);
-                const memberOptions = eligibleMembers.length > 0 ? eligibleMembers : project.members;
-                return (
-                  <div key={position.id} className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 text-sm">
-                    <div className="font-mono text-xs text-muted-foreground">{position.code}</div>
-                    <select
-                      className="h-8 rounded border border-border px-2 text-xs"
-                      value={assigned?.userId ?? ''}
-                      onChange={(event) => assignPosition(position.id, event.target.value)}
-                      disabled={!canAssignPositions}
-                      title={canAssignPositions ? '任命项目岗位' : '当前岗位无任命权限'}
-                    >
-                      <option value="">未任命</option>
-                      {memberOptions.map((member) => (
-                        <option key={member.user.id} value={member.user.id}>
-                          {member.user.displayName}
-                          {member.user.positionBinding?.positionRole.code ? ` (${member.user.positionBinding.positionRole.code})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
           </div>
-        </div>
+        </section>
 
-        <div className="mb-6 rounded-lg border border-border bg-white p-4">
+        <section className="mb-6 rounded-lg border border-border bg-white p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-semibold">TR 阶段门</h2>
@@ -377,15 +319,15 @@ export default function ProjectDetailPage() {
               );
             })}
           </div>
-        </div>
+        </section>
 
-        <div className="space-y-3">
+        <section className="space-y-3">
           <h2 className="text-lg font-semibold">阶段时间线</h2>
           {project.stages.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border bg-white p-8 text-center text-sm text-muted-foreground">暂未设置阶段</p>
           ) : (
             project.stages.map((stage) => {
-              const statusMeta = (STAGE_STATUS_MAP[stage.status] ?? STAGE_STATUS_MAP.pending)!;
+              const statusMeta = (stageStatusMap[stage.status] ?? stageStatusMap.pending)!;
               const stageTasks = project.tasks.filter((task) => task.stageId === stage.id);
               return (
                 <div key={stage.id} className="rounded-lg border border-border bg-white p-4 shadow-sm">
@@ -413,8 +355,8 @@ export default function ProjectDetailPage() {
                       {editingStage === stage.id ? (
                         <div className="flex gap-1">
                           {['pending', 'in_progress', 'completed', 'blocked'].map((status) => (
-                            <button key={status} onClick={() => updateStageStatus(stage.id, status)} className={`rounded px-2 py-0.5 text-xs font-medium ${STAGE_STATUS_MAP[status]!.color}`}>
-                              {STAGE_STATUS_MAP[status]!.label}
+                            <button key={status} onClick={() => updateStageStatus(stage.id, status)} className={`rounded px-2 py-0.5 text-xs font-medium ${stageStatusMap[status]!.color}`}>
+                              {stageStatusMap[status]!.label}
                             </button>
                           ))}
                           <button onClick={() => setEditingStage(null)} className="p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button>
@@ -431,28 +373,23 @@ export default function ProjectDetailPage() {
               );
             })
           )}
-        </div>
+        </section>
 
-        <div className="mt-8">
+        <section className="mt-8">
           <h2 className="mb-3 text-lg font-semibold">项目成员</h2>
           <div className="flex flex-wrap gap-2">
             {project.members.map((member) => (
               <div key={member.user.id} className="rounded-lg border border-border bg-white px-3 py-2 text-sm">
                 <span className="font-medium">{member.user.displayName}</span>
                 <span className="ml-2 text-xs text-muted-foreground">@{member.user.username}</span>
-                <span className={`ml-2 rounded px-1.5 py-0.5 text-xs ${
-                  member.role === 'owner' ? 'bg-amber-100 text-amber-700' :
-                  member.role === 'observer' ? 'bg-gray-100 text-gray-600' : 'bg-blue-50 text-blue-600'
-                }`}>{member.role === 'owner' ? '负责人' : member.role === 'observer' ? '观察者' : '成员'}</span>
-                {member.user.positionBinding?.positionRole && (
-                  <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">
-                    {member.user.positionBinding.positionRole.code}
-                  </span>
-                )}
+                <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">
+                  {member.user.positionBinding?.positionRole.code ?? '未绑定角色'}
+                </span>
               </div>
             ))}
+            {project.members.length === 0 && <div className="text-sm text-muted-foreground">暂无项目成员</div>}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

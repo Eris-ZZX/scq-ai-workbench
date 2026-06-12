@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Check, ChevronLeft, ChevronRight, Plus, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,21 +21,11 @@ type ActivityTemplate = {
   version: number | null;
   stats: { stageCount: number; parentCount: number; childCount: number };
 };
-type Position = { id: string; code: string; name: string };
-type User = {
-  id: string;
-  username: string;
-  displayName: string;
-  positionBinding: null | { positionRoleId: string; positionRole: { code: string; name: string } };
-};
-
-const steps = ['项目信息', '模板选择', '岗位任命', '预览生成'];
+const steps = ['项目信息', '模板选择', '预览生成'];
 
 export default function ProjectListPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [templates, setTemplates] = useState<ActivityTemplate[]>([]);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [step, setStep] = useState(0);
@@ -45,7 +35,6 @@ export default function ProjectListPage() {
     name: '',
     description: '',
     activityTemplateSetId: '',
-    assignments: {} as Record<string, string>,
   });
 
   async function loadProjects() {
@@ -55,10 +44,8 @@ export default function ProjectListPage() {
 
   useEffect(() => {
     (async () => {
-      const [templateRes, positionRes, userRes, permissionRes] = await Promise.all([
+      const [templateRes, permissionRes] = await Promise.all([
         fetch('/api/npq/activity-templates'),
-        fetch('/api/npq/positions'),
-        fetch('/api/npq/users'),
         fetch('/api/npq/permissions?actions=project.create'),
       ]);
       if (templateRes.ok) {
@@ -66,8 +53,6 @@ export default function ProjectListPage() {
         setTemplates(data);
         setForm((current) => ({ ...current, activityTemplateSetId: current.activityTemplateSetId || data[0]?.id || '' }));
       }
-      if (positionRes.ok) setPositions(await positionRes.json());
-      if (userRes.ok) setUsers(await userRes.json());
       if (permissionRes.ok) {
         const permissions = await permissionRes.json();
         setCanCreateProject(Boolean(permissions['project.create']));
@@ -78,10 +63,6 @@ export default function ProjectListPage() {
   }, []);
 
   const selectedTemplate = templates.find((template) => template.id === form.activityTemplateSetId);
-  const assignmentRows = useMemo(() => positions.map((position) => {
-    const matchedUsers = users.filter((user) => user.positionBinding?.positionRoleId === position.id);
-    return { position, users: matchedUsers.length > 0 ? matchedUsers : users };
-  }), [positions, users]);
 
   async function handleCreate() {
     setError('');
@@ -89,9 +70,6 @@ export default function ProjectListPage() {
     if (!name) { setError('请填写项目名称'); setStep(0); return; }
     if (!form.activityTemplateSetId) { setError('请选择活动模板'); setStep(1); return; }
 
-    const positionAssignments = Object.entries(form.assignments)
-      .filter(([, userId]) => Boolean(userId))
-      .map(([positionRoleId, userId]) => ({ positionRoleId, userId }));
     const res = await fetch('/api/npq/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -99,7 +77,6 @@ export default function ProjectListPage() {
         name,
         description: form.description.trim(),
         activityTemplateSetId: form.activityTemplateSetId,
-        positionAssignments,
       }),
     });
     if (!res.ok) {
@@ -109,7 +86,7 @@ export default function ProjectListPage() {
     }
     setShowCreate(false);
     setStep(0);
-    setForm({ name: '', description: '', activityTemplateSetId: templates[0]?.id ?? '', assignments: {} });
+    setForm({ name: '', description: '', activityTemplateSetId: templates[0]?.id ?? '' });
     await loadProjects();
   }
 
@@ -173,26 +150,10 @@ export default function ProjectListPage() {
             )}
 
             {step === 2 && (
-              <div className="grid gap-2 md:grid-cols-2">
-                {assignmentRows.map(({ position, users: options }) => (
-                  <label key={position.id} className="grid grid-cols-[90px_minmax(0,1fr)] items-center gap-2 rounded border border-border p-2 text-sm">
-                    <span className="font-mono text-xs text-muted-foreground">{position.code}</span>
-                    <select value={form.assignments[position.id] ?? ''} onChange={(event) => setForm((current) => ({ ...current, assignments: { ...current.assignments, [position.id]: event.target.value } }))} className="h-8 rounded border px-2 text-xs">
-                      <option value="">暂不任命</option>
-                      {options.map((user) => (
-                        <option key={user.id} value={user.id}>{user.displayName}{user.positionBinding?.positionRole.code ? ` (${user.positionBinding.positionRole.code})` : ''}</option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
-            )}
-
-            {step === 3 && (
               <div className="grid gap-3 text-sm md:grid-cols-3">
                 <Summary label="项目名称" value={form.name || '-'} />
                 <Summary label="活动模板" value={selectedTemplate ? `${selectedTemplate.name} v${selectedTemplate.version}` : '-'} />
-                <Summary label="任命岗位" value={`${Object.values(form.assignments).filter(Boolean).length}/${positions.length}`} />
+                <Summary label="成员维护" value="后台项目管理" />
                 <Summary label="将生成" value={selectedTemplate ? `${selectedTemplate.stats.parentCount} 项目活动` : '-'} />
                 <Summary label="子任务" value={selectedTemplate ? `${selectedTemplate.stats.childCount} 子任务` : '-'} />
                 <Summary label="规则" value="绑定最新发布版并生成项目快照" />
@@ -203,8 +164,8 @@ export default function ProjectListPage() {
               <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>取消</Button>
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}><ChevronLeft className="mr-1 h-4 w-4" />上一步</Button>
-                {step < 3 ? (
-                  <Button type="button" onClick={() => setStep((current) => Math.min(3, current + 1))}>下一步<ChevronRight className="ml-1 h-4 w-4" /></Button>
+                {step < 2 ? (
+                  <Button type="button" onClick={() => setStep((current) => Math.min(2, current + 1))}>下一步<ChevronRight className="ml-1 h-4 w-4" /></Button>
                 ) : (
                   <Button type="button" onClick={handleCreate} disabled={!canCreateProject}>生成项目</Button>
                 )}

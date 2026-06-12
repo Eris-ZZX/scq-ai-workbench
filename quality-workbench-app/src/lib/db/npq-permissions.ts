@@ -16,11 +16,17 @@ export async function getEffectivePositionRoleIds(session: SessionLike, projectI
 
   const roleIds = new Set<string>();
   if (projectId) {
-    const assignments = await prisma.projectPositionAssignment.findMany({
+    const member = await prisma.projectMember.findFirst({
       where: { projectId, userId: session.sub },
-      select: { positionRoleId: true },
+      select: {
+        user: {
+          select: {
+            positionBinding: { select: { positionRoleId: true } },
+          },
+        },
+      },
     });
-    assignments.forEach((assignment) => roleIds.add(assignment.positionRoleId));
+    if (member?.user.positionBinding?.positionRoleId) roleIds.add(member.user.positionBinding.positionRoleId);
   }
 
   const userPosition = await prisma.userPosition.findUnique({
@@ -54,10 +60,7 @@ async function canAccessProjectScope(userId: string, projectId: string) {
   const project = await prisma.project.findFirst({
     where: {
       id: projectId,
-      OR: [
-        { members: { some: { userId } } },
-        { positionAssignments: { some: { userId } } },
-      ],
+      members: { some: { userId } },
     },
     select: { id: true },
   });
@@ -106,19 +109,6 @@ export async function canMaintainActivityChild(params: {
   });
   if (!canUpdateOwn) return { allowed: false, child };
   if (child.assigneeUserId === params.session.sub) return { allowed: true, child };
-
-  if (child.responsibleRoleId) {
-    const assignment = await prisma.projectPositionAssignment.findUnique({
-      where: {
-        projectId_positionRoleId: {
-          projectId: child.projectId,
-          positionRoleId: child.responsibleRoleId,
-        },
-      },
-      select: { userId: true },
-    });
-    if (assignment?.userId === params.session.sub) return { allowed: true, child };
-  }
 
   const userPosition = await prisma.userPosition.findUnique({
     where: { userId: params.session.sub },

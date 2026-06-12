@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Edit3, FilePlus2, Layers3, Save, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Edit3, FilePlus2, Layers3, Save, Trash2, X } from 'lucide-react';
 
 type TemplateChild = {
   id: string;
@@ -114,6 +114,18 @@ function cloneStages(stages: TemplateStage[]): TemplateStage[] {
       children: parent.children.map((child) => ({ ...child })),
     })),
   }));
+}
+
+function reorderById<T extends { id: string; sortOrder: number }>(items: T[], itemId: string, direction: -1 | 1): T[] {
+  const index = items.findIndex((item) => item.id === itemId);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return items;
+
+  const next = [...items];
+  const currentItem = next[index]!;
+  next[index] = next[nextIndex]!;
+  next[nextIndex] = currentItem;
+  return next.map((item, itemIndex) => ({ ...item, sortOrder: itemIndex + 1 }));
 }
 
 function formatDate(value: string | null) {
@@ -257,6 +269,10 @@ export default function AdminTemplatesPage() {
     updateDraft((current) => ({ ...current, stages: current.stages.filter((stage) => stage.id !== stageId) }));
   }
 
+  function moveStage(stageId: string, direction: -1 | 1) {
+    updateDraft((current) => ({ ...current, stages: reorderById(current.stages, stageId, direction) }));
+  }
+
   function updateParent(stageId: string, parentId: string, fields: Partial<Pick<TemplateParent, 'name'>>) {
     updateDraft((current) => ({
       ...current,
@@ -279,6 +295,15 @@ export default function AdminTemplatesPage() {
       ...current,
       stages: current.stages.map((stage) => stage.id === stageId
         ? { ...stage, parents: stage.parents.filter((parent) => parent.id !== parentId) }
+        : stage),
+    }));
+  }
+
+  function moveParent(stageId: string, parentId: string, direction: -1 | 1) {
+    updateDraft((current) => ({
+      ...current,
+      stages: current.stages.map((stage) => stage.id === stageId
+        ? { ...stage, parents: reorderById(stage.parents, parentId, direction) }
         : stage),
     }));
   }
@@ -332,6 +357,20 @@ export default function AdminTemplatesPage() {
           ...stage,
           parents: stage.parents.map((parent) => parent.id === parentId
             ? { ...parent, children: parent.children.filter((child) => child.id !== childId) }
+            : parent),
+        }
+        : stage),
+    }));
+  }
+
+  function moveChild(stageId: string, parentId: string, childId: string, direction: -1 | 1) {
+    updateDraft((current) => ({
+      ...current,
+      stages: current.stages.map((stage) => stage.id === stageId
+        ? {
+          ...stage,
+          parents: stage.parents.map((parent) => parent.id === parentId
+            ? { ...parent, children: reorderById(parent.children, childId, direction) }
             : parent),
         }
         : stage),
@@ -681,16 +720,41 @@ export default function AdminTemplatesPage() {
 
               <div className="max-h-[calc(100vh-170px)] overflow-auto p-4">
                 <div className="space-y-3">
-                  {visibleStages.map((stage) => (
+                  {visibleStages.map((stage, stageIndex) => (
                     <details key={stage.id} className="rounded-lg border border-border bg-white">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-3 [&::-webkit-details-marker]:hidden">
                         <div className="flex min-w-0 items-center gap-3">
                           <Layers3 className="h-4 w-4 shrink-0 text-ws-blue" />
+                          <span className="shrink-0 rounded bg-white px-2 py-0.5 text-xs font-semibold text-muted-foreground">{stageIndex + 1}</span>
                           <span className="truncate text-sm font-semibold text-foreground">{stage.name}</span>
                           <span className="shrink-0 text-xs text-muted-foreground">{stage.parents.length} 项目活动</span>
                         </div>
                         {editMode && (
                           <div className="flex shrink-0 gap-2">
+                            <button
+                              className={iconButtonClass()}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveStage(stage.id, -1);
+                              }}
+                              disabled={saving || stageIndex === 0}
+                              title="上移阶段"
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              className={iconButtonClass()}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveStage(stage.id, 1);
+                              }}
+                              disabled={saving || stageIndex === visibleStages.length - 1}
+                              title="下移阶段"
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </button>
                             <button
                               className={iconButtonClass()}
                               onClick={(event) => {
@@ -731,15 +795,40 @@ export default function AdminTemplatesPage() {
 
                       <div className="space-y-3 border-t border-border p-3">
                         <div className="space-y-2">
-                          {stage.parents.map((parent) => (
+                          {stage.parents.map((parent, parentIndex) => (
                             <details key={parent.id} className="rounded border border-border bg-white">
                               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
-                                <div className="min-w-0">
-                                  <div className="truncate text-sm font-medium">{parent.name}</div>
-                                  <div className="mt-0.5 text-xs text-muted-foreground">{parent.children.length} 子任务</div>
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-muted-foreground">{stageIndex + 1}.{parentIndex + 1}</span>
+                                  <span className="truncate text-sm font-medium">{parent.name}</span>
+                                  <span className="shrink-0 text-xs text-muted-foreground">{parent.children.length} 子任务</span>
                                 </div>
                                 {editMode && (
                                   <div className="flex shrink-0 gap-2">
+                                    <button
+                                      className={iconButtonClass()}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        moveParent(stage.id, parent.id, -1);
+                                      }}
+                                      disabled={saving || parentIndex === 0}
+                                      title="上移项目活动"
+                                    >
+                                      <ArrowUp className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      className={iconButtonClass()}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        moveParent(stage.id, parent.id, 1);
+                                      }}
+                                      disabled={saving || parentIndex === stage.parents.length - 1}
+                                      title="下移项目活动"
+                                    >
+                                      <ArrowDown className="h-4 w-4" />
+                                    </button>
                                     <button
                                       className={iconButtonClass()}
                                       onClick={(event) => {
@@ -779,18 +868,33 @@ export default function AdminTemplatesPage() {
                               </summary>
 
                               <div className="space-y-2 border-t border-border p-3">
-                                {parent.children.map((child) => (
+                                {parent.children.map((child, childIndex) => (
                                   <div key={child.id} className="flex items-center justify-between gap-3 rounded border border-border bg-slate-50 px-3 py-2">
-                                    <div className="min-w-0">
-                                      <div className="truncate text-sm">{child.title}</div>
-                                      <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                                        <span>{child.roleGroup}</span>
-                                        <span>{child.requiresDeliverable ? '附件' : '备注'}</span>
-                                        <span>{child.deliverableName || '无交付件'}</span>
-                                      </div>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <span className="shrink-0 rounded bg-white px-2 py-0.5 text-xs font-semibold text-muted-foreground">{stageIndex + 1}.{parentIndex + 1}.{childIndex + 1}</span>
+                                      <span className="truncate text-sm">{child.title}</span>
+                                      <span className="shrink-0 text-xs text-muted-foreground">{child.roleGroup}</span>
+                                      <span className="shrink-0 text-xs text-muted-foreground">{child.requiresDeliverable ? '附件' : '备注'}</span>
+                                      <span className="truncate text-xs text-muted-foreground">{child.deliverableName || '无交付件'}</span>
                                     </div>
                                     {editMode && (
                                       <div className="flex shrink-0 gap-2">
+                                        <button
+                                          className={iconButtonClass()}
+                                          onClick={() => moveChild(stage.id, parent.id, child.id, -1)}
+                                          disabled={saving || childIndex === 0}
+                                          title="上移子任务"
+                                        >
+                                          <ArrowUp className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          className={iconButtonClass()}
+                                          onClick={() => moveChild(stage.id, parent.id, child.id, 1)}
+                                          disabled={saving || childIndex === parent.children.length - 1}
+                                          title="下移子任务"
+                                        >
+                                          <ArrowDown className="h-4 w-4" />
+                                        </button>
                                         <button
                                           className={iconButtonClass()}
                                           onClick={() => openEditChild(stage.id, parent.id, child)}

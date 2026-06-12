@@ -1,4 +1,4 @@
-// lib/db/activities.ts — F2 新产品导入活动跟踪
+﻿// lib/db/activities.ts — F2 新产品导入活动跟踪
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 
@@ -154,12 +154,6 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
     const version = templateSet?.latestPublishedVersion;
     if (!templateSet || !version) return { created: false, parentCount: 0, childCount: 0 };
 
-    const assignments = await tx.projectPositionAssignment.findMany({
-      where: { projectId },
-      select: { positionRoleId: true, userId: true },
-    });
-    const userByPosition = new Map(assignments.map((assignment) => [assignment.positionRoleId, assignment.userId]));
-
     let parentCount = 0;
     let childCount = 0;
     for (const stage of version.stages) {
@@ -185,7 +179,6 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
 
         for (const child of parent.children) {
           childCount += 1;
-          const assigneeUserId = child.responsibleRoleId ? userByPosition.get(child.responsibleRoleId) : undefined;
           await tx.projectActivityChild.create({
             data: {
               projectId,
@@ -195,7 +188,6 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
               ownerRole: child.ownerRoleName,
               roleGroup: child.roleGroup,
               responsibleRoleId: child.responsibleRoleId,
-              assigneeUserId,
               requiresDeliverable: child.requiresDeliverable,
               requiresAttachment: child.requiresAttachment,
               requiresNote: child.requiresNote,
@@ -437,25 +429,28 @@ export async function updateActivityChild(params: {
     });
 
     if (params.returnReason?.trim()) {
-      const recipientUserId = updated.assigneeUserId ?? (
-        updated.responsibleRoleId
-          ? (await tx.projectPositionAssignment.findUnique({
-              where: { projectId_positionRoleId: { projectId: updated.projectId, positionRoleId: updated.responsibleRoleId } },
+      const recipientUserIds = updated.assigneeUserId
+        ? [updated.assigneeUserId]
+        : updated.responsibleRoleId
+          ? (await tx.projectMember.findMany({
+              where: {
+                projectId: updated.projectId,
+                user: { positionBinding: { positionRoleId: updated.responsibleRoleId } },
+              },
               select: { userId: true },
-            }))?.userId
-          : null
-      );
-      if (recipientUserId) {
-        await tx.notification.create({
-          data: {
+            })).map((member) => member.userId)
+          : [];
+      if (recipientUserIds.length > 0) {
+        await tx.notification.createMany({
+          data: Array.from(new Set(recipientUserIds)).map((recipientUserId) => ({
             recipientUserId,
             projectId: updated.projectId,
             childId: updated.id,
             type: 'child_returned',
             title: '子任务被退回',
-            body: params.returnReason.trim(),
+            body: params.returnReason!.trim(),
             createdById: params.actorUserId,
-          },
+          })),
         });
       }
     }

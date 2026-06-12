@@ -40,19 +40,30 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
   const position = user?.positionBinding?.positionRole ?? null;
   const workbenchRole = getWorkbenchRole(session.role, position?.code);
   const roleIds = (await getEffectivePositionRoleIds(session)).filter((id) => id !== '__admin__');
-  const assignedProjects = await prisma.projectPositionAssignment.findMany({
+  const memberProjects = await prisma.projectMember.findMany({
     where: { userId: session.sub },
-    select: { projectId: true, positionRoleId: true },
+    select: { projectId: true },
   });
-  const assignedProjectIds = assignedProjects.map((item) => item.projectId);
-  const effectiveRoleIds = Array.from(new Set([...roleIds, ...assignedProjects.map((item) => item.positionRoleId)]));
+  const assignedProjectIds = memberProjects.map((item) => item.projectId);
+  const effectiveRoleIds = Array.from(new Set(roleIds));
 
   const baseProjectWhere = buildProjectWhere(session.sub, workbenchRole, effectiveRoleIds, assignedProjectIds);
   const projectWhere = options.projectId ? { AND: [baseProjectWhere, { id: options.projectId }] } : baseProjectWhere;
   const projects = await prisma.project.findMany({
     where: projectWhere,
     include: {
-      positionAssignments: { select: { userId: true, positionRole: { select: { code: true } } } },
+      members: {
+        select: {
+          userId: true,
+          user: {
+            select: {
+              positionBinding: {
+                select: { positionRole: { select: { code: true } } },
+              },
+            },
+          },
+        },
+      },
       stageGateRecords: true,
     },
     orderBy: { updatedAt: 'desc' },
@@ -198,30 +209,22 @@ function buildProjectWhere(
   if (role === 'manager') {
     return {
       status,
-      OR: [
-        { members: { some: { userId } } },
-        { positionAssignments: { some: { userId } } },
-      ],
+      members: { some: { userId } },
     };
   }
   if (role === 'npq') {
     return {
       status,
-      OR: [
-        { members: { some: { userId } } },
-        { positionAssignments: { some: { userId } } },
-        { id: { in: assignedProjectIds } },
-      ],
+      members: { some: { userId } },
     };
   }
   return {
     status,
     OR: [
       { members: { some: { userId } } },
-      { positionAssignments: { some: { userId } } },
       { activityChildren: { some: { assigneeUserId: userId, isNotApplicable: false } } },
-      effectiveRoleIds.length > 0
-        ? { activityChildren: { some: { responsibleRoleId: { in: effectiveRoleIds }, isNotApplicable: false } } }
+      assignedProjectIds.length > 0 && effectiveRoleIds.length > 0
+        ? { activityChildren: { some: { projectId: { in: assignedProjectIds }, responsibleRoleId: { in: effectiveRoleIds }, isNotApplicable: false } } }
         : { id: '__never__' },
     ],
   };
@@ -236,7 +239,7 @@ function buildProjectTodos({
   now,
 }: {
   project: Awaited<ReturnType<typeof prisma.project.findMany>>[number] & {
-    positionAssignments: Array<{ userId: string; positionRole: { code: string } }>;
+    members: Array<{ userId: string; user: { positionBinding: { positionRole: { code: string } } | null } }>;
     activityParents: Array<{
       id: string;
       stage: string;
@@ -367,12 +370,12 @@ function canSeeChildTodo({
 
 function canSeeParentCloseTodo(
   workbenchRole: WorkbenchRole,
-  project: { positionAssignments: { userId: string; positionRole: { code: string } }[] },
+  project: { members: { userId: string; user: { positionBinding: { positionRole: { code: string } } | null } }[] },
   userId: string,
 ) {
   if (workbenchRole === 'admin' || workbenchRole === 'manager') return true;
   if (workbenchRole !== 'npq') return false;
-  return project.positionAssignments.some((assignment) => assignment.userId === userId && assignment.positionRole.code === 'NPQ');
+  return project.members.some((member) => member.userId === userId && member.user.positionBinding?.positionRole.code === 'NPQ');
 }
 
 function getChildTodoType(

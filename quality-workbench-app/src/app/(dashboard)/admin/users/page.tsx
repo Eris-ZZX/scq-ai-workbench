@@ -14,9 +14,7 @@ type Position = {
 
 type User = {
   id: string;
-  role: string;
   status: string;
-  positionBinding: null | { positionRoleId: string };
 };
 
 export default function AdminUsersDashboardPage() {
@@ -45,12 +43,8 @@ export default function AdminUsersDashboardPage() {
 
   const stats = useMemo(() => {
     const activeUsers = users.filter((user) => user.status === 'active').length;
-    const boundUsers = users.filter((user) => user.positionBinding).length;
-    const admins = users.filter((user) => user.role === 'admin').length;
-    const activePositions = positions.filter((position) => position.isActive).length;
     const assignedPositions = positions.reduce((sum, position) => sum + (position._count?.userPositions ?? 0), 0);
-    const templateRefs = positions.reduce((sum, position) => sum + (position._count?.templateChildren ?? 0), 0);
-    return { activeUsers, boundUsers, admins, activePositions, assignedPositions, templateRefs };
+    return { activeUsers, assignedPositions };
   }, [positions, users]);
 
   if (loading) return <div className="p-8 text-sm text-muted-foreground">加载中...</div>;
@@ -75,15 +69,6 @@ export default function AdminUsersDashboardPage() {
           </div>
         )}
 
-        <section className="mb-6 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Summary label="用户总数" value={users.length} />
-          <Summary label="启用用户" value={stats.activeUsers} />
-          <Summary label="管理员" value={stats.admins} />
-          <Summary label="已绑定角色" value={`${stats.boundUsers}/${users.length}`} />
-          <Summary label="启用角色" value={`${stats.activePositions}/${positions.length}`} />
-          <Summary label="模板责任项" value={stats.templateRefs} />
-        </section>
-
         <section className="grid gap-4 md:grid-cols-2">
           <EntryCard
             href="/admin/users/roles"
@@ -101,15 +86,6 @@ export default function AdminUsersDashboardPage() {
           />
         </section>
       </div>
-    </div>
-  );
-}
-
-function Summary({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-lg border border-border bg-white p-4">
-      <div className="text-2xl font-semibold text-foreground">{value}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{label}</div>
     </div>
   );
 }

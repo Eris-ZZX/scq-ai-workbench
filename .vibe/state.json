@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
   "projectRoot": "D:\\Users\\vox1814\\Desktop\\AIspace\\5.Huge-App\\260608-QEworkspace",
-  "updatedAt": "2026-06-12T14:07:00+08:00",
-  "lastSessionId": "session-1781244370927",
+  "updatedAt": "2026-06-12T15:15:45+08:00",
+  "lastSessionId": "session-1781248278732",
   "source": "codex",
   "status": "in_progress",
-  "currentTask": "模板中心可用性与性能优化",
+  "currentTask": "后台用户管理可用性优化",
   "features": [
     {
       "id": "F1",
@@ -224,6 +224,6 @@
     "原 F4 扩展能力：审批、交付件在线预览、外部通知等"
   ],
   "blocker": "",
-  "lastAction": "已提交模板中心优化变更",
-  "nextStep": "用户基于已提交版本继续实测模板中心。"
+  "lastAction": "用户管理列表和新增弹窗移除显示名称，创建链路自动使用用户名作为 displayName。",
+  "nextStep": "用户实测新增用户和用户列表展示是否符合只保留用户名的口径。"
 }

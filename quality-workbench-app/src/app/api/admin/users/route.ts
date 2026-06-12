@@ -43,7 +43,6 @@ export async function POST(request: Request) {
   let body: {
     username?: string;
     password?: string;
-    displayName?: string;
     email?: string | null;
     role?: string;
     status?: string;
@@ -57,14 +56,13 @@ export async function POST(request: Request) {
 
   const username = body.username?.trim();
   const password = body.password;
-  const displayName = body.displayName?.trim();
   const email = body.email?.trim() || null;
   const role = body.role === 'admin' ? 'admin' : 'user';
   const status = body.status === 'disabled' ? 'disabled' : 'active';
   const positionRoleId = body.positionRoleId?.trim() || null;
 
-  if (!username || !password || !displayName) {
-    return NextResponse.json({ error: '请填写用户名、显示名称和密码' }, { status: 400 });
+  if (!username || !password) {
+    return NextResponse.json({ error: '请填写用户名和密码' }, { status: 400 });
   }
   if (!/^[a-zA-Z0-9_-]{1,50}$/.test(username)) {
     return NextResponse.json({ error: '用户名须为 1-50 位字母、数字、下划线或连字符' }, { status: 400 });
@@ -72,10 +70,7 @@ export async function POST(request: Request) {
   if (password.length < 6 || password.length > 128) {
     return NextResponse.json({ error: '密码长度应为 6-128 位' }, { status: 400 });
   }
-  if (displayName.length > 50) {
-    return NextResponse.json({ error: '显示名称不能超过 50 个字符' }, { status: 400 });
-  }
-
+  const displayName = username;
   try {
     const passwordHash = await bcrypt.hash(password, 12);
     const created = await prisma.$transaction(async (tx) => {

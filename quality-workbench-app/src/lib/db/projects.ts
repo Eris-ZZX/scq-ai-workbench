@@ -37,13 +37,6 @@ export function getProjectById(projectId: string, userId: string) {
           },
         },
       },
-      positionAssignments: {
-        include: {
-          positionRole: { select: { id: true, code: true, name: true, roleGroup: true } },
-          user: { select: { id: true, username: true, displayName: true } },
-        },
-        orderBy: { positionRole: { sortOrder: 'asc' } },
-      },
       stages: { orderBy: { order: 'asc' } },
       tasks: { orderBy: { createdAt: 'desc' }, take: 50 },
       _count: { select: { tasks: true } },
@@ -57,7 +50,6 @@ export async function createProject(params: {
   ownerId: string;
   templateId?: string;
   activityTemplateSetId?: string;
-  positionAssignments?: { positionRoleId: string; userId: string }[];
 }) {
   const project = await prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
@@ -67,27 +59,6 @@ export async function createProject(params: {
     await tx.projectMember.create({
       data: { projectId: project.id, userId: params.ownerId, role: 'owner' },
     });
-    const memberUserIds = new Set([params.ownerId, ...(params.positionAssignments ?? []).map((item) => item.userId)]);
-    for (const userId of memberUserIds) {
-      if (userId === params.ownerId) continue;
-      await tx.projectMember.upsert({
-        where: { projectId_userId: { projectId: project.id, userId } },
-        create: { projectId: project.id, userId, role: 'member' },
-        update: {},
-      });
-    }
-    for (const assignment of params.positionAssignments ?? []) {
-      await tx.projectPositionAssignment.upsert({
-        where: { projectId_positionRoleId: { projectId: project.id, positionRoleId: assignment.positionRoleId } },
-        create: {
-          projectId: project.id,
-          positionRoleId: assignment.positionRoleId,
-          userId: assignment.userId,
-          appointedById: params.ownerId,
-        },
-        update: { userId: assignment.userId, appointedById: params.ownerId },
-      });
-    }
     // 🔧 H-1: templateId 指定时只用该模板，未指定时用所有 isDefault 模板
     const templates = await tx.stageTemplate.findMany({
       where: params.templateId ? { id: params.templateId } : { isDefault: true },

@@ -105,16 +105,17 @@ async function main() {
 
   const components = [
     ['cmp-workbench', '工作台', '/workbench', 1],
-    ['cmp-npq-projects', '项目管理', '/flows/npq/projects', 2],
+    ['cmp-npq-projects', '项目看板', '/flows/npq/projects', 2],
     ['cmp-npq-tasks', '任务流转', '/flows/npq/tasks', 3],
     ['cmp-npq-activities', '导入活动跟踪', '/flows/npq/activities', 4],
     ['cmp-npq-activity-dashboard', '活动管理看板', '/flows/npq/activity-dashboard', 5],
     ['cmp-npq-todos', '我的待办', '/flows/npq/todos', 6],
-    ['cmp-admin-templates', '模板中心', '/admin/templates', 7],
-    ['cmp-admin-positions', '岗位角色', '/admin/positions', 8],
-    ['cmp-admin-users', '用户管理', '/admin/users', 9],
-    ['cmp-admin-components', '功能组件管理', '/admin/components', 10],
-    ['cmp-admin-observability', '运行日志', '/admin/observability', 11],
+    ['cmp-admin-projects', '项目管理', '/admin/projects', 7],
+    ['cmp-admin-templates', '模板中心', '/admin/templates', 8],
+    ['cmp-admin-positions', '岗位角色', '/admin/positions', 9],
+    ['cmp-admin-users', '用户管理', '/admin/users', 10],
+    ['cmp-admin-components', '功能组件管理', '/admin/components', 11],
+    ['cmp-admin-observability', '运行日志', '/admin/observability', 12],
   ] as const;
 
   for (const [id, name, cp, order] of components) {

@@ -13,7 +13,6 @@ type Role = {
 type User = {
   id: string;
   username: string;
-  displayName: string;
   role: string;
   status: string;
   email: string | null;
@@ -31,7 +30,6 @@ type UserGroup = {
 
 type NewUserForm = {
   username: string;
-  displayName: string;
   email: string;
   password: string;
   role: string;
@@ -41,7 +39,6 @@ type NewUserForm = {
 
 const emptyNewUser: NewUserForm = {
   username: '',
-  displayName: '',
   email: '',
   password: '',
   role: 'user',
@@ -99,7 +96,6 @@ export default function AdminUserAccountsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: newUser.username,
-        displayName: newUser.displayName,
         email: newUser.email || null,
         password: newUser.password,
         role: newUser.role,
@@ -252,9 +248,9 @@ function UserStatusList({
                     return (
                       <tr key={user.id}>
                         <td className="px-3 py-3">
-                          <div className="truncate font-medium text-foreground">{user.displayName}</div>
+                          <div className="truncate font-medium text-foreground">{user.username}</div>
                           <div className="truncate text-xs text-muted-foreground">
-                            @{user.username}{user.email ? ` / ${user.email}` : ''}
+                            {user.email ?? '-'}
                             {isSuperAdmin ? ' / 超级管理账号' : ''}
                           </div>
                         </td>
@@ -323,7 +319,7 @@ function CreateUserModal({
   onCancel: () => void;
   onSubmit: () => void;
 }) {
-  const requiredMissing = !value.username.trim() || !value.displayName.trim() || !value.password.trim();
+  const requiredMissing = !value.username.trim() || !value.password.trim();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
@@ -343,14 +339,6 @@ function CreateUserModal({
               value={value.username}
               onChange={(event) => onChange({ ...value, username: event.target.value })}
               autoFocus
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-muted-foreground">显示名称</span>
-            <input
-              className="h-9 w-full rounded border border-border px-2 text-sm"
-              value={value.displayName}
-              onChange={(event) => onChange({ ...value, displayName: event.target.value })}
             />
           </label>
           <label className="block">

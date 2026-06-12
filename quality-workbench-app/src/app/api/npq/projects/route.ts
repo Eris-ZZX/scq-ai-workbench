@@ -23,7 +23,6 @@ export async function POST(request: Request) {
     description?: string;
     templateId?: string;
     activityTemplateSetId?: string;
-    positionAssignments?: { positionRoleId: string; userId: string }[];
   };
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
@@ -41,7 +40,6 @@ export async function POST(request: Request) {
     ownerId: session.sub,
     templateId: body.templateId || undefined,
     activityTemplateSetId: body.activityTemplateSetId || undefined,
-    positionAssignments: Array.isArray(body.positionAssignments) ? body.positionAssignments : undefined,
   });
 
   return NextResponse.json(project, { status: 201 });

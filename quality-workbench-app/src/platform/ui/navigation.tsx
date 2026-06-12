@@ -6,19 +6,33 @@ export async function DynamicNav() {
   const session = await getSession();
   const components = await getEnabledComponents();
   const isAdmin = session?.role === 'admin';
+  const businessLinks = components.filter((component) => (
+    component.path.startsWith('/flows') &&
+    component.enabled &&
+    !component.path.includes('[')
+  ));
   const adminLinks = components
-    .filter((component) => component.path.startsWith('/admin') && component.enabled && component.path !== '/admin/positions')
+    .filter((component) => (
+      component.path.startsWith('/admin') &&
+      component.enabled &&
+      component.path !== '/admin/positions' &&
+      component.path !== '/admin/projects'
+    ))
     .map((component) => component.path === '/admin/users' ? { ...component, name: '用户管理' } : component);
 
   return (
     <nav className="flex flex-col gap-1">
       <SectionHeader>业务</SectionHeader>
       <NavLink href="/workbench" label="工作台" />
+      {businessLinks.map((component) => (
+        <NavLink key={component.id} href={component.path} label={component.name} />
+      ))}
 
       {isAdmin && adminLinks.length > 0 && (
         <>
           <div className="mt-4" />
           <SectionHeader>后台配置</SectionHeader>
+          <NavLink href="/admin/projects" label="项目管理" />
           {adminLinks.map((component) => (
             <NavLink key={component.id} href={component.path} label={component.name} />
           ))}

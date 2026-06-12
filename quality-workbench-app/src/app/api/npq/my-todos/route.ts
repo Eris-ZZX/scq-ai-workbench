@@ -8,12 +8,16 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
   const roleIds = await getEffectivePositionRoleIds(session);
-  const roleIdsForProject = await prisma.projectPositionAssignment.findMany({
+  const memberProjects = await prisma.projectMember.findMany({
     where: { userId: session.sub },
-    select: { projectId: true, positionRoleId: true },
+    select: { projectId: true },
   });
-  const projectIds = roleIdsForProject.map((item) => item.projectId);
-  const positionIds = Array.from(new Set([...roleIds.filter((id) => id !== '__admin__'), ...roleIdsForProject.map((item) => item.positionRoleId)]));
+  const projectIds = memberProjects.map((item) => item.projectId);
+  const positionIds = roleIds.filter((id) => id !== '__admin__');
+  const npqPosition = await prisma.userPosition.findFirst({
+    where: { userId: session.sub, positionRole: { code: 'NPQ' } },
+    select: { id: true },
+  });
   const now = new Date();
 
   const children = await prisma.projectActivityChild.findMany({
@@ -22,8 +26,9 @@ export async function GET() {
       status: { not: 'completed' },
       OR: [
         { assigneeUserId: session.sub },
-        { responsibleRoleId: { in: positionIds } },
-        { projectId: { in: projectIds } },
+        projectIds.length > 0 && positionIds.length > 0
+          ? { projectId: { in: projectIds }, responsibleRoleId: { in: positionIds } }
+          : { id: '__never__' },
       ],
     },
     include: {
@@ -56,7 +61,11 @@ export async function GET() {
   const pendingParents = await prisma.projectActivityParent.findMany({
     where: {
       status: 'pending_npq_close',
-      project: session.role === 'admin' ? undefined : { positionAssignments: { some: { userId: session.sub, positionRole: { code: 'NPQ' } } } },
+      project: session.role === 'admin'
+        ? undefined
+        : npqPosition
+          ? { members: { some: { userId: session.sub } } }
+          : { id: '__never__' },
     },
     include: { project: { select: { id: true, name: true } } },
     orderBy: { updatedAt: 'desc' },
