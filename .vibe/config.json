@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "projectName": "质量工作台",
+  "seed": "我要做质量工程师的日常工作台",
+  "schemaVersion": "1.0.0",
+  "tags": [
+    "大型应用"
+  ],
+  "agentPreferences": {
+    "contextLines": 5,
+    "autoCheckConsistency": true
+  }
+}

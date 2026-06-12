@@ -1,0 +1,643 @@
+// ─── 供应链质量部 AI 综合工作台 — Prisma Schema ───
+// MVP: SQLite  |  长期迁移: PostgreSQL + pgvector
+// 设计原则: 数据模型一步到位，预留外部系统集成字段
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ═══════════════════════════════════════════════
+// 用户与认证 (F2)
+// ═══════════════════════════════════════════════
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  displayName  String
+  email        String?  @unique // 🔧 H8: 加唯一约束，防止重复邮箱
+  role         String   @default("user") // "admin" | "user"
+  status       String   @default("active") // 🔧 H10: "active" | "disabled"，支持软禁用
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 外部系统集成预留
+  externalSource String? // 钉钉 / 企业 LDAP
+  externalId     String? // 外部系统的用户 ID
+  syncAt         DateTime?
+
+  projectMembers ProjectMember[]
+  createdTasks   Task[]          @relation("TaskCreator")
+  closedActivityParents ProjectActivityParent[] @relation("ActivityParentCloser")
+  positionBinding UserPosition?
+  projectPositionAssignments ProjectPositionAssignment[]
+  assignedActivityChildren ProjectActivityChild[] @relation("ActivityChildAssignee")
+  returnedActivityChildren ProjectActivityChild[] @relation("ActivityChildReturner")
+  uploadedActivityAttachments ActivityAttachment[] @relation("ActivityAttachmentUploader")
+  deletedActivityAttachments ActivityAttachment[] @relation("ActivityAttachmentDeleter")
+  notifications Notification[] @relation("NotificationRecipient")
+  createdNotifications Notification[] @relation("NotificationCreator")
+  activityEvents ActivityEvent[]
+  events         ObservabilityEvent[]
+
+  @@index([username])
+  @@index([role])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════
+// 项目与阶段 (F3)
+// ═══════════════════════════════════════════════
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("active") // "active" | "completed" | "paused"
+  completedAt DateTime? // 🔧 完成时间戳
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 外部系统集成预留
+  externalSource String? // QMS / PLM
+  externalId     String? // 外部系统的项目 ID
+  syncAt         DateTime?
+  currentStage   String   @default("TR1")
+  currentStageStartedAt DateTime?
+  stageGateStatus String  @default("active") // "active" | "conditional_release" | "completed"
+
+  members ProjectMember[]
+  stages  ProjectStage[]
+  tasks   Task[]
+  positionAssignments ProjectPositionAssignment[]
+  activitySnapshotMeta ProjectActivitySnapshotMeta?
+  activityParents ProjectActivityParent[]
+  activityChildren ProjectActivityChild[]
+  activityAttachments ActivityAttachment[]
+  notifications Notification[]
+  stageGateRecords StageGateRecord[]
+  activityEvents ActivityEvent[]
+  events  ObservabilityEvent[] // 🔧 L17: ObservabilityEvent.projectId 反向关系
+
+  @@index([status])
+  @@index([currentStage])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId  String
+  userId    String
+  role      String   @default("member") // "owner" | "member" | "observer"
+  createdAt DateTime @default(now())
+
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedTasks  Task[]         @relation("TaskAssignee") // 🔧 H5: Task 通过此 relation 确保 assignee 必须是项目成员
+
+  @@unique([projectId, userId])
+  @@index([projectId]) // 保留——需要独立按 projectId 查成员列表
+  @@index([userId])
+}
+
+model PositionRole {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  roleGroup   String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userPositions UserPosition[]
+  projectAssignments ProjectPositionAssignment[]
+  templateChildren ActivityTemplateChild[]
+  activityChildren ProjectActivityChild[]
+  permissions NpqActionPermission[]
+
+  @@index([roleGroup])
+  @@index([isActive, sortOrder])
+}
+
+model UserPosition {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  positionRoleId String
+  effectiveAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positionRole PositionRole @relation(fields: [positionRoleId], references: [id], onDelete: Restrict)
+
+  @@index([positionRoleId])
+}
+
+model ProjectPositionAssignment {
+  id             String   @id @default(cuid())
+  projectId      String
+  positionRoleId String
+  userId         String
+  appointedById  String?
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  positionRole PositionRole @relation(fields: [positionRoleId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, positionRoleId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([positionRoleId])
+}
+
+model StageTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  order       Int      @default(0) // 排序序号
+  isDefault   Boolean  @default(false) // 是否预置模板
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+}
+
+model ProjectStage {
+  id          String   @id @default(cuid())
+  projectId    String
+  name        String
+  description String?
+  order       Int      @default(0)
+  status      String   @default("pending") // "pending" | "in_progress" | "completed" | "blocked"
+  blockedReason String? // 🔧 阻塞原因
+  completedAt DateTime? // 🔧 完成时间戳
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[] // Task.stageId → ProjectStage 的反向关系
+
+  @@unique([projectId, order])     // 🔧 L19: 同一项目内阶段排序不允许重复
+  @@index([projectId, order])      // 🔧 H4: 复合索引 (按项目+排序查询阶段列表)
+  @@index([projectId, status])     // 🔧 按项目+状态过滤阶段
+}
+
+// ═══════════════════════════════════════════════
+// 新产品导入质量活动跟踪 (F2)
+// ═══════════════════════════════════════════════
+
+model ActivityTemplateSet {
+  id                       String   @id @default(cuid())
+  code                     String   @unique
+  name                     String
+  description              String?
+  isBuiltIn                Boolean  @default(true)
+  isActive                 Boolean  @default(true)
+  latestPublishedVersionId String?  @unique
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  latestPublishedVersion ActivityTemplateVersion? @relation("LatestPublishedTemplateVersion", fields: [latestPublishedVersionId], references: [id], onDelete: SetNull)
+  versions ActivityTemplateVersion[] @relation("TemplateSetVersions")
+  projectSnapshots ProjectActivitySnapshotMeta[]
+
+  @@index([isActive])
+}
+
+model ActivityTemplateVersion {
+  id            String   @id @default(cuid())
+  templateSetId String
+  version       Int
+  status        String   @default("draft") // "draft" | "published" | "retired"
+  sourceVersionId String?
+  publishedAt   DateTime?
+  publishedById String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  templateSet ActivityTemplateSet @relation("TemplateSetVersions", fields: [templateSetId], references: [id], onDelete: Cascade)
+  latestForSet ActivityTemplateSet? @relation("LatestPublishedTemplateVersion")
+  stages ActivityTemplateStage[]
+  projectSnapshots ProjectActivitySnapshotMeta[]
+
+  @@unique([templateSetId, version])
+  @@index([templateSetId, status])
+  @@index([status])
+}
+
+model ActivityTemplateStage {
+  id         String   @id @default(cuid())
+  versionId  String
+  code       String
+  name       String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  version ActivityTemplateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  parents ActivityTemplateParent[]
+
+  @@unique([versionId, code])
+  @@index([versionId, sortOrder])
+}
+
+model ActivityTemplateParent {
+  id             String   @id @default(cuid())
+  stageId        String
+  name           String
+  description    String?
+  closureStandard String?
+  plannedOffsetDays Int?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  stage ActivityTemplateStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  children ActivityTemplateChild[]
+  projectParents ProjectActivityParent[]
+
+  @@unique([stageId, name])
+  @@index([stageId, sortOrder])
+}
+
+model ActivityTemplateChild {
+  id                  String   @id @default(cuid())
+  parentId            String
+  title               String
+  ownerRoleName       String
+  roleGroup           String
+  responsibleRoleId   String?
+  deliverableName     String?
+  requiresDeliverable Boolean  @default(false)
+  requiresAttachment  Boolean  @default(false)
+  requiresNote        Boolean  @default(false)
+  isRequired          Boolean  @default(true)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  parent ActivityTemplateParent @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  responsibleRole PositionRole? @relation(fields: [responsibleRoleId], references: [id], onDelete: SetNull)
+  projectChildren ProjectActivityChild[]
+
+  @@unique([parentId, title, ownerRoleName])
+  @@index([parentId, sortOrder])
+  @@index([responsibleRoleId])
+  @@index([roleGroup])
+}
+
+model ProjectActivitySnapshotMeta {
+  id                  String   @id @default(cuid())
+  projectId           String   @unique
+  templateSetId        String
+  templateVersionId    String
+  generatedAt          DateTime @default(now())
+  generatedById        String?
+  localAdjustmentCount Int      @default(0)
+  notApplicableCount   Int      @default(0)
+  notes                String?
+  updatedAt            DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  templateSet ActivityTemplateSet @relation(fields: [templateSetId], references: [id], onDelete: Restrict)
+  templateVersion ActivityTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+
+  @@index([templateSetId])
+  @@index([templateVersionId])
+}
+
+model ActivityTemplate {
+  id              String   @id @default(cuid())
+  stage           String
+  projectTaskName String
+  thirdLevelPlan  String
+  ownerRole       String
+  roleGroup       String
+  deliverableName String?
+  requiresDeliverable Boolean @default(false)
+  sourceBatchId   String   @default("quality-activity-template-20260611")
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([stage, projectTaskName, thirdLevelPlan, ownerRole, sourceBatchId])
+  @@index([stage, sortOrder])
+  @@index([ownerRole])
+  @@index([roleGroup])
+  @@index([isActive])
+}
+
+model ProjectActivityParent {
+  id              String   @id @default(cuid())
+  projectId       String
+  templateParentId String?
+  stage           String
+  projectTaskName String
+  status          String   @default("not_started") // "not_started" | "in_progress" | "pending_npq_close" | "closed"
+  plannedDueDate  DateTime?
+  closedAt        DateTime?
+  closedById      String?
+  progressPercent Int      @default(0)
+  hasBlocked      Boolean  @default(false)
+  hasOverdue      Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  templateParent ActivityTemplateParent? @relation(fields: [templateParentId], references: [id], onDelete: SetNull)
+  closedBy User?   @relation("ActivityParentCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  children ProjectActivityChild[]
+  events   ActivityEvent[]
+
+  @@unique([projectId, stage, projectTaskName])
+  @@index([projectId, stage])
+  @@index([projectId, status])
+  @@index([templateParentId])
+  @@index([hasBlocked])
+  @@index([hasOverdue])
+}
+
+model ProjectActivityChild {
+  id              String   @id @default(cuid())
+  projectId       String
+  parentId        String
+  templateChildId String?
+  thirdLevelPlan  String
+  ownerRole       String
+  roleGroup       String
+  responsibleRoleId String?
+  assigneeUserId  String?
+  status          String   @default("not_started") // "not_started" | "in_progress" | "returned" | "completed"
+  requiresDeliverable Boolean @default(false)
+  requiresAttachment Boolean @default(false)
+  requiresNote    Boolean @default(false)
+  deliverableName String?
+  deliverableUrl  String?
+  completionNote  String?
+  blockerNote     String?
+  isBlocked       Boolean  @default(false)
+  isNotApplicable Boolean  @default(false)
+  notApplicableReason String?
+  returnedAt      DateTime?
+  returnedById    String?
+  returnReason    String?
+  isManuallyAdded Boolean  @default(false)
+  plannedDueDateOverride DateTime?
+  completedAt     DateTime?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent  ProjectActivityParent @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  templateChild ActivityTemplateChild? @relation(fields: [templateChildId], references: [id], onDelete: SetNull)
+  responsibleRole PositionRole? @relation(fields: [responsibleRoleId], references: [id], onDelete: SetNull)
+  assignee User? @relation("ActivityChildAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  returnedBy User? @relation("ActivityChildReturner", fields: [returnedById], references: [id], onDelete: SetNull)
+  attachments ActivityAttachment[]
+  notifications Notification[]
+  events  ActivityEvent[]
+
+  @@unique([parentId, thirdLevelPlan, ownerRole])
+  @@index([projectId, ownerRole])
+  @@index([projectId, roleGroup])
+  @@index([projectId, status])
+  @@index([projectId, assigneeUserId])
+  @@index([responsibleRoleId])
+  @@index([templateChildId])
+  @@index([parentId, sortOrder])
+  @@index([isBlocked])
+  @@index([isNotApplicable])
+}
+
+model ActivityEvent {
+  id          String   @id @default(cuid())
+  projectId   String
+  parentId    String?
+  childId     String?
+  actorUserId String?
+  actorRole   String?
+  actionType  String
+  beforeValue String?
+  afterValue  String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent  ProjectActivityParent? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child   ProjectActivityChild? @relation(fields: [childId], references: [id], onDelete: Cascade)
+  actor   User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([parentId, createdAt])
+  @@index([childId, createdAt])
+  @@index([actorUserId])
+  @@index([actionType])
+}
+
+// ═══════════════════════════════════════════════
+// 任务流转 (F4)
+// ═══════════════════════════════════════════════
+
+model ActivityAttachment {
+  id            String   @id @default(cuid())
+  projectId     String
+  childId       String
+  fileName      String
+  storagePath   String
+  mimeType      String?
+  sizeBytes     Int?
+  uploadedById  String
+  deletedAt     DateTime?
+  deletedById   String?
+  deleteReason  String?
+  createdAt     DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  child ProjectActivityChild @relation(fields: [childId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation("ActivityAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  deletedBy User? @relation("ActivityAttachmentDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([childId])
+  @@index([uploadedById])
+  @@index([deletedAt])
+}
+
+model Notification {
+  id              String   @id @default(cuid())
+  recipientUserId String
+  projectId       String?
+  childId         String?
+  type            String
+  title           String
+  body            String?
+  status          String   @default("unread") // "unread" | "read"
+  createdById     String?
+  readAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  recipient User @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  child ProjectActivityChild? @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("NotificationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([recipientUserId, status, createdAt])
+  @@index([projectId])
+  @@index([childId])
+  @@index([type])
+}
+
+model NpqActionPermission {
+  id             String   @id @default(cuid())
+  actionKey      String
+  positionRoleId String
+  canExecute     Boolean  @default(true)
+  scope          String   @default("project")
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  positionRole PositionRole @relation(fields: [positionRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([actionKey, positionRoleId])
+  @@index([positionRoleId])
+}
+
+model StageGateRecord {
+  id                   String   @id @default(cuid())
+  projectId            String
+  stage                String
+  status               String   @default("pending") // "pending" | "passed" | "conditional_release"
+  passedAt             DateTime?
+  passedById           String?
+  conditionReleaseNote String?
+  blockerSummary       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, stage])
+  @@index([projectId, status])
+  @@index([stage])
+}
+
+model Task {
+  id                String   @id @default(cuid())
+  title             String
+  description       String?
+  status            String   @default("todo") // "todo" | "in_progress" | "done"
+  priority          String   @default("medium") // "low" | "medium" | "high" | "urgent"
+  projectId          String
+  stageId           String?   // 🔧 C2: 现在有 FK 约束，见下方 relation
+  assigneeMemberId  String?   // 🔧 H5: 引用 ProjectMember，确保只能分配给项目成员
+  creatorId         String
+  completedAt       DateTime? // 🔧 完成时间戳
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // 外部系统集成预留
+  externalSource String? // QMS / OA
+  externalId     String?
+  syncAt         DateTime?
+
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage          ProjectStage?  @relation(fields: [stageId], references: [id], onDelete: SetNull) // 🔧 C2
+  assigneeMember ProjectMember? @relation("TaskAssignee", fields: [assigneeMemberId], references: [id], onDelete: SetNull) // 🔧 H5
+  creator        User           @relation("TaskCreator", fields: [creatorId], references: [id])
+
+  statusChanges TaskStatusChange[] // 🔧 H7: 审计关联
+
+  @@index([projectId])
+  @@index([status])
+  @@index([assigneeMemberId, status]) // 🔧 H4: 复合索引 (按执行者+状态查任务)
+  @@index([creatorId])
+}
+
+// ═══════════════════════════════════════════════
+// 审计 — 任务状态变更记录 (🔧 H7 新增)
+// ═══════════════════════════════════════════════
+
+model TaskStatusChange {
+  id        String   @id @default(cuid())
+  taskId    String
+  fromStatus String?  // 变更前状态（首次为 null）
+  toStatus  String    // 变更后状态
+  changedBy String    // 操作人 userId
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([changedBy])
+}
+
+// ═══════════════════════════════════════════════
+// 搭积木架构 — 功能组件注册 (F7)
+// ═══════════════════════════════════════════════
+
+model ComponentConfig {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  path        String   @unique // 前端路由路径 / API 路径前缀
+  enabled     Boolean  @default(true)
+  order       Int      @default(0) // 🔧 导航排序序号
+  policy      String   @default("whitelist") // 🔧 M14: "whitelist"=仅注册路径可访问 | "blacklist"=仅禁用已注册的禁用路径
+  description String?
+  dependsOnId String?  // 🔧 M13: 依赖的其他组件 ID，禁用父组件时子组件一并不可达
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dependsOn ComponentConfig? @relation("ComponentDependency", fields: [dependsOnId], references: [id], onDelete: SetNull)
+  dependedBy ComponentConfig[] @relation("ComponentDependency")
+
+  @@index([enabled])
+  @@index([order])
+  @@index([dependsOnId])
+}
+
+// ═══════════════════════════════════════════════
+// 运行日志 — 事件记录 (F6)
+// ═══════════════════════════════════════════════
+
+model ObservabilityEvent {
+  id             String   @id @default(cuid())
+  traceId        String
+  spanId         String?
+  parentSpanId   String?
+  eventType      String   // "request" | "db_query" | "ai_call" | "user_action" | "error"
+  path           String?  // API 请求路径
+  method         String?  // HTTP method
+  userId         String?
+  projectId       String?
+  statusCode     Int?
+  durationMs     Int?
+  requestBody    String?  // JSON string (SQLite 无原生 JSON 字段)
+  responseSummary String? // 响应摘要
+  errorMessage   String?
+  errorStack     String?
+  timestamp      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull) // 🔧 L17: FK 约束
+
+  @@index([traceId, timestamp])  // 🔧 H4: 复合索引 (按 trace 查询 span 并按时间排序)
+  @@index([eventType])
+  @@index([timestamp])
+  @@index([userId])
+}

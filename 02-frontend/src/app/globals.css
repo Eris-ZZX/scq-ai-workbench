@@ -1,0 +1,158 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ── Workspace Shell 配色 tokens ── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+  --font-mono: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+  --font-heading: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* workspace-shell brand colors */
+  --color-ws-blue: var(--ws-blue);
+  --color-ws-green: var(--ws-green);
+  --color-ws-amber: var(--ws-amber);
+  --color-ws-red: var(--ws-red);
+  --color-ws-violet: var(--ws-violet);
+  --color-ws-cyan: var(--ws-cyan);
+  --color-ws-sidebar-bg: var(--ws-sidebar-bg);
+  --color-ws-sidebar-text: var(--ws-sidebar-text);
+  --color-ws-content-bg: var(--ws-content-bg);
+  --color-ws-panel-bg: var(--ws-panel-bg);
+}
+
+/* ── Light theme (main content area) ── */
+:root {
+  --background: hsl(220 14% 96%);
+  --foreground: hsl(215 28% 17%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(215 28% 17%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(215 28% 17%);
+  --primary: hsl(221 83% 53%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(220 14% 96%);
+  --secondary-foreground: hsl(215 28% 17%);
+  --muted: hsl(210 20% 98%);
+  --muted-foreground: hsl(215 16% 47%);
+  --accent: hsl(210 20% 98%);
+  --accent-foreground: hsl(215 28% 17%);
+  --destructive: hsl(0 72% 51%);
+  --border: hsl(214 32% 91%);
+  --input: hsl(214 32% 91%);
+  --ring: hsl(221 83% 53%);
+  --chart-1: hsl(221 83% 53%);
+  --chart-2: hsl(142 71% 29%);
+  --chart-3: hsl(39 89% 44%);
+  --chart-4: hsl(271 81% 56%);
+  --chart-5: hsl(189 94% 30%);
+  --radius: 0.5rem;
+  --sidebar: hsl(215 28% 7%);
+  --sidebar-foreground: hsl(220 14% 90%);
+  --sidebar-primary: hsl(221 83% 53%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(215 17% 18%);
+  --sidebar-accent-foreground: hsl(220 14% 90%);
+  --sidebar-border: hsl(215 17% 15%);
+  --sidebar-ring: hsl(221 83% 53%);
+
+  /* workspace-shell brand tokens */
+  --ws-blue: #2563eb;
+  --ws-green: #059669;
+  --ws-amber: #d97706;
+  --ws-red: #dc2626;
+  --ws-violet: #7c3aed;
+  --ws-cyan: #0891b2;
+  --ws-sidebar-bg: #111827;
+  --ws-sidebar-text: #e5e7eb;
+  --ws-content-bg: #f6f7f9;
+  --ws-panel-bg: #ffffff;
+}
+
+/* ── Dark theme (full dark mode, future use) ── */
+.dark {
+  --background: hsl(215 28% 10%);
+  --foreground: hsl(210 20% 98%);
+  --card: hsl(215 28% 13%);
+  --card-foreground: hsl(210 20% 98%);
+  --popover: hsl(215 28% 13%);
+  --popover-foreground: hsl(210 20% 98%);
+  --primary: hsl(221 83% 60%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(215 17% 18%);
+  --secondary-foreground: hsl(210 20% 98%);
+  --muted: hsl(215 17% 18%);
+  --muted-foreground: hsl(215 20% 65%);
+  --accent: hsl(215 17% 18%);
+  --accent-foreground: hsl(210 20% 98%);
+  --destructive: hsl(0 72% 51%);
+  --border: hsl(215 17% 18%);
+  --input: hsl(215 17% 18%);
+  --ring: hsl(221 83% 60%);
+  --chart-1: hsl(221 83% 60%);
+  --chart-2: hsl(142 71% 45%);
+  --chart-3: hsl(39 89% 55%);
+  --chart-4: hsl(271 81% 65%);
+  --chart-5: hsl(189 94% 40%);
+  --sidebar: hsl(215 28% 7%);
+  --sidebar-foreground: hsl(220 14% 90%);
+  --sidebar-primary: hsl(221 83% 53%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(215 17% 18%);
+  --sidebar-accent-foreground: hsl(220 14% 90%);
+  --sidebar-border: hsl(215 17% 15%);
+  --sidebar-ring: hsl(221 83% 53%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+  }
+  html {
+    @apply font-sans;
+  }
+}

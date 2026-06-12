@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>供应链质量部 AI 应用规划 - 业务线视角</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+
+        :root {
+            --color-bg: #f8fafc;
+            --color-surface: #ffffff;
+            --color-text: #1e293b;
+            --color-text-secondary: #64748b;
+            --color-border: #e2e8f0;
+            --color-pqe: #059669;
+            --color-sqe: #7c3aed;
+            --color-qcm: #dc2626;
+            --color-lab: #ea580c;
+            --color-ems: #0284c7;
+            --color-npq: #6d28d9;
+            --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            padding: 4rem 2rem;
+            margin-bottom: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(-30px, -30px); }
+        }
+
+        .hero h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero p {
+            font-size: 1.125rem;
+            opacity: 0.9;
+            max-width: 800px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Business Line Tabs */
+        .business-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            border: 2px solid var(--color-border);
+            background: var(--color-surface);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            font-family: var(--font-sans);
+        }
+
+        .tab-button:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .tab-button.active {
+            color: white;
+            border-color: transparent;
+        }
+
+        .tab-button[data-business="pqe"].active {
+            background: var(--color-pqe);
+        }
+        .tab-button[data-business="sqe"].active {
+            background: var(--color-sqe);
+        }
+        .tab-button[data-business="qcm"].active {
+            background: var(--color-qcm);
+        }
+        .tab-button[data-business="lab"].active {
+            background: var(--color-lab);
+        }
+        .tab-button[data-business="ems"].active {
+            background: var(--color-ems);
+        }
+        .tab-button[data-business="npq"].active {
+            background: var(--color-npq);
+        }
+
+        /* Business Content */
+        .business-content {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .business-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Business Header */
+        .business-header {
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .business-header.pqe {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        }
+        .business-header.sqe {
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+        }
+        .business-header.qcm {
+            background: linear-gradient(135deg, #dc2626 0%, #f87171 100%);
+        }
+        .business-header.lab {
+            background: linear-gradient(135deg, #ea580c 0%, #fb923c 100%);
+        }
+        .business-header.ems {
+            background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+        }
+        .business-header.npq {
+            background: linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%);
+        }
+
+        .business-header h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .business-header .owner {
+            font-size: 1rem;
+            opacity: 0.95;
+            font-weight: 500;
+        }
+
+        /* Vertical Layer Stack */
+        .layer-stack {
+            position: relative;
+            padding-left: 3rem;
+        }
+
+        .layer-stack::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: linear-gradient(to bottom, var(--color-pqe), var(--color-sqe), var(--color-qcm), var(--color-lab), var(--color-ems));
+            border-radius: 2px;
+        }
+
+        .layer-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .layer-card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateX(8px);
+        }
+
+        .layer-card::before {
+            content: attr(data-layer-number);
+            position: absolute;
+            left: -3.5rem;
+            top: 2rem;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            background: var(--color-surface);
+            border: 3px solid var(--color-text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--color-text);
+        }
+
+        .layer-card.data-bus {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .layer-card.data-bus::before {
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .layer-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .layer-title .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .layer-card:not(.data-bus) .badge {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .layer-card.data-bus .badge {
+            background: #92400e;
+            color: white;
+        }
+
+        .layer-content {
+            color: var(--color-text-secondary);
+            line-height: 1.8;
+        }
+
+        .layer-content ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .layer-content li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        .layer-content li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            font-weight: 700;
+        }
+
+        .pqe .layer-content li::before { color: var(--color-pqe); }
+        .sqe .layer-content li::before { color: var(--color-sqe); }
+        .qcm .layer-content li::before { color: var(--color-qcm); }
+        .lab .layer-content li::before { color: var(--color-lab); }
+        .ems .layer-content li::before { color: var(--color-ems); }
+        .npq .layer-content li::before { color: var(--color-npq); }
+
+        .data-bus-content {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .data-bus-title {
+            font-weight: 700;
+            color: #92400e;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .data-domains {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .domain {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .domain-name {
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1rem;
+            }
+
+            .hero {
+                padding: 3rem 1rem;
+            }
+
+            .business-tabs {
+                flex-direction: column;
+            }
+
+            .tab-button {
+                width: 100%;
+            }
+
+            .layer-stack {
+                padding-left: 2rem;
+            }
+
+            .layer-card::before {
+                left: -2.5rem;
+                width: 2rem;
+                height: 2rem;
+                font-size: 0.875rem;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            .business-tabs {
+                display: none;
+            }
+
+            .business-content {
+                display: block !important;
+                page-break-before: always;
+            }
+
+            .layer-card {
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <div class="hero">
+        <div class="container">
+            <h1>供应链质量部 AI 应用规划</h1>
+            <p>业务线视角 - 竖向展示六大核心业务在各层级的完整规划</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Business Line Tabs -->
+        <div class="business-tabs">
+            <button class="tab-button active" data-business="pqe">PQE 过程质量管理</button>
+            <button class="tab-button" data-business="sqe">SQE 供应商质量管理</button>
+            <button class="tab-button" data-business="qcm">QCM 质量控制与测量</button>
+            <button class="tab-button" data-business="lab">实验室 可靠性与失效分析</button>
+            <button class="tab-button" data-business="ems">EMS 三地制造质量</button>
+            <button class="tab-button" data-business="npq">NPQ 新产品质量</button>
+        </div>
+
+        <!-- PQE Business Line -->
+        <div class="business-content active" id="pqe">
+            <div class="business-header pqe">
+                <h2>PQE 过程质量管理</h2>
+                <div class="owner">主导：陈亮 / 张潇</div>
+            </div>
+
+            <div class="layer-stack">
+                <!-- 第五层 -->
+                <div class="layer-card" data-layer-number="5">
+                    <div class="layer-title">
+                        <span class="badge">第五层</span>
+                        管理决策层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li>辛锡堂驾驶舱 - PQE过程异常状态监控</li>
+                            <li>改善价值量化看板（Q×C双维度）- PQE改善项目追踪</li>
+                            <li>节拍卡点关联分析 - 过程异常对生产效率的影响</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第四层 -->
+                <div class="layer-card" data-layer-number="4">
+                    <div class="layer-title">
+                        <span class="badge">第四层</span>
+                        PQE工作台
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>双级分工路由</strong>：助理工程师任务 vs 工程师任务 vs 跨组协调</li>
+                            <li><strong>主动改善立项</strong>：基于问题频率与节拍影响自动建议改善项目</li>
+                            <li><strong>节拍卡点关联</strong>：过程异常与生产效率数据的实时关联分析</li>
+                            <li><strong>质量策划输出</strong>：NPI阶段的质量策划文档生成与跟踪</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第三层 -->
+                <div class="layer-card" data-layer-number="3">
+                    <div class="layer-title">
+                        <span class="badge">第三层</span>
+                        智能处理层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>问题分类路由AI（PQE双级）</strong>：自动识别过程异常类型，路由至合适人员</li>
+                            <li><strong>改善优先级量化引擎</strong>：质量问题频率 × 节拍影响系数 = 改善优先级分数</li>
+                            <li><strong>跨厂区版本一致性引擎</strong>：追踪工艺变更在各厂区的执行状态</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第二层 - 数据总线层 -->
+                <div class="layer-card data-bus" data-layer-number="2">
+                    <div class="layer-title">
+                        <span class="badge">第二层</span>
+                        数据总线层 - PQE域
+                    </div>
+                    <div class="layer-content">
+                        <p>PQE域数据跨角色共享，按权限授权访问</p>
+                        <div class="data-bus-content">
+                            <div class="data-bus-title">PQE域数据内容</div>
+                            <div class="data-domains">
+                                <div class="domain">
+                                    <div class="domain-name">过程异常</div>
+                                    <div>异常记录/问题处置/改善记录</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">策划文档</div>
+                                    <div>质量策划/节点状态/风险清单</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">节拍关联</div>
+                                    <div>节拍数据/返工时间/等待时间</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第一层 -->
+                <div class="layer-card" data-layer-number="1">
+                    <div class="layer-title">
+                        <span class="badge">第一层</span>
+                        数据采集层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>过程异常录入</strong>：PQE过程异常记录、问题处置记录</li>
+                            <li><strong>节拍数据录入</strong>：生产效率数据（节拍/返工/等待时间）</li>
+                            <li><strong>改善数据录入</strong>：改善立项与验证记录、改善前后数据对比</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SQE Business Line -->
+        <div class="business-content" id="sqe">
+            <div class="business-header sqe">
+                <h2>SQE 供应商质量管理</h2>
+                <div class="owner">主导：王慈僧</div>
+            </div>
+
+            <div class="layer-stack">
+                <!-- 第五层 -->
+                <div class="layer-card" data-layer-number="5">
+                    <div class="layer-title">
+                        <span class="badge">第五层</span>
+                        管理决策层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li>供应商交付影响追踪 - 供应商质量表现对生产计划的影响</li>
+                            <li>SI批退率预警 - 供应商批退率异常预警</li>
+                            <li>供应商全维度画像看板 - 综合评分与分级管理</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第四层 -->
+                <div class="layer-card" data-layer-number="4">
+                    <div class="layer-title">
+                        <span class="badge">第四层</span>
+                        SQE供应商台
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>双级分工路由</strong>：助理工程师任务 vs 工程师任务 vs 跨组协调</li>
+                            <li><strong>异常分级处理</strong>：根据供应商风险等级自动分级处理</li>
+                            <li><strong>标准合理性反馈</strong>：向研发反馈检验标准合理性</li>
+                            <li><strong>8D跟踪</strong>：供应商8D报告跟踪与验证</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第三层 -->
+                <div class="layer-card" data-layer-number="3">
+                    <div class="layer-title">
+                        <span class="badge">第三层</span>
+                        智能处理层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>问题分类路由AI（SQE双级）</strong>：自动识别供应商异常类型，路由至合适人员</li>
+                            <li><strong>供应商全维度画像自动生成</strong>：SI数据 + IQC数据 + 各厂区物料反馈 + 8D记录 + 交付数据</li>
+                            <li><strong>可靠性标准合理性预警</strong>：批退率持续偏高/偏低 → 触发标准评审提醒</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第二层 - 数据总线层 -->
+                <div class="layer-card data-bus" data-layer-number="2">
+                    <div class="layer-title">
+                        <span class="badge">第二层</span>
+                        数据总线层 - SQM域
+                    </div>
+                    <div class="layer-content">
+                        <p>SQM域数据跨角色共享，按权限授权访问</p>
+                        <div class="data-bus-content">
+                            <div class="data-bus-title">SQM域数据内容</div>
+                            <div class="data-domains">
+                                <div class="domain">
+                                    <div class="domain-name">稽核/8D</div>
+                                    <div>稽核记录/8D报告/SI数据</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">评级/供应商画像</div>
+                                    <div>供应商评级/全维度画像</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">可靠性标准</div>
+                                    <div>检验标准/可靠性标准</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem; font-size: 0.9rem; color: #92400e;">
+                                <strong>物料供应模式标签：</strong>
+                                客供（检验场地：石岩 or 东莞检验处，二选一）·
+                                客指自采（SQM管理供应商）·
+                                非客指自采（代工厂自选）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第一层 -->
+                <div class="layer-card" data-layer-number="1">
+                    <div class="layer-title">
+                        <span class="badge">第一层</span>
+                        数据采集层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>供应商异常录入</strong>：SQE供应商异常记录、8D报告</li>
+                            <li><strong>供应商出货报告录入</strong>：供应商出货检验报告</li>
+                            <li><strong>交付数据录入</strong>：供应商交付准时率、交付质量数据</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- QCM Business Line -->
+        <div class="business-content" id="qcm">
+            <div class="business-header qcm">
+                <h2>QCM 质量控制与测量</h2>
+                <div class="owner">主导：刘宽宽</div>
+            </div>
+
+            <div class="layer-stack">
+                <!-- 第五层 -->
+                <div class="layer-card" data-layer-number="5">
+                    <div class="layer-title">
+                        <span class="badge">第五层</span>
+                        管理决策层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li>IQC检验效率看板 - IQC检验吞吐量与及时率</li>
+                            <li>IPQC/FQC/OQC覆盖率分析 - 过程质量控制覆盖率</li>
+                            <li>SI驻厂数据汇总 - 供应商现场质量数据</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第四层 -->
+                <div class="layer-card" data-layer-number="4">
+                    <div class="layer-title">
+                        <span class="badge">第四层</span>
+                        QCM执行台
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>IQC综合判断辅助</strong>：自动汇集外观结果 + 包装信息 + 供应商出货报告 + 实验室（可靠性+尺寸）</li>
+                            <li><strong>IPQC巡检</strong>：过程巡检计划生成与执行跟踪</li>
+                            <li><strong>FQC/OQC</strong>：成品检验与出货检验执行</li>
+                            <li><strong>SI驻厂数据汇入</strong>：供应商现场质量数据实时汇入</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第三层 -->
+                <div class="layer-card" data-layer-number="3">
+                    <div class="layer-title">
+                        <span class="badge">第三层</span>
+                        智能处理层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>IQC综合判断辅助AI</strong>：自动汇集四类输入，生成批次判断建议</li>
+                            <li><strong>检验标准合理性预警</strong>：批退率持续偏高/偏低 → 触发标准评审提醒</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第二层 - 数据总线层 -->
+                <div class="layer-card data-bus" data-layer-number="2">
+                    <div class="layer-title">
+                        <span class="badge">第二层</span>
+                        数据总线层 - QCM域
+                    </div>
+                    <div class="layer-content">
+                        <p>QCM域数据跨角色共享，按权限授权访问</p>
+                        <div class="data-bus-content">
+                            <div class="data-bus-title">QCM域数据内容</div>
+                            <div class="data-domains">
+                                <div class="domain">
+                                    <div class="domain-name">IQC/IPQC/FQC/OQC/SI</div>
+                                    <div>检验记录/不良统计/改善记录</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">节拍关联数据</div>
+                                    <div>检验节拍/等待时间/返工时间</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第一层 -->
+                <div class="layer-card" data-layer-number="1">
+                    <div class="layer-title">
+                        <span class="badge">第一层</span>
+                        数据采集层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>检验节点录入</strong>：石岩工厂内IQC / 东莞检验处IQC · IPQC巡检记录 / FQC / OQC / SI驻厂记录</li>
+                            <li><strong>实验室数据汇入</strong>：实验室可靠性测试结果 + 尺寸测量结果</li>
+                            <li><strong>包装信息录入</strong>：包装检验结果与包装信息</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Laboratory Business Line -->
+        <div class="business-content" id="lab">
+            <div class="business-header lab">
+                <h2>实验室 可靠性与失效分析</h2>
+                <div class="owner">主导：张一焘</div>
+            </div>
+
+            <div class="layer-stack">
+                <!-- 第五层 -->
+                <div class="layer-card" data-layer-number="5">
+                    <div class="layer-title">
+                        <span class="badge">第五层</span>
+                        管理决策层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li>实验室负荷监控 - 待测样品数量与周转时间</li>
+                            <li>可靠性标准决策支持 - 研发测试 + 研发可靠性协同</li>
+                            <li>ORT测试计划执行状态 - 各厂区ORT测试覆盖</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第四层 -->
+                <div class="layer-card" data-layer-number="4">
+                    <div class="layer-title">
+                        <span class="badge">第四层</span>
+                        实验室工作台
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>FAE失效分析</strong>：失效模式识别与分析报告生成</li>
+                            <li><strong>可靠性评估</strong>：可靠性测试方案设计与评估</li>
+                            <li><strong>IQC检验支持</strong>：可靠性+尺寸测量支持</li>
+                            <li><strong>东莞ORT承接</strong>：东莞厂区ORT测试执行与数据管理</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第三层 -->
+                <div class="layer-card" data-layer-number="3">
+                    <div class="layer-title">
+                        <span class="badge">第三层</span>
+                        智能处理层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>可靠性标准合理性预警</strong>：批退率持续偏高/偏低 → 触发标准评审提醒</li>
+                            <li><strong>失效模式自动识别</strong>：基于历史FAE数据，辅助失效模式识别</li>
+                            <li><strong>测试方案自动推荐</strong>：根据产品特性自动推荐可靠性测试方案</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第二层 - 数据总线层 -->
+                <div class="layer-card data-bus" data-layer-number="2">
+                    <div class="layer-title">
+                        <span class="badge">第二层</span>
+                        数据总线层 - 实验室域
+                    </div>
+                    <div class="layer-content">
+                        <p>实验室域数据跨角色共享，按权限授权访问</p>
+                        <div class="data-bus-content">
+                            <div class="data-bus-title">实验室域数据内容</div>
+                            <div class="data-domains">
+                                <div class="domain">
+                                    <div class="domain-name">测试用例/ORT</div>
+                                    <div>测试用例/ORT测试计划与结果</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">评估/可靠性</div>
+                                    <div>可靠性评估/失效分析</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem; font-size: 0.9rem; color: #92400e;">
+                                <strong>跨体系接口：</strong>
+                                研发测试 + 研发可靠性（实验室为接口方）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第一层 -->
+                <div class="layer-card" data-layer-number="1">
+                    <div class="layer-title">
+                        <span class="badge">第一层</span>
+                        数据采集层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>可靠性测试结果录入</strong>：可靠性测试数据、测试报告</li>
+                            <li><strong>尺寸测量结果录入</strong>：尺寸测量数据（含东莞ORT + 东莞委托石岩项目）</li>
+                            <li><strong>FAE分析记录录入</strong>：失效分析记录、分析报告</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EMS Business Line -->
+        <div class="business-content" id="ems">
+            <div class="business-header ems">
+                <h2>EMS 三地制造质量</h2>
+                <div class="owner">主导：刘畅</div>
+            </div>
+
+            <div class="layer-stack">
+                <!-- 第五层 -->
+                <div class="layer-card" data-layer-number="5">
+                    <div class="layer-title">
+                        <span class="badge">第五层</span>
+                        管理决策层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li>跨厂区版本执行状态 - 各厂区版本执行一致性监控</li>
+                            <li>三地质量对比看板 - 清溪/丰顺/越南质量数据对比</li>
+                            <li>跨厂区差异预警 - 各厂区质量表现差异预警</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第四层 -->
+                <div class="layer-card" data-layer-number="4">
+                    <div class="layer-title">
+                        <span class="badge">第四层</span>
+                        EMS三地看板
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>清溪/丰顺/越南</strong>：三地进行质量数据实时监控</li>
+                            <li><strong>版本同步追踪</strong>：各厂区版本执行状态跟踪</li>
+                            <li><strong>跨厂区差异记录</strong>：记录各厂区自动化程度差异导致的工艺差异</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第三层 -->
+                <div class="layer-card" data-layer-number="3">
+                    <div class="layer-title">
+                        <span class="badge">第三层</span>
+                        智能处理层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>跨厂区版本一致性引擎</strong>：变更发起 → 影响范围识别 → 差异化工艺方案标记 → 执行确认追踪</li>
+                            <li><strong>跨厂区差异分析</strong>：自动识别各厂区质量表现差异并预警</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第二层 - 数据总线层 -->
+                <div class="layer-card data-bus" data-layer-number="2">
+                    <div class="layer-title">
+                        <span class="badge">第二层</span>
+                        数据总线层 - EMS域
+                    </div>
+                    <div class="layer-content">
+                        <p>EMS域数据跨角色共享，按权限授权访问</p>
+                        <div class="data-bus-content">
+                            <div class="data-bus-title">EMS域数据内容</div>
+                            <div class="data-domains">
+                                <div class="domain">
+                                    <div class="domain-name">三地质量/版本执行</div>
+                                    <div>清溪/丰顺/越南质量数据</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">变更单/工艺变更</div>
+                                    <div>ECO/工艺变更/检验标准变更</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem; font-size: 0.9rem; color: #92400e;">
+                                <strong>版本管理域：</strong>
+                                变更类型：ECO（产品设计）/ 工艺变更 / 检验标准变更 ·
+                                版本状态：主版本 + 各厂区差异化分支 ·
+                                同步方向：双向（石岩↔代工厂）+ 多点（各代工厂厂区间）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第一层 -->
+                <div class="layer-card" data-layer-number="1">
+                    <div class="layer-title">
+                        <span class="badge">第一层</span>
+                        数据采集层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>EMS三地异常录入</strong>：清溪/丰顺/越南三地质量异常记录</li>
+                            <li><strong>版本执行数据录入</strong>：各厂区版本执行状态、差异记录</li>
+                            <li><strong>变更数据录入</strong>：ECO变更单 / 工艺变更单 / 检验标准变更单</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NPQ Business Line -->
+        <div class="business-content" id="npq">
+            <div class="business-header npq">
+                <h2>NPQ 新产品质量</h2>
+                <div class="owner">主导：王孟义</div>
+            </div>
+
+            <div class="layer-stack">
+                <!-- 第五层 -->
+                <div class="layer-card" data-layer-number="5">
+                    <div class="layer-title">
+                        <span class="badge">第五层</span>
+                        管理决策层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li>NPQ项目状态看板 - 所有NPI/JDM项目状态监控</li>
+                            <li>质量策划节点追踪 - 质量策划各节点完成状态</li>
+                            <li>历史改善沉淀检索 - NPQ启动时自动检索相关产品历史改善</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第四层 -->
+                <div class="layer-card" data-layer-number="4">
+                    <div class="layer-title">
+                        <span class="badge">第四层</span>
+                        NPQ项目中枢
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>矩阵团队协调</strong>：跨职能团队协调与沟通</li>
+                            <li><strong>NPI/JDM并行</strong>：支持NPI和JDM项目并行管理</li>
+                            <li><strong>质量策划输出</strong>：质量策划文档生成与节点管理</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第三层 -->
+                <div class="layer-card" data-layer-number="3">
+                    <div class="layer-title">
+                        <span class="badge">第三层</span>
+                        智能处理层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>改善知识库自动检索</strong>：NPQ新品启动时自动检索相关产品历史改善沉淀</li>
+                            <li><strong>质量策划智能辅助</strong>：基于历史项目自动生成质量策划模板</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 第二层 - 数据总线层 -->
+                <div class="layer-card data-bus" data-layer-number="2">
+                    <div class="layer-title">
+                        <span class="badge">第二层</span>
+                        数据总线层 - NPQ域
+                    </div>
+                    <div class="layer-content">
+                        <p>NPQ域数据跨角色共享，按权限授权访问</p>
+                        <div class="data-bus-content">
+                            <div class="data-bus-title">NPQ域数据内容</div>
+                            <div class="data-domains">
+                                <div class="domain">
+                                    <div class="domain-name">策划文档</div>
+                                    <div>质量策划/风险评估/控制计划</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">节点状态</div>
+                                    <div>项目节点/里程碑/风险清单</div>
+                                </div>
+                                <div class="domain">
+                                    <div class="domain-name">改善记录</div>
+                                    <div>历史改善/经验教训</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem; font-size: 0.9rem; color: #92400e;">
+                                <strong>改善知识库：</strong>
+                                来源：PQE量产改善 + EMS代工厂改善 ·
+                                分类：工艺改善 / 产品设计改善 / 过程控制改善 ·
+                                NPQ新品启动时自动检索相关产品历史改善沉淀
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第一层 -->
+                <div class="layer-card" data-layer-number="1">
+                    <div class="layer-title">
+                        <span class="badge">第一层</span>
+                        数据采集层
+                    </div>
+                    <div class="layer-content">
+                        <ul>
+                            <li><strong>策划文档录入</strong>：质量策划文档、节点状态更新</li>
+                            <li><strong>改善数据录入</strong>：改善立项与验证记录</li>
+                            <li><strong>风险数据录入</strong>：风险评估记录、风险清单更新</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const businessContents = document.querySelectorAll('.business-content');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const business = button.getAttribute('data-business');
+
+                // Remove active class from all buttons and contents
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                businessContents.forEach(content => content.classList.remove('active'));
+
+                // Add active class to clicked button and corresponding content
+                button.classList.add('active');
+                document.getElementById(business).classList.add('active');
+            });
+        });
+
+        // Smooth scroll for layer cards
+        const layerCards = document.querySelectorAll('.layer-card');
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateX(0)';
+                }
+            });
+        }, observerOptions);
+
+        layerCards.forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(-30px)';
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(card);
+        });
+    </script>
+</body>
+</html>
