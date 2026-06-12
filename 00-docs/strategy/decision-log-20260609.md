@@ -92,7 +92,7 @@
 ### 目录结构
 
 ```text
-02-frontend/src/
+quality-workbench-app/src/
 ├─ platform/          ← 共享平台能力（将来可抽为 @qe/platform）
 │  ├─ auth/           ← 登录、会话、UserContext
 │  ├─ permissions/    ← 项目+角色权限

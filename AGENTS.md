@@ -4,9 +4,11 @@
 如果工具列表中有 list_projects，说明 MCP 运行在 workspace 模式：
   1. 新会话开始先调用 list_projects，选择当前项目。
   2. 后续每次调用 Vibe Tracker 工具都带上 projectId，例如 get_context({projectId})、get_plan({projectId})、add_log({projectId, ...})、update_state({projectId, ...})。
+  3. 只处理 list_projects 返回的已登记项目；不要把普通当前目录或未登记文件夹当作 VibeTracker 项目。
+  4. 如果当前项目不在列表中，先提醒用户在 VibeTracker 中创建或登记项目，不要继续调用项目工具。
 如果没有 list_projects，说明 MCP 运行在单项目模式，工具调用不需要 projectId。
 
-会话开始调 get_context，了解项目状态。
+选定项目后（或单项目模式下会话开始时）调 get_context，了解项目状态。
 如首次运行或需要完整规划，调用 get_plan 读取 plan.md 模板。
 
 六种 add_log type 及其触发时机：
@@ -40,6 +42,7 @@
   check_consistency。如有 warning，修正后重新 update_state。
 可用标签：@frontend @backend @devops @database @npm @bug @config @deploy @general
 <!-- VIBE-TRACKER-END -->
+
 
 
 

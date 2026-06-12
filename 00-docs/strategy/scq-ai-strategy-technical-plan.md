@@ -366,7 +366,7 @@ Next.js Server (localhost:3000)
 > **更新于 2026-06-09。** 单体全栈 Next.js 工程，内部按 platform / flows / admin 三层模块边界组织。依赖方向：flows → platform（单向），admin → platform（单向），flows 和 admin 之间不直接依赖。
 
 ```text
-02-frontend/
+quality-workbench-app/
 ├─ public/
 ├─ prisma/
 │  ├─ schema.prisma          ← 所有数据模型（MVP 用 SQLite）

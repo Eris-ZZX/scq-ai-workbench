@@ -1,5 +1,5 @@
 {
-  "name": "02-frontend",
+  "name": "quality-workbench-app",
   "version": "0.1.0",
   "private": true,
   "prisma": {
