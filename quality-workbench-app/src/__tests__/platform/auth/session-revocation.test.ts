@@ -54,7 +54,6 @@ describe('auth session revocation', () => {
         sub: 'user-1',
         username: 'npq',
         role: 'user',
-        displayName: 'NPQ',
         iat: 200,
         exp: Math.floor(Date.now() / 1000) + 3600,
       },
@@ -63,7 +62,6 @@ describe('auth session revocation', () => {
       id: 'user-1',
       username: 'npq',
       role: 'user',
-      displayName: 'NPQ',
       status: 'active',
       updatedAt: new Date(100_000),
     });
@@ -89,7 +87,6 @@ describe('auth session revocation', () => {
         sub: 'user-1',
         username: 'npq',
         role: 'user',
-        displayName: 'NPQ',
         iat: 100,
       },
     });
@@ -97,7 +94,6 @@ describe('auth session revocation', () => {
       id: 'user-1',
       username: 'npq',
       role: 'user',
-      displayName: 'NPQ',
       status: 'active',
       updatedAt: new Date(103_000),
     });
@@ -112,7 +108,6 @@ describe('auth session revocation', () => {
         sub: 'user-1',
         username: 'npq',
         role: 'user',
-        displayName: 'NPQ',
         iat: 100,
         authAt: 100_100,
       },
@@ -121,7 +116,6 @@ describe('auth session revocation', () => {
       id: 'user-1',
       username: 'npq',
       role: 'user',
-      displayName: 'NPQ',
       status: 'active',
       updatedAt: new Date(100_101),
     });

@@ -64,7 +64,6 @@ type WorkbenchData = {
   roleContext: {
     userId: string;
     username: string;
-    displayName: string;
     appRole: string;
     workbenchRole: WorkbenchRole;
     position: null | { code: string; name: string; roleGroup: string };
@@ -108,7 +107,7 @@ const TODO_LABEL: Record<TodoType, string> = {
   returned: '退回',
   missing_deliverable: '缺交付件',
   responsibility: '责任项',
-  pending_parent_close: '待关闭',
+  pending_parent_close: '待确认关闭',
   stage_gate: '阶段门',
 };
 
@@ -123,8 +122,6 @@ const FILTERS = [
   { key: 'all', label: '全部' },
   { key: 'overdue', label: '逾期' },
   { key: 'blocked', label: '阻塞' },
-  { key: 'missing_deliverable', label: '缺交付件' },
-  { key: 'pending_parent_close', label: '待关闭' },
 ] as const;
 
 export default function WorkbenchPage() {
@@ -140,7 +137,7 @@ export default function WorkbenchPage() {
     const res = await fetch('/api/npq/workbench');
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setError(body.error ?? '工作台加载失败');
+      setError(body.error ?? '个人工作台加载失败');
       setLoading(false);
       return;
     }
@@ -187,10 +184,11 @@ export default function WorkbenchPage() {
     }
   }
 
-  if (loading) return <div className="p-8 text-sm text-muted-foreground">加载工作台...</div>;
-  if (!data) return <div className="p-8 text-sm text-red-600">{error || '工作台不可用'}</div>;
+  if (loading) return <div className="p-8 text-sm text-muted-foreground">加载个人工作台...</div>;
+  if (!data) return <div className="p-8 text-sm text-red-600">{error || '个人工作台不可用'}</div>;
 
   const role = data.roleContext.workbenchRole;
+  const showProjectTodos = role !== 'admin';
 
   return (
     <div className="min-h-screen bg-ws-content-bg">
@@ -202,7 +200,7 @@ export default function WorkbenchPage() {
               <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-700">{ROLE_LABEL[role]}</span>
               {data.roleContext.position && <span>{data.roleContext.position.code}</span>}
             </div>
-            <h1 className="mt-1 text-2xl font-semibold text-foreground">{data.roleContext.displayName}，今天先看这些项目</h1>
+            <h1 className="mt-1 text-2xl font-semibold text-foreground">{data.roleContext.username}，个人工作台</h1>
           </div>
           <div className="flex gap-2">
             {role === 'admin' && (
@@ -223,17 +221,15 @@ export default function WorkbenchPage() {
           </div>
         )}
 
-        <section className="mb-5 grid gap-3 md:grid-cols-5">
+        {showProjectTodos && <section className="mb-5 grid gap-3 md:grid-cols-3">
           <Metric label="待处理" value={data.actionMetrics.totalTodo} active={activeFilter === 'all'} onClick={() => setActiveFilter('all')} />
           <Metric label="逾期" value={data.actionMetrics.overdue} tone="red" active={activeFilter === 'overdue'} onClick={() => setActiveFilter('overdue')} />
           <Metric label="阻塞" value={data.actionMetrics.blocked} tone="red" active={activeFilter === 'blocked'} onClick={() => setActiveFilter('blocked')} />
-          <Metric label="缺交付件" value={data.actionMetrics.missingDeliverable} tone="amber" active={activeFilter === 'missing_deliverable'} onClick={() => setActiveFilter('missing_deliverable')} />
-          <Metric label="待关闭" value={data.actionMetrics.pendingParentClose} tone="green" active={activeFilter === 'pending_parent_close'} onClick={() => setActiveFilter('pending_parent_close')} />
-        </section>
+        </section>}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="space-y-5">
-            <section className="overflow-hidden rounded-lg border border-border bg-white">
+            {showProjectTodos && <section className="overflow-hidden rounded-lg border border-border bg-white">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
                 <h2 className="text-sm font-semibold text-foreground">按项目分组的待处理任务</h2>
                 <div className="flex gap-1">
@@ -276,34 +272,8 @@ export default function WorkbenchPage() {
                   ))}
                 </div>
               )}
-            </section>
+            </section>}
 
-            <section className="rounded-lg border border-border bg-white p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">相关项目状态</h2>
-                <span className="text-xs text-muted-foreground">按关注程度排序</span>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                {data.projectCards.map((project) => (
-                  <Link key={project.projectId} href={`/flows/npq/projects/${project.projectId}`} className="rounded-md border border-border p-3 transition hover:border-primary hover:bg-muted/20">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{project.projectName}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                          <span>{project.currentStage}</span>
-                          <span>{project.todoCount} 待处理</span>
-                          {project.riskFlags.map((flag) => <RiskFlag key={flag} flag={flag} />)}
-                        </div>
-                      </div>
-                      <span className="text-lg font-semibold text-foreground">{project.progressPercent}%</span>
-                    </div>
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${project.progressPercent}%` }} />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
           </main>
 
           <aside className="space-y-5">
@@ -484,9 +454,9 @@ function WorkbenchDrawer({
       {todo.type === 'pending_parent_close' ? (
         <div className="space-y-4">
           <div className="rounded-md border bg-green-50 p-3 text-sm text-green-800">
-            项目活动下的涉及子任务已完成，等待 NPQ 最终关闭。
+            项目活动下的涉及子任务已完成，等待 NPQ 确认关闭。
           </div>
-          {canManage && <Button disabled={saving} onClick={closeParent}><ShieldCheck className="mr-1 h-4 w-4" /> 关闭项目活动</Button>}
+          {canManage && <Button disabled={saving} onClick={closeParent}><ShieldCheck className="mr-1 h-4 w-4" /> 确认关闭</Button>}
         </div>
       ) : todo.type === 'stage_gate' ? (
         <div className="space-y-4">
@@ -586,7 +556,7 @@ function WorkbenchDrawer({
 }
 
 function RiskFlag({ flag }: { flag: string }) {
-  const cls = flag === '逾期' || flag === '阻塞' ? 'bg-red-100 text-red-700' : flag === '待关闭' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+  const cls = flag === '逾期' || flag === '阻塞' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700';
   return <span className={`rounded px-1.5 py-0.5 text-xs ${cls}`}>{flag}</span>;
 }
 

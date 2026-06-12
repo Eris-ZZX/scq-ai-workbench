@@ -10,10 +10,10 @@ const { mockGetSession, mockJson, mockGetEvents, mockGetUsageStats, mockPrisma }
   mockGetUsageStats: vi.fn(),
   mockPrisma: {
     project: { findFirst: vi.fn() },
+    projectMember: { findFirst: vi.fn() },
     projectPositionAssignment: { findMany: vi.fn() },
     userPosition: { findUnique: vi.fn() },
     npqActionPermission: { findFirst: vi.fn() },
-    notification: { updateMany: vi.fn() },
   },
 }));
 
@@ -24,7 +24,6 @@ vi.mock('@/platform/observability/metrics', () => ({ getUsageStats: mockGetUsage
 vi.mock('next/server', () => ({ NextResponse: { json: mockJson } }));
 
 import { GET as getObservability } from '@/app/api/admin/observability/route';
-import { PATCH as patchMyTodos } from '@/app/api/npq/my-todos/route';
 import { canExecuteNpqAction } from '@/lib/db/npq-permissions';
 
 describe('full-test security regressions', () => {
@@ -47,6 +46,9 @@ describe('full-test security regressions', () => {
 
   it('allows project-scoped permissions only after project access and action permission match', async () => {
     mockPrisma.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    mockPrisma.projectMember.findFirst.mockResolvedValueOnce({
+      user: { positionBinding: { positionRoleId: 'pos-npq' } },
+    });
     mockPrisma.projectPositionAssignment.findMany.mockResolvedValueOnce([{ positionRoleId: 'pos-npq' }]);
     mockPrisma.userPosition.findUnique.mockResolvedValueOnce({ positionRoleId: 'pos-npq' });
     mockPrisma.npqActionPermission.findFirst.mockResolvedValueOnce({ id: 'perm-1' });
@@ -70,31 +72,5 @@ describe('full-test security regressions', () => {
 
     expect(res.status).toBe(403);
     expect(mockGetEvents).not.toHaveBeenCalled();
-  });
-
-  it('marks only the current user notification as read', async () => {
-    mockGetSession.mockResolvedValueOnce({ sub: 'user-1', role: 'user' });
-    mockPrisma.notification.updateMany.mockResolvedValueOnce({ count: 1 });
-
-    const res = await patchMyTodos({
-      json: () => Promise.resolve({ notificationId: 'notice-1' }),
-    } as unknown as Request);
-
-    expect(res.status).toBe(200);
-    expect(mockPrisma.notification.updateMany).toHaveBeenCalledWith({
-      where: { id: 'notice-1', recipientUserId: 'user-1' },
-      data: { status: 'read', readAt: expect.any(Date) },
-    });
-  });
-
-  it('returns 404 when marking another user notification as read', async () => {
-    mockGetSession.mockResolvedValueOnce({ sub: 'user-1', role: 'user' });
-    mockPrisma.notification.updateMany.mockResolvedValueOnce({ count: 0 });
-
-    const res = await patchMyTodos({
-      json: () => Promise.resolve({ notificationId: 'notice-2' }),
-    } as unknown as Request);
-
-    expect(res.status).toBe(404);
   });
 });

@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { ProjectActivityEditor } from './project-activity-editor';
 
 type PositionBinding = null | {
   positionRoleId: string;
@@ -12,7 +14,7 @@ type ProjectMember = {
   id: string;
   userId: string;
   role: string;
-  user: { id: string; username: string; displayName: string; positionBinding: PositionBinding };
+  user: { id: string; username: string; positionBinding: PositionBinding };
 };
 
 type Project = {
@@ -28,9 +30,16 @@ type Project = {
 type User = {
   id: string;
   username: string;
-  displayName: string;
   status: string;
   positionBinding: PositionBinding;
+};
+
+type ActivityTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  version: number | string | null;
+  stats: { stageCount: number; parentCount: number; childCount: number };
 };
 
 const projectRoleNames = ['NPQ', 'PQE', 'SQE', 'FAE', 'RAM', 'QCM'] as const;
@@ -67,25 +76,32 @@ function statusLabel(status: string) {
   return statusOptions.find((item) => item.value === status)?.label ?? status;
 }
 
-function displayUser(user?: { username: string; displayName: string }) {
+function displayUser(user?: { username: string }) {
   if (!user) return '-';
-  return `${user.displayName} (${user.username})`;
+  return user.username;
 }
 
 function userRoleName(user: { positionBinding: PositionBinding }) {
   return user.positionBinding?.positionRole.code ?? user.positionBinding?.positionRole.name ?? '';
 }
 
+function formatTemplateVersion(version: ActivityTemplate['version']) {
+  if (!version) return 'latest';
+  if (typeof version === 'number') return `V${version}`;
+  return version;
+}
+
 export default function AdminProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [templates, setTemplates] = useState<ActivityTemplate[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [memberDialog, setMemberDialog] = useState<AddMemberDialog | null>(null);
-  const [createForm, setCreateForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '' });
+  const [createForm, setCreateForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: '' });
   const [basicForm, setBasicForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1' });
 
   function syncBasicForm(project?: Project) {
@@ -105,19 +121,26 @@ export default function AdminProjectsPage() {
 
   async function load(preferredProjectId = selectedProjectId) {
     setError('');
-    const [projectsRes, usersRes] = await Promise.all([
+    const [projectsRes, usersRes, templatesRes] = await Promise.all([
       fetch('/api/admin/projects'),
       fetch('/api/admin/users'),
+      fetch('/api/npq/activity-templates'),
     ]);
-    if (!projectsRes.ok || !usersRes.ok) {
+    if (!projectsRes.ok || !usersRes.ok || !templatesRes.ok) {
       setError('加载项目或用户失败，请刷新后重试。');
       setLoading(false);
       return;
     }
     const nextProjects = (await projectsRes.json()) as Project[];
     const nextUsers = (await usersRes.json()) as User[];
+    const nextTemplates = (await templatesRes.json()) as ActivityTemplate[];
     setProjects(nextProjects);
     setUsers(nextUsers);
+    setTemplates(nextTemplates);
+    setCreateForm((current) => ({
+      ...current,
+      activityTemplateSetId: current.activityTemplateSetId || nextTemplates[0]?.id || '',
+    }));
     const nextSelected = nextProjects.find((project) => project.id === preferredProjectId) ?? nextProjects[0];
     setSelectedProjectId(nextSelected?.id ?? '');
     syncBasicForm(nextSelected);
@@ -163,10 +186,20 @@ export default function AdminProjectsPage() {
     return data;
   }
 
+  function replaceProject(project: Project) {
+    setProjects((current) => current.map((item) => (item.id === project.id ? project : item)));
+    setSelectedProjectId(project.id);
+    syncBasicForm(project);
+  }
+
   async function createProject() {
     const name = createForm.name.trim();
     if (!name) {
       setError('请填写项目名称。');
+      return;
+    }
+    if (templates.length > 0 && !createForm.activityTemplateSetId) {
+      setError('请选择活动模板');
       return;
     }
     const created = await requestJson('POST', {
@@ -175,10 +208,11 @@ export default function AdminProjectsPage() {
       status: createForm.status,
       currentStage: createForm.currentStage,
       ownerId: createForm.ownerId,
+      activityTemplateSetId: createForm.activityTemplateSetId,
     });
     if (created?.id) {
       setCreateOpen(false);
-      setCreateForm({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '' });
+      setCreateForm({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: templates[0]?.id ?? '' });
       await load(created.id);
     }
   }
@@ -190,7 +224,7 @@ export default function AdminProjectsPage() {
       projectId: selectedProject.id,
       ...basicForm,
     });
-    if (updated?.id) await load(updated.id);
+    if (updated?.id) replaceProject(updated as Project);
   }
 
   async function deleteProject(project: Project) {
@@ -219,16 +253,24 @@ export default function AdminProjectsPage() {
       roleName,
       userIds,
     });
-    if (updated?.id) await load(updated.id);
+    if (updated?.id) replaceProject(updated as Project);
   }
 
   async function addRoleMembers() {
     if (!memberDialog) return;
     const pool = rolePools.find((item) => item.roleName === memberDialog.roleName);
     if (!pool) return;
-    const current = selectedUserIdsForRole(memberDialog.roleName);
-    await syncRoleMembers(memberDialog.roleName, Array.from(new Set([...current, ...memberDialog.selectedUserIds])));
-    setMemberDialog(null);
+    if (!selectedProject) return;
+    const updated = await requestJson('PATCH', {
+      action: 'addRoleMembers',
+      projectId: selectedProject.id,
+      roleName: memberDialog.roleName,
+      userIds: memberDialog.selectedUserIds,
+    });
+    if (updated?.id) {
+      replaceProject(updated as Project);
+      setMemberDialog(null);
+    }
   }
 
   function toggleDialogUser(userId: string, checked: boolean) {
@@ -258,7 +300,17 @@ export default function AdminProjectsPage() {
             <h1 className="mt-1 text-2xl font-semibold text-foreground">项目管理</h1>
             <p className="mt-1 text-sm text-muted-foreground">后台维护项目清单、基础信息和六类固定项目成员。</p>
           </div>
-          <button className={actionButton(true)} onClick={() => setCreateOpen(true)} disabled={saving}>
+          <button
+            className={actionButton(true)}
+            onClick={() => {
+              setCreateForm((current) => ({
+                ...current,
+                activityTemplateSetId: current.activityTemplateSetId || templates[0]?.id || '',
+              }));
+              setCreateOpen(true);
+            }}
+            disabled={saving}
+          >
             <Plus className="h-4 w-4" />新增项目
           </button>
         </div>
@@ -297,9 +349,14 @@ export default function AdminProjectsPage() {
                 <section className="rounded-lg border border-border bg-white">
                   <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                     <div className="text-sm font-semibold">项目基本信息</div>
-                    <button className={dangerButton()} onClick={() => deleteProject(selectedProject)} disabled={saving}>
-                      <Trash2 className="h-4 w-4" />删除项目
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <Link className={actionButton()} href={`/flows/npq/activities?projectId=${selectedProject.id}`}>
+                        维护任务状态
+                      </Link>
+                      <button className={dangerButton()} onClick={() => deleteProject(selectedProject)} disabled={saving}>
+                        <Trash2 className="h-4 w-4" />删除项目
+                      </button>
+                    </div>
                   </div>
                   <div className="grid gap-3 p-4 md:grid-cols-2">
                     <label className="text-xs font-medium text-muted-foreground">
@@ -341,14 +398,12 @@ export default function AdminProjectsPage() {
                   </div>
                   <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
                     {rolePools.map((pool) => {
-                      const selected = selectedUserIdsForRole(pool.roleName);
                       const selectedMembers = selectedMembersForRole(pool.roleName);
                       return (
                         <div key={pool.roleName} className="rounded border border-border bg-white">
                           <div className="flex items-center justify-between border-b border-border px-3 py-2">
                             <div className="text-sm font-semibold">{pool.roleName}</div>
                             <div className="flex items-center gap-2">
-                              <div className="text-xs text-muted-foreground">{selected.size}/{pool.users.length}</div>
                               <button
                                 className={actionButton()}
                                 onClick={() => setMemberDialog({ roleName: pool.roleName, search: '', selectedUserIds: [] })}
@@ -382,6 +437,8 @@ export default function AdminProjectsPage() {
                     })}
                   </div>
                 </section>
+
+                <ProjectActivityEditor projectId={selectedProject.id} />
               </>
             )}
           </main>
@@ -417,6 +474,26 @@ export default function AdminProjectsPage() {
                 </label>
               </div>
               <label className="block text-xs font-medium text-muted-foreground">
+                活动模板
+                <select
+                  className={fieldClass('mt-1 h-9 w-full')}
+                  value={createForm.activityTemplateSetId}
+                  onChange={(event) => setCreateForm((current) => ({ ...current, activityTemplateSetId: event.target.value }))}
+                  disabled={templates.length === 0}
+                >
+                  {templates.length === 0 ? (
+                    <option value="">暂无可用模板</option>
+                  ) : templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} / {formatTemplateVersion(template.version)} / {template.stats.parentCount} 项目活动 / {template.stats.childCount} 子任务
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
+                  创建时一次性导入所选模板的最新版本，之后项目活动独立维护，不随模板中心同步。
+                </span>
+              </label>
+              <label className="block text-xs font-medium text-muted-foreground">
                 初始 NPQ 成员
                 <select className={fieldClass('mt-1 h-9 w-full')} value={createForm.ownerId} onChange={(event) => setCreateForm((current) => ({ ...current, ownerId: event.target.value }))}>
                   <option value="">暂不指定</option>
@@ -426,7 +503,7 @@ export default function AdminProjectsPage() {
             </div>
             <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
               <button className={actionButton()} onClick={() => setCreateOpen(false)} disabled={saving}>取消</button>
-              <button className={actionButton(true)} onClick={createProject} disabled={saving || !createForm.name.trim()}>保存</button>
+              <button className={actionButton(true)} onClick={createProject} disabled={saving || !createForm.name.trim() || templates.length === 0}>保存</button>
             </div>
           </div>
         </div>
@@ -444,7 +521,7 @@ export default function AdminProjectsPage() {
                 className={fieldClass('h-9 w-full')}
                 value={memberDialog.search}
                 onChange={(event) => setMemberDialog((current) => current ? { ...current, search: event.target.value } : current)}
-                placeholder="搜索姓名或账号，不输入则显示全部可增加人员"
+                placeholder="搜索账号，不输入则显示全部可增加人员"
                 disabled={saving}
               />
 
@@ -456,8 +533,7 @@ export default function AdminProjectsPage() {
                   .filter((user) => !selected.has(user.id))
                   .filter((user) => (
                     !keyword ||
-                    user.username.toLowerCase().includes(keyword) ||
-                    user.displayName.toLowerCase().includes(keyword)
+                    user.username.toLowerCase().includes(keyword)
                   ));
                 return (
                   <div className="max-h-72 overflow-auto rounded border border-border p-2">

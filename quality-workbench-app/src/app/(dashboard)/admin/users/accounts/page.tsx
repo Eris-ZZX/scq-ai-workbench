@@ -74,6 +74,7 @@ export default function AdminUserAccountsPage() {
   const disabledUsers = useMemo(() => users.filter((user) => user.status === 'disabled'), [users]);
 
   async function updateUser(id: string, data: Record<string, string | null>) {
+    setError('');
     setSaving(true);
     const res = await fetch('/api/admin/users', {
       method: 'PATCH',
@@ -86,18 +87,34 @@ export default function AdminUserAccountsPage() {
       setError(body.error ?? '更新用户失败。');
       return;
     }
-    load();
+    setError('');
+    await load();
   }
 
   async function createUser() {
+    setError('');
+    const username = newUser.username.trim();
+    const password = newUser.password;
+    if (!username || !password) {
+      setError('请填写用户名和密码。');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_-]{1,50}$/.test(username)) {
+      setError('用户名须为 1-50 位字母、数字、下划线或连字符。');
+      return;
+    }
+    if (password.length < 6 || password.length > 128) {
+      setError('密码长度应为 6-128 位。');
+      return;
+    }
     setSaving(true);
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: newUser.username,
-        email: newUser.email || null,
-        password: newUser.password,
+        username,
+        email: newUser.email.trim() || null,
+        password,
         role: newUser.role,
         status: newUser.status,
         positionRoleId: newUser.positionRoleId || null,
@@ -109,6 +126,7 @@ export default function AdminUserAccountsPage() {
       setError(body.error ?? '创建用户失败。');
       return;
     }
+    setError('');
     setNewUser(emptyNewUser);
     setShowCreate(false);
     await load();

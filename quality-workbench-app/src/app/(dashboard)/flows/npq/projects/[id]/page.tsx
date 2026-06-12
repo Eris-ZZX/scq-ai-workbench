@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type ProjectMember = {
@@ -12,7 +12,6 @@ type ProjectMember = {
   user: {
     id: string;
     username: string;
-    displayName: string;
     positionBinding: null | {
       positionRoleId: string;
       positionRole: { id: string; code: string; name: string; roleGroup: string };
@@ -71,7 +70,6 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editingStage, setEditingStage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [canPassStageGate, setCanPassStageGate] = useState(false);
   const [stageGates, setStageGates] = useState<StageGate[]>([]);
@@ -82,7 +80,7 @@ export default function ProjectDetailPage() {
     try {
       const projectRes = await fetch(`/api/npq/projects/${id}`);
       if (!projectRes.ok) {
-        router.push('/workbench');
+        router.push('/project-workbench');
         return;
       }
       setProject(await projectRes.json());
@@ -119,58 +117,6 @@ export default function ProjectDetailPage() {
     return () => window.clearTimeout(timeoutId);
   }, [loadProject]);
 
-  async function updateStageStatus(stageId: string, status: string) {
-    const res = await fetch(`/api/npq/projects/${id}/stages/${stageId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    if (!res.ok) {
-      setErrorMsg('状态更新失败');
-      return;
-    }
-    await loadProject();
-    setEditingStage(null);
-  }
-
-  async function addStage() {
-    const name = prompt('新阶段名称:');
-    if (!name) return;
-    const res = await fetch(`/api/npq/projects/${id}/stages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) {
-      setErrorMsg('添加阶段失败');
-      return;
-    }
-    await loadProject();
-  }
-
-  async function deleteStage(stageId: string) {
-    if (!confirm('删除此阶段？关联的任务将保留。')) return;
-    const res = await fetch(`/api/npq/projects/${id}/stages/${stageId}`, { method: 'DELETE' });
-    if (!res.ok) {
-      setErrorMsg('删除阶段失败');
-      return;
-    }
-    await loadProject();
-  }
-
-  async function updateStatus(newStatus: string) {
-    const res = await fetch(`/api/npq/projects/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    if (!res.ok) {
-      setErrorMsg('状态更新失败');
-      return;
-    }
-    await loadProject();
-  }
-
   async function passStageGate(stage: string) {
     const res = await fetch(`/api/npq/projects/${id}/stage-gates`, {
       method: 'PATCH',
@@ -196,10 +142,10 @@ export default function ProjectDetailPage() {
     <div className="min-h-screen bg-ws-content-bg">
       <div className="mx-auto max-w-6xl px-6 py-8">
         <button
-          onClick={() => router.push('/workbench')}
+          onClick={() => router.push('/project-workbench')}
           className="mb-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> 返回工作台
+          <ArrowLeft className="h-4 w-4" /> 返回项目工作台
         </button>
 
         {errorMsg && (
@@ -214,26 +160,23 @@ export default function ProjectDetailPage() {
             <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
             {project.description && <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>}
             <div className="mt-2 flex flex-wrap gap-2">
-              <select value={project.status} onChange={(event) => updateStatus(event.target.value)} className="rounded-md border px-2 py-1 text-xs">
-                <option value="active">进行中</option>
-                <option value="paused">暂停</option>
-                <option value="completed">已完成</option>
-              </select>
+              <span className={`rounded px-2 py-1 text-xs font-medium ${projectStatusColor(project.status)}`}>
+                {projectStatusLabel(project.status)}
+              </span>
               <span className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">当前阶段 {project.currentStage}</span>
               <span className="text-xs text-muted-foreground">{project.stages.length} 阶段 / {project._count.tasks} 任务 / {project.members.length} 成员</span>
             </div>
           </div>
-          <Button size="sm" onClick={addStage}><Plus className="mr-1 h-3 w-3" />添加阶段</Button>
         </div>
 
         <section className="mb-6 rounded-lg border border-border bg-white p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-semibold">当前项目待处理事项</h2>
-              <p className="mt-1 text-xs text-muted-foreground">优先处理逾期、阻塞、退回和待关闭活动，点击后回到工作台处理。</p>
+              <p className="mt-1 text-xs text-muted-foreground">优先处理逾期、阻塞、退回和待确认关闭活动，点击后回到个人工作台处理。</p>
             </div>
             <Link href="/workbench" className="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary">
-              打开工作台
+              打开个人工作台
             </Link>
           </div>
           {projectTodos.length === 0 ? (
@@ -351,23 +294,6 @@ export default function ProjectDetailPage() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      {editingStage === stage.id ? (
-                        <div className="flex gap-1">
-                          {['pending', 'in_progress', 'completed', 'blocked'].map((status) => (
-                            <button key={status} onClick={() => updateStageStatus(stage.id, status)} className={`rounded px-2 py-0.5 text-xs font-medium ${stageStatusMap[status]!.color}`}>
-                              {stageStatusMap[status]!.label}
-                            </button>
-                          ))}
-                          <button onClick={() => setEditingStage(null)} className="p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-1">
-                          <button onClick={() => setEditingStage(stage.id)} className="rounded p-1 text-xs text-muted-foreground hover:bg-muted">状态</button>
-                          <button onClick={() => deleteStage(stage.id)} className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               );
@@ -380,7 +306,7 @@ export default function ProjectDetailPage() {
           <div className="flex flex-wrap gap-2">
             {project.members.map((member) => (
               <div key={member.user.id} className="rounded-lg border border-border bg-white px-3 py-2 text-sm">
-                <span className="font-medium">{member.user.displayName}</span>
+                <span className="font-medium">{member.user.username}</span>
                 <span className="ml-2 text-xs text-muted-foreground">@{member.user.username}</span>
                 <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">
                   {member.user.positionBinding?.positionRole.code ?? '未绑定角色'}
@@ -413,6 +339,20 @@ function todoTypeTone(type: string) {
   if (type === 'missing_deliverable' || type === 'stage_gate') return 'bg-amber-50 text-amber-700';
   if (type === 'pending_parent_close') return 'bg-green-50 text-green-700';
   return 'bg-blue-50 text-blue-700';
+}
+
+function projectStatusLabel(status: string) {
+  if (status === 'active') return '进行中';
+  if (status === 'completed') return '已完成';
+  if (status === 'paused') return '暂停';
+  return status;
+}
+
+function projectStatusColor(status: string) {
+  if (status === 'active') return 'bg-green-100 text-green-700';
+  if (status === 'completed') return 'bg-slate-100 text-slate-700';
+  if (status === 'paused') return 'bg-amber-100 text-amber-700';
+  return 'bg-muted text-muted-foreground';
 }
 
 function formatDate(value: string) {

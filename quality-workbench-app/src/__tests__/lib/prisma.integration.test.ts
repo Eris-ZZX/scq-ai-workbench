@@ -28,20 +28,23 @@ describe('Database — integration (libsql direct)', () => {
     ]);
   });
 
-  it('has 11 component configs with workbench and F4 entries', async () => {
+  it('has 10 component configs with personal/project workbench and F4 entries', async () => {
     const rs = await db.execute(
       'SELECT name, path, enabled, "order" FROM ComponentConfig ORDER BY "order" ASC'
     );
-    expect(rs.rows).toHaveLength(11);
+    expect(rs.rows).toHaveLength(10);
     const rows = rs.rows as unknown as { name: string; path: string; enabled: number; order: number }[];
     rows.forEach((r, i) => {
       expect(r.enabled).toBe(1);
       expect(r.order).toBe(i + 1); // 🔧 order 字段验证
     });
     expect(rows.map((row) => row.path)).toContain('/workbench');
+    expect(rows.map((row) => row.path)).toContain('/project-workbench');
+    expect(rows.map((row) => row.path)).not.toContain('/flows/npq/projects');
+    expect(rows.map((row) => row.path)).not.toContain('/flows/npq/todos');
+    expect(rows.map((row) => row.path)).not.toContain('/flows/npq/tasks');
     expect(rows.map((row) => row.path)).toContain('/flows/npq/activities');
     expect(rows.map((row) => row.path)).toContain('/flows/npq/activity-dashboard');
-    expect(rows.map((row) => row.path)).toContain('/flows/npq/todos');
     expect(rows.map((row) => row.path)).toContain('/admin/positions');
   });
 
@@ -278,12 +281,7 @@ describe('Database — integration (libsql direct)', () => {
   });
 
   // ── 🔧 M13: Component dependency chain seeded ──
-  it('Component dependencies are seeded (tasks→projects, comp-mgmt→templates)', async () => {
-    const tasks = await db.execute(
-      "SELECT dependsOnId FROM ComponentConfig WHERE id = 'cmp-npq-tasks'"
-    );
-    expect((tasks.rows[0] as unknown as { dependsOnId: string }).dependsOnId).toBe('cmp-npq-projects');
-
+  it('Component dependencies are seeded (comp-mgmt→templates)', async () => {
     const compMgmt = await db.execute(
       "SELECT dependsOnId FROM ComponentConfig WHERE id = 'cmp-admin-components'"
     );
@@ -293,10 +291,5 @@ describe('Database — integration (libsql direct)', () => {
       "SELECT dependsOnId FROM ComponentConfig WHERE id = 'cmp-admin-users'"
     );
     expect((users.rows[0] as unknown as { dependsOnId: string }).dependsOnId).toBe('cmp-admin-positions');
-
-    const todos = await db.execute(
-      "SELECT dependsOnId FROM ComponentConfig WHERE id = 'cmp-npq-todos'"
-    );
-    expect((todos.rows[0] as unknown as { dependsOnId: string }).dependsOnId).toBe('cmp-npq-activities');
   });
 });

@@ -157,9 +157,10 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
     let parentCount = 0;
     let childCount = 0;
     for (const stage of version.stages) {
+      const stageName = stage.name;
       await tx.stageGateRecord.upsert({
-        where: { projectId_stage: { projectId, stage: stage.code } },
-        create: { projectId, stage: stage.code },
+        where: { projectId_stage: { projectId, stage: stageName } },
+        create: { projectId, stage: stageName },
         update: {},
       });
 
@@ -169,9 +170,9 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
           data: {
             projectId,
             templateParentId: parent.id,
-            stage: stage.code,
+            stage: stageName,
             projectTaskName: parent.name,
-            plannedDueDate: parent.plannedOffsetDays ? offsetDueDate(parent.plannedOffsetDays) : defaultDueDate(stage.code),
+            plannedDueDate: parent.plannedOffsetDays ? offsetDueDate(parent.plannedOffsetDays) : defaultDueDate(stageName),
             sortOrder: parent.sortOrder || parentCount,
           },
           select: { id: true },
@@ -266,7 +267,7 @@ export async function getProjectActivityView(projectId: string) {
 export async function getActivityEvents(projectId: string, childId?: string) {
   return prisma.activityEvent.findMany({
     where: { projectId, ...(childId ? { childId } : {}) },
-    include: { actor: { select: { id: true, username: true, displayName: true } } },
+    include: { actor: { select: { id: true, username: true } } },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });

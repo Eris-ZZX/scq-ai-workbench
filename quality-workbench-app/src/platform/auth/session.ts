@@ -3,7 +3,6 @@ export type SessionUser = {
   sub: string;
   username: string;
   role: string;
-  displayName?: string;
 };
 
 export { getSession as getCurrentUser } from './auth.config';

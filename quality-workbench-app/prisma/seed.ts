@@ -104,18 +104,16 @@ async function main() {
   console.log(`  F3 position roles: ${positionRoleSeeds.length} seeded`);
 
   const components = [
-    ['cmp-workbench', '工作台', '/workbench', 1],
-    ['cmp-npq-projects', '项目看板', '/flows/npq/projects', 2],
-    ['cmp-npq-tasks', '任务流转', '/flows/npq/tasks', 3],
-    ['cmp-npq-activities', '导入活动跟踪', '/flows/npq/activities', 4],
-    ['cmp-npq-activity-dashboard', '活动管理看板', '/flows/npq/activity-dashboard', 5],
-    ['cmp-npq-todos', '我的待办', '/flows/npq/todos', 6],
-    ['cmp-admin-projects', '项目管理', '/admin/projects', 7],
-    ['cmp-admin-templates', '模板中心', '/admin/templates', 8],
-    ['cmp-admin-positions', '岗位角色', '/admin/positions', 9],
-    ['cmp-admin-users', '用户管理', '/admin/users', 10],
-    ['cmp-admin-components', '功能组件管理', '/admin/components', 11],
-    ['cmp-admin-observability', '运行日志', '/admin/observability', 12],
+    ['cmp-workbench', '个人工作台', '/workbench', 1],
+    ['cmp-project-workbench', '项目工作台', '/project-workbench', 2],
+    ['cmp-npq-activities', '导入活动跟踪', '/flows/npq/activities', 3],
+    ['cmp-npq-activity-dashboard', '活动管理看板', '/flows/npq/activity-dashboard', 4],
+    ['cmp-admin-projects', '项目管理', '/admin/projects', 5],
+    ['cmp-admin-templates', '模板中心', '/admin/templates', 6],
+    ['cmp-admin-positions', '岗位角色', '/admin/positions', 7],
+    ['cmp-admin-users', '用户管理', '/admin/users', 8],
+    ['cmp-admin-components', '功能组件管理', '/admin/components', 9],
+    ['cmp-admin-observability', '运行日志', '/admin/observability', 10],
   ] as const;
 
   for (const [id, name, cp, order] of components) {
@@ -130,14 +128,21 @@ async function main() {
       [id, name, cp, order],
     );
   }
+  await executeWithRetry(
+    `UPDATE ComponentConfig
+     SET dependsOnId = NULL, updatedAt = datetime('now')
+     WHERE dependsOnId = 'cmp-npq-projects'`,
+  );
+  await executeWithRetry(
+    `DELETE FROM ComponentConfig
+     WHERE id IN ('cmp-npq-projects', 'cmp-npq-todos', 'cmp-npq-tasks')
+        OR path IN ('/flows/npq/projects', '/flows/npq/todos', '/flows/npq/tasks')`,
+  );
   console.log(`  ✓ Component configs: ${components.length} registered (with F3 positions)`);
 
   // ── 设置组件依赖关系 ──
   const deps = [
-    ['cmp-npq-tasks', 'cmp-npq-projects'],     // 任务流转依赖项目管理看板
-    ['cmp-npq-activities', 'cmp-npq-projects'], // 活动跟踪依赖项目管理看板
     ['cmp-npq-activity-dashboard', 'cmp-npq-activities'], // 管理看板依赖活动跟踪
-    ['cmp-npq-todos', 'cmp-npq-activities'], // 我的待办依赖活动跟踪
     ['cmp-admin-users', 'cmp-admin-positions'], // 用户岗位绑定依赖岗位字典
     ['cmp-admin-components', 'cmp-admin-templates'], // 组件管理依赖模板配置
   ];
@@ -193,14 +198,14 @@ async function main() {
   if (existingAdmin.rows[0]?.id) {
     await executeWithRetry(
       `UPDATE User
-       SET displayName='NPQ 管理员', passwordHash=?, role='admin', status='active', updatedAt=datetime('now')
+       SET passwordHash=?, role='admin', status='active', updatedAt=datetime('now')
        WHERE id=?`,
       [TEST_PASSWORD_HASH, adminUserId],
     );
   } else {
     await executeWithRetry(
-      `INSERT INTO User (id, username, passwordHash, displayName, email, role, status, createdAt, updatedAt)
-       VALUES (?, 'admin', ?, 'NPQ 管理员', 'admin@example.com', 'admin', 'active', datetime('now'), datetime('now'))`,
+      `INSERT INTO User (id, username, passwordHash, email, role, status, createdAt, updatedAt)
+       VALUES (?, 'admin', ?, 'admin@example.com', 'admin', 'active', datetime('now'), datetime('now'))`,
       [adminUserId, TEST_PASSWORD_HASH],
     );
   }
@@ -230,29 +235,28 @@ async function main() {
   );
 
   const fixedUsers = [
-    ['seed-user-npq', 'npq', 'NPQ 项目负责人', 'npq@example.com', 'pos-npq', 'owner'],
-    ['seed-user-pqe', 'pqe', 'PQE 工程师', 'pqe@example.com', 'pos-pqe', 'member'],
-    ['seed-user-sqe', 'sqe', 'SQE 工程师', 'sqe@example.com', 'pos-sqe', 'member'],
-    ['seed-user-fae', 'fae', 'FAE 工程师', 'fae@example.com', 'pos-fae', 'member'],
-    ['seed-user-ram', 'ram', 'RAM 工程师', 'ram@example.com', 'pos-ram', 'member'],
-    ['seed-user-qcm', 'qcm', 'QCM 工程师', 'qcm@example.com', 'pos-qcm', 'member'],
-    ['seed-user-manager', 'manager', '管理者', 'manager@example.com', 'pos-manager', 'observer'],
+    ['seed-user-npq', 'npq', 'npq@example.com', 'pos-npq', 'owner'],
+    ['seed-user-pqe', 'pqe', 'pqe@example.com', 'pos-pqe', 'member'],
+    ['seed-user-sqe', 'sqe', 'sqe@example.com', 'pos-sqe', 'member'],
+    ['seed-user-fae', 'fae', 'fae@example.com', 'pos-fae', 'member'],
+    ['seed-user-ram', 'ram', 'ram@example.com', 'pos-ram', 'member'],
+    ['seed-user-qcm', 'qcm', 'qcm@example.com', 'pos-qcm', 'member'],
+    ['seed-user-manager', 'manager', 'manager@example.com', 'pos-manager', 'observer'],
   ] as const;
   const seedUserIds: Record<string, string> = { admin: adminUserId };
 
-  for (const [seedId, username, displayName, email, positionRoleId, projectRole] of fixedUsers) {
+  for (const [seedId, username, email, positionRoleId, projectRole] of fixedUsers) {
     const existing = await executeWithRetry('SELECT id FROM User WHERE username = ? LIMIT 1', [username]);
     const userId = String(existing.rows[0]?.id ?? seedId);
     await executeWithRetry(
-      `INSERT INTO User (id, username, passwordHash, displayName, email, role, status, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, 'user', 'active', datetime('now'), datetime('now'))
+      `INSERT INTO User (id, username, passwordHash, email, role, status, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, 'user', 'active', datetime('now'), datetime('now'))
        ON CONFLICT(username) DO UPDATE SET
          passwordHash=excluded.passwordHash,
-         displayName=excluded.displayName,
          role='user',
          status='active',
          updatedAt=datetime('now')`,
-      [userId, username, TEST_PASSWORD_HASH, displayName, email],
+      [userId, username, TEST_PASSWORD_HASH, email],
     );
     seedUserIds[username] = userId;
     await executeWithRetry(
@@ -373,13 +377,12 @@ async function seedStructuredActivityTemplate(templates: QualityActivityTemplate
     if (!stageOrder.has(row.stage)) stageOrder.set(row.stage, stageOrder.size + 1);
     const stageId = `ats-${slug(row.stage)}`;
     await executeWithRetry(
-      `INSERT INTO ActivityTemplateStage (id, versionId, code, name, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-       ON CONFLICT(versionId, code) DO UPDATE SET
-         name=excluded.name,
+      `INSERT INTO ActivityTemplateStage (id, versionId, name, sortOrder, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+       ON CONFLICT(versionId, name) DO UPDATE SET
          sortOrder=excluded.sortOrder,
          updatedAt=datetime('now')`,
-      [stageId, versionId, row.stage, row.stage, stageOrder.get(row.stage) ?? 0],
+      [stageId, versionId, row.stage, stageOrder.get(row.stage) ?? 0],
     );
 
     const parentKey = `${row.stage}::${row.projectTaskName}`;

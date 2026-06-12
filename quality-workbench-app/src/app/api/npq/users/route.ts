@@ -11,7 +11,6 @@ export async function GET() {
     select: {
       id: true,
       username: true,
-      displayName: true,
       positionBinding: {
         select: {
           positionRoleId: true,
@@ -19,7 +18,7 @@ export async function GET() {
         },
       },
     },
-    orderBy: { displayName: 'asc' },
+    orderBy: { username: 'asc' },
   });
   return NextResponse.json(users);
 }

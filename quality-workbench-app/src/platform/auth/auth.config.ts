@@ -29,14 +29,12 @@ export async function createSession(user: {
   id: string;
   username: string;
   role: string;
-  displayName?: string;
 }) {
   const authAt = Date.now();
   const token = await new SignJWT({
     sub: user.id,
     username: user.username,
     role: user.role,
-    displayName: user.displayName ?? user.username,
     authAt,
   })
     .setProtectedHeader({ alg: 'HS256' })
@@ -59,13 +57,11 @@ export async function maybeRefreshSession(existing: {
   sub: string;
   username: string;
   role: string;
-  displayName?: string;
 }) {
   await createSession({
     id: existing.sub,
     username: existing.username,
     role: existing.role,
-    displayName: existing.displayName,
   });
 }
 
@@ -109,14 +105,13 @@ function isRevokedToken(token: string) {
 
 function isValidPayload(
   payload: unknown,
-): payload is { sub: string; username: string; role: string; displayName?: string; iat?: number; authAt?: number } {
+): payload is { sub: string; username: string; role: string; iat?: number; authAt?: number } {
   if (!payload || typeof payload !== 'object') return false;
   const p = payload as Record<string, unknown>;
   return (
     typeof p.sub === 'string' &&
     typeof p.username === 'string' &&
     typeof p.role === 'string' &&
-    (p.displayName === undefined || typeof p.displayName === 'string') &&
     (p.iat === undefined || typeof p.iat === 'number') &&
     (p.authAt === undefined || typeof p.authAt === 'number')
   );
@@ -126,7 +121,6 @@ export async function getSession(): Promise<{
   sub: string;
   username: string;
   role: string;
-  displayName?: string;
 } | null> {
   const jar = await cookies();
   const token = jar.get(COOKIE_NAME)?.value;
@@ -146,7 +140,6 @@ export async function getSession(): Promise<{
         id: true,
         username: true,
         role: true,
-        displayName: true,
         status: true,
         updatedAt: true,
       },
@@ -167,7 +160,6 @@ export async function getSession(): Promise<{
       sub: user.id,
       username: user.username,
       role: user.role,
-      displayName: user.displayName,
     };
   } catch {
     return null;

@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
   "projectRoot": "D:\\Users\\vox1814\\Desktop\\AIspace\\5.Huge-App\\260608-QEworkspace",
-  "updatedAt": "2026-06-12T15:15:45+08:00",
-  "lastSessionId": "session-1781248278732",
+  "updatedAt": "2026-06-12T17:10:14+08:00",
+  "lastSessionId": "session-1781255385708",
   "source": "codex",
   "status": "in_progress",
-  "currentTask": "后台用户管理可用性优化",
+  "currentTask": "调整项目工作台文案和项目详情返回路径",
   "features": [
     {
       "id": "F1",
@@ -224,6 +224,6 @@
     "原 F4 扩展能力：审批、交付件在线预览、外部通知等"
   ],
   "blocker": "",
-  "lastAction": "用户管理列表和新增弹窗移除显示名称，创建链路自动使用用户名作为 displayName。",
-  "nextStep": "用户实测新增用户和用户列表展示是否符合只保留用户名的口径。"
+  "lastAction": "已将项目工作台列表标题改为“我的项目”，项目详情左上角返回改为“返回项目工作台”。",
+  "nextStep": "用户刷新项目工作台和项目详情页，确认标题与返回路径符合预期。"
 }

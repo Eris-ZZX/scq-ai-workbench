@@ -24,7 +24,7 @@ type ActivityAttachment = {
   fileName: string;
   sizeBytes: number | null;
   createdAt: string;
-  uploadedBy?: { displayName: string; username: string } | null;
+  uploadedBy?: { username: string } | null;
 };
 type ActivityChild = {
   id: string;
@@ -64,7 +64,7 @@ type ActivityEvent = {
   actionType: string;
   note: string | null;
   createdAt: string;
-  actor: { displayName: string; username: string } | null;
+  actor: { username: string } | null;
 };
 
 const STAGES = ['TR1', 'TR2&3', 'TR4', 'TR4A', 'TR5', 'TR6'];
@@ -134,10 +134,13 @@ export default function ActivityTrackingPage() {
       const res = await fetch('/api/npq/projects');
       if (res.ok) {
         const data = await res.json();
+        const requestedProjectId = new URLSearchParams(window.location.search).get('projectId') ?? '';
         setProjects(data);
-        const firstId = data[0]?.id ?? '';
-        setProjectId(firstId);
-        if (firstId) await loadActivities(firstId);
+        const selectedId = data.some((project: Project) => project.id === requestedProjectId)
+          ? requestedProjectId
+          : data[0]?.id ?? '';
+        setProjectId(selectedId);
+        if (selectedId) await loadActivities(selectedId);
       }
       setLoading(false);
     })();
@@ -441,7 +444,7 @@ export default function ActivityTrackingPage() {
           <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
             {events.slice(0, 8).map((event) => (
               <div key={event.id} className="rounded border bg-muted/20 px-3 py-2">
-                <span className="font-medium text-foreground">{event.actor?.displayName ?? '系统'}</span>
+                <span className="font-medium text-foreground">{event.actor?.username ?? '系统'}</span>
                 <span className="ml-2">{event.actionType}</span>
                 {event.note && <span className="ml-2 text-amber-700">{event.note}</span>}
                 <span className="ml-2">{formatDateTime(event.createdAt)}</span>
@@ -778,7 +781,7 @@ function ChildEvents({ childId }: { childId: string }) {
           <div className="flex items-center gap-2 text-muted-foreground">
             <Clock className="h-3 w-3" />
             <span>{formatDateTime(event.createdAt)}</span>
-            <span>{event.actor?.displayName ?? '系统'}</span>
+            <span>{event.actor?.username ?? '系统'}</span>
           </div>
           <div className="mt-1 font-medium">{event.actionType}</div>
           {event.note && <div className="mt-1 text-amber-700">{event.note}</div>}

@@ -33,7 +33,6 @@ type TemplateParentInput = {
 };
 
 type TemplateStageInput = {
-  code: string;
   name: string;
   sortOrder: number;
   parents: TemplateParentInput[];
@@ -81,9 +80,8 @@ function parseTemplateStages(value: unknown): TemplateStageInput[] {
 
   for (const [stageIndex, rawStage] of asArray(value).entries()) {
     const stageRecord = asRecord(rawStage);
-    const code = cleanText(stageRecord.code);
-    const name = cleanText(stageRecord.name) || code;
-    if (!code || !name) continue;
+    const name = cleanText(stageRecord.name);
+    if (!name) continue;
 
     const parents: TemplateParentInput[] = [];
     for (const [parentIndex, rawParent] of asArray(stageRecord.parents).entries()) {
@@ -120,7 +118,6 @@ function parseTemplateStages(value: unknown): TemplateStageInput[] {
     }
 
     stages.push({
-      code,
       name,
       sortOrder: stageIndex + 1,
       parents,
@@ -154,7 +151,7 @@ async function getTemplateCenterView() {
   const stages = activeVersionIds.length
     ? await prisma.activityTemplateStage.findMany({
       where: { versionId: { in: activeVersionIds } },
-      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     })
     : [];
   const stageIds = stages.map((stage) => stage.id);
@@ -233,7 +230,6 @@ async function copyVersionStructure(client: TemplateWriteClient, sourceVersionId
   if (!source) throw new Error('SOURCE_VERSION_NOT_FOUND');
 
   const stages = source.stages.map((stage) => ({
-    code: stage.code,
     name: stage.name,
     sortOrder: stage.sortOrder,
     parents: stage.parents.map((parent) => ({
@@ -270,7 +266,6 @@ async function createVersionStructure(client: TemplateWriteClient, targetVersion
     const createdStage = await client.activityTemplateStage.create({
       data: {
         versionId: targetVersionId,
-        code: stage.code,
         name: stage.name,
         sortOrder: stage.sortOrder,
       },

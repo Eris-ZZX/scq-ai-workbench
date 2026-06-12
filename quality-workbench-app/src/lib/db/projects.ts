@@ -8,7 +8,7 @@ export function getProjectsByUser(userId: string) {
   return prisma.project.findMany({
     where: { members: { some: { userId } } },
     include: {
-      members: { include: { user: { select: { id: true, username: true, displayName: true } } } },
+      members: { include: { user: { select: { id: true, username: true } } } },
       stages: { orderBy: { order: 'asc' } },
       _count: { select: { tasks: true } },
     },
@@ -26,7 +26,6 @@ export function getProjectById(projectId: string, userId: string) {
             select: {
               id: true,
               username: true,
-              displayName: true,
               positionBinding: {
                 select: {
                   positionRoleId: true,
@@ -111,7 +110,6 @@ export function getMembers(projectId: string) {
         select: {
           id: true,
           username: true,
-          displayName: true,
           positionBinding: {
             select: {
               positionRoleId: true,

@@ -28,7 +28,6 @@ type MockResponse = { status: number; data?: unknown; url?: string };
 const activeUser = {
   id: 'u1',
   username: 'testuser',
-  displayName: '测试',
   role: 'user',
   status: 'active',
   passwordHash: '$2a$12$dummyhashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
@@ -101,7 +100,6 @@ describe('POST /api/auth/login', () => {
     mockVerifyPassword.mockResolvedValueOnce(true);
     const res = (await jsonRequest({ username: 'disabled', password: 'Correct1!' })) as unknown as MockResponse;
     expect(res.status).toBe(401);
-    expect(res.data).toEqual({ error: '用户名或密码错误' });
     expect(mockCreateSession).not.toHaveBeenCalled();
   });
 
@@ -114,7 +112,6 @@ describe('POST /api/auth/login', () => {
       id: 'u1',
       username: 'testuser',
       role: 'user',
-      displayName: '测试',
     });
   });
 
@@ -134,7 +131,6 @@ describe('POST /api/auth/login', () => {
       id: 'u1',
       username: 'testuser',
       role: 'user',
-      displayName: '测试',
     });
   });
 

@@ -3,7 +3,6 @@ import path from 'node:path';
 import { createClient } from '@libsql/client';
 import bcrypt from 'bcryptjs';
 
-// 直接用 libsql 测试认证逻辑，绕过 PrismaClient 的 DATABASE_URL 问题
 const dbPath = path.resolve(process.cwd(), 'dev.db');
 const db = createClient({ url: `file:${dbPath}` });
 const SALT_ROUNDS = 12;
@@ -11,7 +10,6 @@ const SALT_ROUNDS = 12;
 const testUser = {
   username: `test-auth-${Date.now()}`,
   password: 'Test1234!',
-  displayName: '测试用户',
 };
 
 describe('Auth: User CRUD + bcrypt (libsql direct)', () => {
@@ -21,23 +19,21 @@ describe('Auth: User CRUD + bcrypt (libsql direct)', () => {
     if (userId) {
       await db.execute({ sql: 'DELETE FROM User WHERE id = ?', args: [userId] });
     }
-    // 兜底: 用 username 清理
     await db.execute({ sql: 'DELETE FROM User WHERE username = ?', args: [testUser.username] });
   });
 
   it('creates a user with bcrypt-hashed password', async () => {
     const hash = await bcrypt.hash(testUser.password, SALT_ROUNDS);
     const rs = await db.execute({
-      sql: `INSERT INTO User (id, username, "passwordHash", displayName, role, status, createdAt, updatedAt)
-            VALUES (?, ?, ?, ?, 'user', 'active', datetime('now'), datetime('now'))
-            RETURNING id, username, displayName, role, status`,
-      args: [crypto.randomUUID(), testUser.username, hash, testUser.displayName],
+      sql: `INSERT INTO User (id, username, "passwordHash", role, status, createdAt, updatedAt)
+            VALUES (?, ?, ?, 'user', 'active', datetime('now'), datetime('now'))
+            RETURNING id, username, role, status`,
+      args: [crypto.randomUUID(), testUser.username, hash],
     });
     const user = rs.rows[0] as unknown as { id: string; username: string };
     userId = user.id;
     expect(user.username).toBe(testUser.username);
 
-    // 验证密码哈希不存为明文
     const raw = await db.execute({
       sql: 'SELECT "passwordHash" FROM User WHERE id = ?',
       args: [userId],
@@ -49,7 +45,7 @@ describe('Auth: User CRUD + bcrypt (libsql direct)', () => {
 
   it('findByUsername: finds existing user', async () => {
     const rs = await db.execute({
-      sql: 'SELECT id, username, displayName, role, status FROM User WHERE username = ?',
+      sql: 'SELECT id, username, role, status FROM User WHERE username = ?',
       args: [testUser.username],
     });
     expect(rs.rows).toHaveLength(1);
@@ -65,9 +61,9 @@ describe('Auth: User CRUD + bcrypt (libsql direct)', () => {
     expect(rs.rows).toHaveLength(0);
   });
 
-  it('findById: returns user without passwordHash (application layer)', async () => {
+  it('findById: returns user without passwordHash', async () => {
     const rs = await db.execute({
-      sql: 'SELECT id, username, displayName FROM User WHERE id = ?',
+      sql: 'SELECT id, username FROM User WHERE id = ?',
       args: [userId],
     });
     const user = rs.rows[0] as Record<string, unknown>;
@@ -99,9 +95,9 @@ describe('Auth: User CRUD + bcrypt (libsql direct)', () => {
     await expect(
       (async () => {
         await db.execute({
-          sql: `INSERT INTO User (id, username, "passwordHash", displayName)
-                VALUES (?, ?, ?, ?)`,
-          args: [crypto.randomUUID(), testUser.username, 'noop', 'dup'],
+          sql: `INSERT INTO User (id, username, "passwordHash")
+                VALUES (?, ?, ?)`,
+          args: [crypto.randomUUID(), testUser.username, 'noop'],
         });
       })(),
     ).rejects.toThrow();
@@ -121,7 +117,6 @@ describe('Auth: User CRUD + bcrypt (libsql direct)', () => {
     const rs = await db.execute({ sql: 'SELECT status FROM User WHERE id = ?', args: [userId] });
     const { status } = rs.rows[0] as unknown as { status: string };
     expect(status).toBe('disabled');
-    // 恢复
     await db.execute({ sql: 'UPDATE User SET status = ? WHERE id = ?', args: ['active', userId] });
   });
 });

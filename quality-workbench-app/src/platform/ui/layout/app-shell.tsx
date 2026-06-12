@@ -7,7 +7,6 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 type AppShellSession = {
   username: string;
   role: string;
-  displayName?: string;
 };
 
 export function AppShell({
@@ -20,7 +19,6 @@ export function AppShell({
   session: AppShellSession;
 }) {
   const [collapsed, setCollapsed] = React.useState(false);
-  const displayName = session.displayName ?? session.username;
   const toggleLabel = collapsed ? '展开侧边栏' : '隐藏侧边栏';
 
   return (
@@ -38,7 +36,7 @@ export function AppShell({
           <Link
             href="/workbench"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-ws-blue to-ws-green text-xs font-bold text-white"
-            title="工作台"
+            title="个人工作台"
           >
             SCQ
           </Link>
@@ -64,17 +62,17 @@ export function AppShell({
         <div className="mt-auto border-t border-white/10 px-3 py-3">
           <div className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''}`}>
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ws-blue text-xs font-bold text-white">
-              {displayName.charAt(0)}
+              {session.username.charAt(0)}
             </div>
             {!collapsed && (
               <>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white">{displayName}</div>
+                  <div className="truncate text-sm text-white">{session.username}</div>
                   <div className="text-xs text-ws-sidebar-text/60">
                     {session.role === 'admin' ? '系统管理员' : '项目成员'}
                   </div>
                 </div>
-                <Link href="/workbench" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="工作台">
+                <Link href="/workbench" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="个人工作台">
                   首页
                 </Link>
               </>

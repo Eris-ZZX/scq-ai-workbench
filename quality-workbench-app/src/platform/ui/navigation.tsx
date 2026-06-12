@@ -6,10 +6,17 @@ export async function DynamicNav() {
   const session = await getSession();
   const components = await getEnabledComponents();
   const isAdmin = session?.role === 'admin';
+  const projectWorkbenchEnabled = components.some((component) => (
+    component.path === '/project-workbench' &&
+    component.enabled
+  ));
   const businessLinks = components.filter((component) => (
     component.path.startsWith('/flows') &&
     component.enabled &&
-    !component.path.includes('[')
+    !component.path.includes('[') &&
+    component.path !== '/flows/npq/projects' &&
+    component.path !== '/flows/npq/todos' &&
+    component.path !== '/flows/npq/tasks'
   ));
   const adminLinks = components
     .filter((component) => (
@@ -23,7 +30,8 @@ export async function DynamicNav() {
   return (
     <nav className="flex flex-col gap-1">
       <SectionHeader>业务</SectionHeader>
-      <NavLink href="/workbench" label="工作台" />
+      <NavLink href="/workbench" label="个人工作台" />
+      {projectWorkbenchEnabled && <NavLink href="/project-workbench" label="项目工作台" />}
       {businessLinks.map((component) => (
         <NavLink key={component.id} href={component.path} label={component.name} />
       ))}

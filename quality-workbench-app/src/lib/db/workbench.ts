@@ -5,7 +5,6 @@ type SessionLike = {
   sub: string;
   username: string;
   role: string;
-  displayName?: string;
 };
 
 type WorkbenchRole = 'npq' | 'executor' | 'manager' | 'admin';
@@ -26,7 +25,6 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
     select: {
       id: true,
       username: true,
-      displayName: true,
       role: true,
       positionBinding: {
         select: {
@@ -95,18 +93,20 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
   }));
 
   const now = new Date();
-  const projectTodos = projectsWithParents.map((project) => {
-    const todos = buildProjectTodos({ project, session, workbenchRole, effectiveRoleIds, assignedProjectIds, now });
-    return {
-      projectId: project.id,
-      projectName: project.name,
-      currentStage: project.currentStage,
-      riskFlags: getProjectRiskFlags(todos),
-      todoCount: todos.length,
-      todos,
-      updatedAt: project.updatedAt.toISOString(),
-    };
-  }).filter((group) => group.todos.length > 0);
+  const projectTodos = workbenchRole === 'admin'
+    ? []
+    : projectsWithParents.map((project) => {
+        const todos = buildProjectTodos({ project, session, workbenchRole, effectiveRoleIds, assignedProjectIds, now });
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          currentStage: project.currentStage,
+          riskFlags: getProjectRiskFlags(todos),
+          todoCount: todos.length,
+          todos,
+          updatedAt: project.updatedAt.toISOString(),
+        };
+      }).filter((group) => group.todos.length > 0);
 
   const allTodos = projectTodos.flatMap((group) => group.todos);
   const projectCards = projectsWithParents
@@ -145,7 +145,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
         where: { projectId: { in: projectIds } },
         include: {
           project: { select: { id: true, name: true } },
-          actor: { select: { displayName: true, username: true } },
+          actor: { select: { username: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 30,
@@ -156,7 +156,6 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
     roleContext: {
       userId: session.sub,
       username: user?.username ?? session.username,
-      displayName: user?.displayName ?? session.displayName ?? session.username,
       appRole: session.role,
       position,
       workbenchRole,
@@ -185,7 +184,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
       projectName: event.project.name,
       actionType: event.actionType,
       note: event.note,
-      actorName: event.actor?.displayName ?? event.actor?.username ?? null,
+      actorName: event.actor?.username ?? null,
       createdAt: event.createdAt.toISOString(),
     })),
   };
@@ -279,8 +278,10 @@ function buildProjectTodos({
   const isProjectAssigned = assignedProjectIds.includes(project.id);
 
   for (const parent of project.activityParents) {
+    if (parent.status === 'not_started') continue;
+
     for (const child of parent.children) {
-      if (child.status === 'completed') continue;
+      if (child.status === 'not_started' || child.status === 'completed') continue;
       if (!canSeeChildTodo({ child, session, workbenchRole, effectiveRoleIds, isProjectAssigned })) continue;
 
       const dueAt = child.plannedDueDateOverride ?? parent.plannedDueDate;
@@ -324,7 +325,7 @@ function buildProjectTodos({
   const currentGate = project.stageGateRecords.find((gate) => gate.stage === project.currentStage);
   const currentStageParents = project.activityParents.filter((parent) => parent.stage === project.currentStage);
   const stageHasBlocker = currentStageParents.some((parent) => parent.hasBlocked);
-  const stageHasOpen = currentStageParents.some((parent) => parent.status !== 'closed');
+  const stageHasOpen = currentStageParents.some((parent) => parent.status !== 'not_started' && parent.status !== 'closed');
   if ((workbenchRole === 'npq' || workbenchRole === 'manager' || workbenchRole === 'admin') && currentGate?.status === 'pending' && (stageHasBlocker || stageHasOpen)) {
     todos.push({
       id: `stage:${project.id}:${project.currentStage}`,
@@ -430,7 +431,6 @@ function getProjectRiskFlags(todos: { type: string }[]) {
   if (todos.some((todo) => todo.type === 'overdue')) flags.add('逾期');
   if (todos.some((todo) => todo.type === 'blocked')) flags.add('阻塞');
   if (todos.some((todo) => todo.type === 'missing_deliverable')) flags.add('缺交付件');
-  if (todos.some((todo) => todo.type === 'pending_parent_close')) flags.add('待关闭');
   if (todos.some((todo) => todo.type === 'stage_gate')) flags.add('阶段门');
   return Array.from(flags);
 }
@@ -439,7 +439,6 @@ function getProjectRiskFlagsFromParents(parents: { hasOverdue: boolean; hasBlock
   const flags = new Set<string>();
   if (parents.some((parent) => parent.hasOverdue)) flags.add('逾期');
   if (parents.some((parent) => parent.hasBlocked)) flags.add('阻塞');
-  if (parents.some((parent) => parent.status === 'pending_npq_close')) flags.add('待关闭');
   return Array.from(flags);
 }
 
@@ -448,7 +447,6 @@ function getProjectSortScore(todos: { type: string }[], riskFlags: string[], upd
   if (todos.length > 0) score += 10_000;
   if (riskFlags.includes('逾期') || riskFlags.includes('阻塞')) score += 8_000;
   if (riskFlags.includes('阶段门')) score += 5_000;
-  if (riskFlags.includes('待关闭')) score += 3_000;
   return score;
 }
 

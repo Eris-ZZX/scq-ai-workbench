@@ -4,8 +4,8 @@ import { prisma } from '@/lib/prisma';
 // ─── 共享查询片段 ───
 const TASK_INCLUDE = {
   stage: { select: { id: true, name: true, status: true } },
-  assigneeMember: { select: { id: true, user: { select: { id: true, username: true, displayName: true } } } },
-  creator: { select: { id: true, username: true, displayName: true } },
+  assigneeMember: { select: { id: true, user: { select: { id: true, username: true } } } },
+  creator: { select: { id: true, username: true } },
 } as const;
 
 // 🔧 F1: 允许的状态转换

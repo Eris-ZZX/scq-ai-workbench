@@ -19,7 +19,6 @@ model User {
   id           String   @id @default(cuid())
   username     String   @unique
   passwordHash String
-  displayName  String
   email        String?  @unique // 🔧 H8: 加唯一约束，防止重复邮箱
   role         String   @default("user") // "admin" | "user"
   status       String   @default("active") // 🔧 H10: "active" | "disabled"，支持软禁用
@@ -240,7 +239,6 @@ model ActivityTemplateVersion {
 model ActivityTemplateStage {
   id         String   @id @default(cuid())
   versionId  String
-  code       String
   name       String
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
@@ -249,7 +247,7 @@ model ActivityTemplateStage {
   version ActivityTemplateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   parents ActivityTemplateParent[]
 
-  @@unique([versionId, code])
+  @@unique([versionId, name])
   @@index([versionId, sortOrder])
 }
 

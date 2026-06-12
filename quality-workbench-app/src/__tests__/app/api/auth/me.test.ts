@@ -35,7 +35,7 @@ describe('GET /api/auth/me', () => {
   });
 
   it('returns 200 with user data (no passwordHash)', async () => {
-    const safe = { id: 'u1', username: 'test', displayName: 'T', role: 'user', status: 'active' };
+    const safe = { id: 'u1', username: 'test', role: 'user', status: 'active' };
     mockGetSession.mockResolvedValueOnce({ sub: 'u1', username: 'test', role: 'user' });
     mockFindById.mockResolvedValueOnce(safe);
     const res = (await GET()) as unknown as MockResponse;

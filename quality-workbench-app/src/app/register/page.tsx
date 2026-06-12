@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 export default function RegisterPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,7 +18,7 @@ export default function RegisterPage() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, displayName }),
+      body: JSON.stringify({ username, password }),
     });
     if (res.ok) {
       router.push('/login?registered=1');
@@ -43,16 +42,6 @@ export default function RegisterPage() {
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            required
-          />
-        </div>
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-muted-foreground">显示名</label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
             className="w-full rounded-md border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             required
           />

@@ -6,7 +6,7 @@ const SALT_ROUNDS = 12;
 
 /** 返回给客户端的安全 User 字段（不含 passwordHash） */
 const SAFE_USER_SELECT = {
-  id: true, username: true, displayName: true,
+  id: true, username: true,
   role: true, status: true, email: true,
   createdAt: true, updatedAt: true,
 } as const;
@@ -20,7 +20,6 @@ type SafeUser = Pick<
 export async function createUser(params: {
   username: string;
   password: string;
-  displayName: string;
   email?: string;
 }) {
   const passwordHash = await bcrypt.hash(params.password, SALT_ROUNDS);
@@ -28,7 +27,6 @@ export async function createUser(params: {
     data: {
       username: params.username,
       passwordHash,
-      displayName: params.displayName,
       email: params.email ?? null,
     },
     select: SAFE_USER_SELECT,

@@ -78,7 +78,6 @@ export async function POST(request: Request) {
     id: user.id,
     username: user.username,
     role: user.role,
-    displayName: user.displayName,
   });
 
   if (formMode) {
@@ -88,7 +87,6 @@ export async function POST(request: Request) {
   return NextResponse.json({
     id: user.id,
     username: user.username,
-    displayName: user.displayName,
     role: user.role,
   });
 }

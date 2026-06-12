@@ -19,7 +19,6 @@ export async function GET() {
     select: {
       id: true,
       username: true,
-      displayName: true,
       role: true,
       status: true,
       email: true,
@@ -70,7 +69,6 @@ export async function POST(request: Request) {
   if (password.length < 6 || password.length > 128) {
     return NextResponse.json({ error: '密码长度应为 6-128 位' }, { status: 400 });
   }
-  const displayName = username;
   try {
     const passwordHash = await bcrypt.hash(password, 12);
     const created = await prisma.$transaction(async (tx) => {
@@ -78,7 +76,6 @@ export async function POST(request: Request) {
         data: {
           username,
           passwordHash,
-          displayName,
           email,
           role,
           status,
@@ -86,7 +83,6 @@ export async function POST(request: Request) {
         select: {
           id: true,
           username: true,
-          displayName: true,
           role: true,
           status: true,
           email: true,
@@ -105,7 +101,6 @@ export async function POST(request: Request) {
         select: {
           id: true,
           username: true,
-          displayName: true,
           role: true,
           status: true,
           email: true,
@@ -126,6 +121,9 @@ export async function POST(request: Request) {
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
       return NextResponse.json({ error: '角色不存在' }, { status: 400 });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2011') {
+      return NextResponse.json({ error: `数据库结构未同步：${String(error.meta?.modelName ?? 'User')} 存在非空旧字段，请刷新数据库迁移后重试` }, { status: 500 });
     }
     console.error('[admin/users:POST]', error);
     return NextResponse.json({ error: '创建用户失败' }, { status: 500 });
@@ -186,7 +184,6 @@ export async function PATCH(request: Request) {
       select: {
         id: true,
         username: true,
-        displayName: true,
         role: true,
         status: true,
         positionBinding: {

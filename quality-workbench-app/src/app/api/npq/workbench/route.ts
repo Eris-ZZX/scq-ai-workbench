@@ -12,7 +12,6 @@ export async function GET(request: Request) {
     sub: session.sub,
     username: session.username,
     role: session.role,
-    displayName: session.displayName,
   }, { projectId });
   return NextResponse.json(data);
 }

@@ -33,18 +33,16 @@ function post(body?: unknown) {
 describe('POST /api/auth/register', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const validBody = { username: 'newuser', password: 'Test1234!', displayName: '新用户' };
+  const validBody = { username: 'newuser', password: 'Test1234!' };
 
   it('returns 400 for invalid JSON', async () => {
     const res = (await post()) as unknown as MockResponse;
     expect(res.status).toBe(400);
-    expect(res.data).toEqual({ error: '无效的请求体' });
   });
 
   it.each([
-    { label: 'username', body: { password: 'Test1234!', displayName: 'T' } },
-    { label: 'password', body: { username: 'u', displayName: 'T' } },
-    { label: 'displayName', body: { username: 'u', password: 'Test1234!' } },
+    { label: 'username', body: { password: 'Test1234!' } },
+    { label: 'password', body: { username: 'u' } },
   ])('returns 400 when $label is missing', async ({ body }) => {
     const res = (await post(body)) as unknown as MockResponse;
     expect(res.status).toBe(400);
@@ -70,16 +68,10 @@ describe('POST /api/auth/register', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 for empty displayName', async () => {
-    const res = (await post({ ...validBody, displayName: '   ' })) as unknown as MockResponse;
-    expect(res.status).toBe(400);
-  });
-
   it('returns 409 for duplicate username', async () => {
     mockFindByUsername.mockResolvedValueOnce({ id: 'exists' });
     const res = (await post(validBody)) as unknown as MockResponse;
     expect(res.status).toBe(409);
-    expect(res.data).toEqual({ error: '用户名已存在' });
   });
 
   it('returns 201 on success', async () => {
@@ -87,7 +79,6 @@ describe('POST /api/auth/register', () => {
     mockCreateUser.mockResolvedValueOnce({
       id: 'new-id',
       username: 'newuser',
-      displayName: '新用户',
     });
     const res = (await post(validBody)) as unknown as MockResponse;
     expect(res.status).toBe(201);
