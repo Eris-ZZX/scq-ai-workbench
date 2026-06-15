@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import { getEnabledComponents } from '@/platform/permissions/component-guard';
 import { getSession } from '@/platform/auth/auth.config';
+import { getProjectAdminAccess } from '@/lib/db/project-admin-access';
 
 export async function DynamicNav() {
   const session = await getSession();
   const components = await getEnabledComponents();
   const isAdmin = session?.role === 'admin';
+  const projectAdminAccess = session ? await getProjectAdminAccess(session) : { kind: 'none' as const };
+  const canUseProjectManagement = projectAdminAccess.kind === 'admin' || projectAdminAccess.kind === 'npq';
   const businessLinks = components.filter((component) => (
     component.path.startsWith('/flows') &&
     component.enabled &&
@@ -32,12 +35,12 @@ export async function DynamicNav() {
         <NavLink key={component.id} href={component.path} label={component.name} />
       ))}
 
-      {isAdmin && adminLinks.length > 0 && (
+      {canUseProjectManagement && (
         <>
           <div className="mt-4" />
           <SectionHeader>后台配置</SectionHeader>
           <NavLink href="/admin/projects" label="项目管理" />
-          {adminLinks.map((component) => (
+          {isAdmin && adminLinks.map((component) => (
             <NavLink key={component.id} href={component.path} label={component.name} />
           ))}
         </>

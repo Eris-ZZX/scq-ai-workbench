@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { activateProjectStageActivities } from '@/lib/db/activities';
 import { getEffectivePositionRoleIds } from '@/lib/db/npq-permissions';
 
 type SessionLike = {
@@ -14,8 +15,23 @@ type TodoType =
   | 'returned'
   | 'missing_deliverable'
   | 'responsibility'
-  | 'pending_parent_close'
-  | 'stage_gate';
+  | 'pending_parent_close';
+
+type WorkbenchTodoItem = {
+  id: string;
+  type: TodoType;
+  projectId: string;
+  parentId: string | null;
+  childId: string | null;
+  stage: string;
+  title: string;
+  parentTitle: string;
+  ownerRole: string;
+  status: string;
+  dueAt: string | null;
+  priorityRank: number;
+  allowedActions: string[];
+};
 
 const BUSINESS_PROJECT_STATUSES = ['active', 'paused'];
 
@@ -66,6 +82,11 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
     },
     orderBy: { updatedAt: 'desc' },
   });
+  await Promise.all(
+    projects
+      .filter((project) => project.status !== 'completed')
+      .map((project) => activateProjectStageActivities(project.id, project.currentStage)),
+  );
   const currentStageParents = projects.length > 0
     ? await prisma.projectActivityParent.findMany({
         where: {
@@ -284,14 +305,35 @@ function buildProjectTodos({
   assignedProjectIds: string[];
   now: Date;
 }) {
-  const todos = [];
+  const todos: WorkbenchTodoItem[] = [];
   const isProjectAssigned = assignedProjectIds.includes(project.id);
 
   for (const parent of project.activityParents) {
     if (parent.status === 'not_started') continue;
 
+    if (parent.status === 'in_progress' && canSeeNpqProjectTodo(workbenchRole, project, session.sub)) {
+      const parentTodoType = getParentTodoType(parent, now);
+      if (parentTodoType) {
+        todos.push({
+          id: `parent:${parent.id}`,
+          type: parentTodoType,
+          projectId: project.id,
+          parentId: parent.id,
+          childId: null,
+          stage: parent.stage,
+          title: parent.projectTaskName,
+          parentTitle: parent.projectTaskName,
+          ownerRole: 'NPQ',
+          status: parent.status,
+          dueAt: parent.plannedDueDate?.toISOString() ?? null,
+          priorityRank: getTodoPriority(parentTodoType, parent.plannedDueDate, now),
+          allowedActions: getAllowedActions(workbenchRole, 'parent'),
+        });
+      }
+    }
+
     for (const child of parent.children) {
-      if (child.status === 'not_started' || child.status === 'completed') continue;
+      if (child.status !== 'in_progress') continue;
       if (!canSeeChildTodo({ child, session, workbenchRole, effectiveRoleIds, isProjectAssigned })) continue;
 
       const dueAt = child.plannedDueDateOverride ?? parent.plannedDueDate;
@@ -313,7 +355,7 @@ function buildProjectTodos({
       });
     }
 
-    if (parent.status === 'pending_npq_close' && canSeeParentCloseTodo(workbenchRole, project, session.sub)) {
+    if (parent.status === 'pending_npq_close' && canSeeNpqProjectTodo(workbenchRole, project, session.sub)) {
       todos.push({
         id: `parent:${parent.id}`,
         type: 'pending_parent_close' as TodoType,
@@ -330,28 +372,6 @@ function buildProjectTodos({
         allowedActions: getAllowedActions(workbenchRole, 'parent'),
       });
     }
-  }
-
-  const currentGate = project.stageGateRecords.find((gate) => gate.stage === project.currentStage);
-  const currentStageParents = project.activityParents.filter((parent) => parent.stage === project.currentStage);
-  const stageHasBlocker = currentStageParents.some((parent) => parent.hasBlocked);
-  const stageHasOpen = currentStageParents.some((parent) => parent.status !== 'not_started' && parent.status !== 'closed');
-  if ((workbenchRole === 'npq' || workbenchRole === 'manager' || workbenchRole === 'admin') && currentGate?.status === 'pending' && (stageHasBlocker || stageHasOpen)) {
-    todos.push({
-      id: `stage:${project.id}:${project.currentStage}`,
-      type: 'stage_gate' as TodoType,
-      projectId: project.id,
-      parentId: null,
-      childId: null,
-      stage: project.currentStage,
-      title: `${project.currentStage} 阶段门待推进`,
-      parentTitle: '阶段门',
-      ownerRole: 'NPQ',
-      status: currentGate.status,
-      dueAt: null,
-      priorityRank: getTodoPriority('stage_gate', null, now),
-      allowedActions: getAllowedActions(workbenchRole, 'stage_gate'),
-    });
   }
 
   return todos.sort((a, b) => a.priorityRank - b.priorityRank);
@@ -373,18 +393,17 @@ function canSeeChildTodo({
   effectiveRoleIds: string[];
   isProjectAssigned: boolean;
 }) {
-  if (workbenchRole === 'admin' || workbenchRole === 'manager' || workbenchRole === 'npq') return true;
+  if (workbenchRole === 'admin' || workbenchRole === 'manager') return false;
   if (child.assigneeUserId === session.sub) return true;
   if (isProjectAssigned && child.responsibleRoleId && effectiveRoleIds.includes(child.responsibleRoleId)) return true;
   return false;
 }
 
-function canSeeParentCloseTodo(
+function canSeeNpqProjectTodo(
   workbenchRole: WorkbenchRole,
   project: { members: { userId: string; user: { positionBinding: { positionRole: { code: string } } | null } }[] },
   userId: string,
 ) {
-  if (workbenchRole === 'admin' || workbenchRole === 'manager') return true;
   if (workbenchRole !== 'npq') return false;
   return project.members.some((member) => member.userId === userId && member.user.positionBinding?.positionRole.code === 'NPQ');
 }
@@ -410,9 +429,34 @@ function getChildTodoType(
   return 'responsibility';
 }
 
+function getParentTodoType(
+  parent: {
+    hasBlocked: boolean;
+    hasOverdue: boolean;
+    plannedDueDate: Date | null;
+    children: Array<{
+      status: string;
+      isBlocked: boolean;
+      plannedDueDateOverride: Date | null;
+    }>;
+  },
+  now: Date,
+): TodoType | null {
+  const openChildren = parent.children.filter((child) => child.status !== 'completed');
+  const hasBlocked = parent.hasBlocked || openChildren.some((child) => child.isBlocked);
+  if (hasBlocked) return 'blocked';
+
+  const hasOverdue = parent.hasOverdue || openChildren.some((child) => {
+    const due = child.plannedDueDateOverride ?? parent.plannedDueDate;
+    return Boolean(due && due < now);
+  });
+  if (hasOverdue) return 'overdue';
+
+  return null;
+}
+
 function getTodoPriority(type: TodoType, dueAt: Date | null, now: Date) {
   const base: Record<TodoType, number> = {
-    stage_gate: 10,
     blocked: 20,
     overdue: 30,
     pending_parent_close: 40,
@@ -424,12 +468,11 @@ function getTodoPriority(type: TodoType, dueAt: Date | null, now: Date) {
   return base[type] + Math.max(Math.min(days, 30), -30);
 }
 
-function getAllowedActions(role: WorkbenchRole, target: 'child' | 'parent' | 'stage_gate') {
+function getAllowedActions(role: WorkbenchRole, target: 'child' | 'parent') {
   if (role === 'manager') return ['view'];
   if (role === 'admin') return ['view', 'configure'];
   if (role === 'npq') {
     if (target === 'parent') return ['view', 'close_parent'];
-    if (target === 'stage_gate') return ['view', 'stage_gate'];
     return ['view', 'update', 'complete', 'block', 'attachment', 'return', 'not_applicable', 'adjust'];
   }
   if (target !== 'child') return ['view'];
@@ -441,8 +484,6 @@ function getProjectRiskFlags(todos: { type: string }[]) {
   if (todos.some((todo) => todo.type === 'overdue')) flags.add('逾期');
   if (todos.some((todo) => todo.type === 'blocked')) flags.add('阻塞');
   if (todos.some((todo) => todo.type === 'pending_parent_close')) flags.add('待确认关闭');
-  if (todos.some((todo) => todo.type === 'missing_deliverable')) flags.add('缺交付件');
-  if (todos.some((todo) => todo.type === 'stage_gate')) flags.add('阶段门');
   return Array.from(flags);
 }
 
@@ -457,7 +498,6 @@ function getProjectRiskFlagsFromParents(parents: { hasOverdue: boolean; hasBlock
 function getProjectSortScore(todos: { type: string }[], riskFlags: string[], updatedAt: Date) {
   let score = Math.floor(updatedAt.getTime() / 1_000_000_000);
   if (todos.length > 0) score += 10_000;
-  if (todos.some((todo) => todo.type === 'stage_gate') || riskFlags.includes('阶段门')) score += 12_000;
   if (todos.some((todo) => todo.type === 'blocked') || riskFlags.includes('阻塞')) score += 10_000;
   if (todos.some((todo) => todo.type === 'overdue') || riskFlags.includes('逾期')) score += 8_000;
   if (todos.some((todo) => todo.type === 'pending_parent_close') || riskFlags.includes('待确认关闭')) score += 6_000;

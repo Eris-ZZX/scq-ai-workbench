@@ -29,8 +29,14 @@ type Project = {
 type User = {
   id: string;
   username: string;
-  status: string;
+  status?: string;
   positionBinding: PositionBinding;
+};
+
+type SessionUser = {
+  id: string;
+  username: string;
+  role: string;
 };
 
 type ActivityTemplate = {
@@ -98,6 +104,7 @@ export default function AdminProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [memberDialog, setMemberDialog] = useState<AddMemberDialog | null>(null);
   const [createForm, setCreateForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: '' });
@@ -120,12 +127,13 @@ export default function AdminProjectsPage() {
 
   async function load(preferredProjectId = selectedProjectId) {
     setError('');
-    const [projectsRes, usersRes, templatesRes] = await Promise.all([
+    const [projectsRes, usersRes, templatesRes, meRes] = await Promise.all([
       fetch('/api/admin/projects'),
-      fetch('/api/admin/users'),
+      fetch('/api/npq/users'),
       fetch('/api/npq/activity-templates'),
+      fetch('/api/auth/me'),
     ]);
-    if (!projectsRes.ok || !usersRes.ok || !templatesRes.ok) {
+    if (!projectsRes.ok || !usersRes.ok || !templatesRes.ok || !meRes.ok) {
       setError('加载项目或用户失败，请刷新后重试。');
       setLoading(false);
       return;
@@ -133,6 +141,8 @@ export default function AdminProjectsPage() {
     const nextProjects = (await projectsRes.json()) as Project[];
     const nextUsers = (await usersRes.json()) as User[];
     const nextTemplates = (await templatesRes.json()) as ActivityTemplate[];
+    const currentUser = (await meRes.json()) as SessionUser;
+    setIsAdmin(currentUser.role === 'admin');
     setProjects(nextProjects);
     setUsers(nextUsers);
     setTemplates(nextTemplates);
@@ -154,7 +164,7 @@ export default function AdminProjectsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const activeUsers = useMemo(() => users.filter((user) => user.status === 'active'), [users]);
+  const activeUsers = useMemo(() => users.filter((user) => !user.status || user.status === 'active'), [users]);
   const rolePools = useMemo(
     () => projectRoleNames.map((roleName) => ({
       roleName,
@@ -297,21 +307,25 @@ export default function AdminProjectsPage() {
           <div>
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Admin / Projects</div>
             <h1 className="mt-1 text-2xl font-semibold text-foreground">项目管理</h1>
-            <p className="mt-1 text-sm text-muted-foreground">后台维护项目清单、基础信息和六类固定项目成员。</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isAdmin ? '后台维护项目清单、基础信息和六类固定项目成员。' : '维护你负责项目的基础信息、项目成员和项目活动结构。'}
+            </p>
           </div>
-          <button
-            className={actionButton(true)}
-            onClick={() => {
-              setCreateForm((current) => ({
-                ...current,
-                activityTemplateSetId: current.activityTemplateSetId || templates[0]?.id || '',
-              }));
-              setCreateOpen(true);
-            }}
-            disabled={saving}
-          >
-            <Plus className="h-4 w-4" />新增项目
-          </button>
+          {isAdmin && (
+            <button
+              className={actionButton(true)}
+              onClick={() => {
+                setCreateForm((current) => ({
+                  ...current,
+                  activityTemplateSetId: current.activityTemplateSetId || templates[0]?.id || '',
+                }));
+                setCreateOpen(true);
+              }}
+              disabled={saving}
+            >
+              <Plus className="h-4 w-4" />新增项目
+            </button>
+          )}
         </div>
 
         {error && <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
@@ -342,17 +356,21 @@ export default function AdminProjectsPage() {
 
           <main className="min-w-0 space-y-4">
             {!selectedProject ? (
-              <div className="rounded-lg border border-dashed border-border bg-white px-4 py-12 text-center text-sm text-muted-foreground">请选择或新增项目</div>
+              <div className="rounded-lg border border-dashed border-border bg-white px-4 py-12 text-center text-sm text-muted-foreground">
+                {isAdmin ? '请选择或新增项目' : '暂无可维护项目'}
+              </div>
             ) : (
               <>
                 <section className="rounded-lg border border-border bg-white">
                   <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                     <div className="text-sm font-semibold">项目基本信息</div>
-                    <div className="flex items-center gap-2">
-                      <button className={dangerButton()} onClick={() => deleteProject(selectedProject)} disabled={saving}>
-                        <Trash2 className="h-4 w-4" />删除项目
-                      </button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-2">
+                        <button className={dangerButton()} onClick={() => deleteProject(selectedProject)} disabled={saving}>
+                          <Trash2 className="h-4 w-4" />删除项目
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="grid gap-3 p-4 md:grid-cols-2">
                     <label className="text-xs font-medium text-muted-foreground">

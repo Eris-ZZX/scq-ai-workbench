@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@/generated/prisma/client';
-import { ensureProjectActivities } from '@/lib/db/activities';
+import { activateProjectStageActivities, ensureProjectActivities } from '@/lib/db/activities';
+import { canManageProject, getProjectAdminAccess, projectScopeWhere, type ProjectAdminAccess } from '@/lib/db/project-admin-access';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
 
@@ -8,11 +9,12 @@ const validStatuses = new Set(['active', 'completed', 'paused']);
 const projectRoleNames = ['NPQ', 'PQE', 'SQE', 'FAE', 'RAM', 'QCM'] as const;
 type ProjectRoleName = (typeof projectRoleNames)[number];
 
-async function checkAdmin() {
+async function checkProjectManager() {
   const session = await getSession();
-  if (!session) return { error: '未登录', status: 401 };
-  if (session.role !== 'admin') return { error: '需要管理员权限', status: 403 };
-  return { ok: true, session };
+  if (!session) return { error: '未登录', status: 401 } as const;
+  const access = await getProjectAdminAccess(session);
+  if (access.kind === 'none') return { error: '无权访问项目管理', status: 403 } as const;
+  return { ok: true, session, access } as const;
 }
 
 function clean(value: unknown) {
@@ -67,8 +69,9 @@ function projectSelect() {
   };
 }
 
-async function getProjects() {
+async function getProjects(access: ProjectAdminAccess) {
   return prisma.project.findMany({
+    where: projectScopeWhere(access),
     orderBy: { updatedAt: 'desc' },
     select: projectSelect(),
   });
@@ -103,14 +106,15 @@ async function validateRoleUsers(roleName: string, userIds: string[]) {
 }
 
 export async function GET() {
-  const r = await checkAdmin();
+  const r = await checkProjectManager();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
-  return NextResponse.json(await getProjects());
+  return NextResponse.json(await getProjects(r.access));
 }
 
 export async function POST(request: Request) {
-  const r = await checkAdmin();
+  const r = await checkProjectManager();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
+  if (r.access.kind !== 'admin') return NextResponse.json({ error: '仅管理员可以新增项目' }, { status: 403 });
 
   let body: Record<string, unknown>;
   try {
@@ -179,7 +183,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const r = await checkAdmin();
+  const r = await checkProjectManager();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
 
   let body: Record<string, unknown>;
@@ -192,21 +196,28 @@ export async function PATCH(request: Request) {
   const action = clean(body.action) || 'updateProject';
   const projectId = clean(body.projectId);
   if (!projectId) return NextResponse.json({ error: '缺少项目 ID' }, { status: 400 });
+  if (!(await canManageProject(r.access, projectId))) {
+    return NextResponse.json({ error: '无权维护该项目' }, { status: 403 });
+  }
 
   try {
     if (action === 'updateProject') {
       const name = clean(body.name);
       if (!name) return NextResponse.json({ error: '请填写项目名称' }, { status: 400 });
       const status = clean(body.status);
+      const currentStage = clean(body.currentStage) || 'TR1';
       await prisma.project.update({
         where: { id: projectId },
         data: {
           name,
           description: cleanOptional(body.description),
           status: validStatuses.has(status) ? status : 'active',
-          currentStage: clean(body.currentStage) || 'TR1',
+          currentStage,
         },
       });
+      if (status !== 'completed') {
+        await activateProjectStageActivities(projectId, currentStage, r.session.sub);
+      }
     }
 
     if (action === 'syncRoleMembers') {
@@ -309,8 +320,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const r = await checkAdmin();
+  const r = await checkProjectManager();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
+  if (r.access.kind !== 'admin') return NextResponse.json({ error: '仅管理员可以删除项目' }, { status: 403 });
 
   const id = clean(new URL(request.url).searchParams.get('id'));
   if (!id) return NextResponse.json({ error: '缺少项目 ID' }, { status: 400 });

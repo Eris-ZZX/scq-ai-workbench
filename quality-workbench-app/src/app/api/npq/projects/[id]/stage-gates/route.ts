@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canAccessProject, ensureProjectActivities } from '@/lib/db/activities';
+import { activateProjectStageActivities, canAccessProject, ensureProjectActivities } from '@/lib/db/activities';
 import { canExecuteNpqAction } from '@/lib/db/npq-permissions';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
@@ -52,7 +52,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
   const { id: projectId } = await params;
   const allowed = await canExecuteNpqAction({ actionKey: 'stage_gate.pass', session, projectId });
-  if (!allowed) return NextResponse.json({ error: '无权通过阶段门' }, { status: 403 });
+  if (!allowed) return NextResponse.json({ error: '无权执行过点' }, { status: 403 });
 
   let body: { stage?: string; conditionReleaseNote?: string | null };
   try {
@@ -62,6 +62,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   const stage = body.stage?.trim();
   if (!stage || !STAGES.includes(stage)) return NextResponse.json({ error: '无效阶段' }, { status: 400 });
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, currentStage: true, stageGateStatus: true, status: true },
+  });
+  if (!project) return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+  if (project.status === 'completed' || project.stageGateStatus === 'completed') {
+    return NextResponse.json({ error: '项目已完成，无需过点' }, { status: 409 });
+  }
+  if (stage !== project.currentStage) {
+    return NextResponse.json({ error: `只能按顺序处理当前阶段 ${project.currentStage} 的过点` }, { status: 409 });
+  }
 
   const parents = await prisma.projectActivityParent.findMany({
     where: { projectId, stage },
@@ -115,6 +127,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         completedAt: nextStage ? undefined : new Date(),
       },
     });
+
+    if (nextStage) {
+      await activateProjectStageActivities(projectId, nextStage, session.sub, tx);
+    }
 
     await tx.activityEvent.create({
       data: {

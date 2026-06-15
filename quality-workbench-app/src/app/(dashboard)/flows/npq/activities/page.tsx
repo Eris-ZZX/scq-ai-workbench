@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -305,15 +306,23 @@ export default function ActivityTrackingPage() {
     stage,
     parents: filteredParents.filter((parent) => parent.stage === stage),
   })).filter((group) => group.parents.length > 0);
+  const backHref = projectId ? `/flows/npq/projects/${projectId}` : '/workbench';
 
   if (loading) return <div className="p-8 text-muted-foreground">加载中...</div>;
 
   return (
     <div className="min-h-screen bg-ws-content-bg">
       <div className="mx-auto max-w-7xl px-6 py-8">
+        <a
+          href={backHref}
+          className="mb-4 flex w-fit items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" /> 返回项目工作区
+        </a>
+
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">批量修改</h1>
+            <h1 className="text-2xl font-bold text-foreground">计划维护</h1>
             <p className="mt-1 text-sm text-muted-foreground">按阶段筛选并批量维护当前项目的活动子任务、附件、退回和不涉及项。</p>
           </div>
           <Button variant="outline" onClick={() => loadActivities(projectId)}>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@/generated/prisma/client';
 import { getRoleGroup, refreshParentSummary } from '@/lib/db/activities';
+import { canManageProject, getProjectAdminAccess } from '@/lib/db/project-admin-access';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
 
@@ -49,11 +50,13 @@ function cleanOptional(value: unknown) {
   return text || null;
 }
 
-async function checkAdmin() {
+async function checkProjectManager(projectId: string) {
   const session = await getSession();
-  if (!session) return { error: '未登录', status: 401 };
-  if (session.role !== 'admin') return { error: '需要管理员权限', status: 403 };
-  return { ok: true, session };
+  if (!session) return { error: '未登录', status: 401 } as const;
+  const access = await getProjectAdminAccess(session);
+  if (access.kind === 'none') return { error: '无权访问项目管理', status: 403 } as const;
+  if (!(await canManageProject(access, projectId))) return { error: '无权维护该项目', status: 403 } as const;
+  return { ok: true, session, access } as const;
 }
 
 function parseDate(value: string | null | undefined) {
@@ -100,18 +103,18 @@ async function getProjectActivities(projectId: string) {
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const r = await checkAdmin();
-  if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
   const { id } = await params;
+  const r = await checkProjectManager(id);
+  if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
   const project = await prisma.project.findUnique({ where: { id }, select: { id: true, name: true } });
   if (!project) return NextResponse.json({ error: '项目不存在' }, { status: 404 });
   return NextResponse.json({ project, parents: await getProjectActivities(id) });
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const r = await checkAdmin();
-  if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
   const { id: projectId } = await params;
+  const r = await checkProjectManager(projectId);
+  if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
 
   let body: { parents?: ActivityParentInput[]; changeNote?: string };
   try {
@@ -260,7 +263,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         data: {
           projectId,
           actorUserId: r.session.sub,
-          actorRole: 'admin',
+          actorRole: r.access.kind === 'admin' ? 'admin' : 'NPQ',
           actionType: 'admin_activity_structure_save',
           note: cleanOptional(body.changeNote) ?? '后台项目活动结构维护',
         },

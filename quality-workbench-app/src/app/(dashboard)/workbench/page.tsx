@@ -6,7 +6,13 @@ import { AlertTriangle, ArrowRight, RefreshCw, Search, ShieldCheck } from 'lucid
 import { Button, buttonVariants } from '@/components/ui/button';
 
 type WorkbenchRole = 'npq' | 'executor' | 'manager' | 'admin';
-type TodoType = 'overdue' | 'blocked' | 'returned' | 'missing_deliverable' | 'responsibility' | 'pending_parent_close' | 'stage_gate';
+type TodoType =
+  | 'overdue'
+  | 'blocked'
+  | 'returned'
+  | 'missing_deliverable'
+  | 'responsibility'
+  | 'pending_parent_close';
 type WorkbenchTodo = {
   id: string;
   type: TodoType;
@@ -62,16 +68,6 @@ type WorkbenchData = {
 type TodoFilter = 'all' | 'overdue' | 'blocked' | 'returned' | 'pending_parent_close';
 type TodoWithProject = WorkbenchTodo & { projectName: string; currentStage: string };
 
-const TODO_LABEL: Record<TodoType, string> = {
-  overdue: '逾期',
-  blocked: '阻塞',
-  returned: '退回',
-  missing_deliverable: '补交付件',
-  responsibility: '待处理',
-  pending_parent_close: '待确认关闭',
-  stage_gate: '阶段门',
-};
-
 const FILTERS: Array<{ key: TodoFilter; label: string }> = [
   { key: 'all', label: '全部' },
   { key: 'overdue', label: '逾期' },
@@ -119,7 +115,7 @@ export default function WorkbenchPage() {
         projectName: group.projectName,
         currentStage: group.currentStage,
       })))
-      .sort((a, b) => a.priorityRank - b.priorityRank);
+      .sort(compareTodos);
   }, [data]);
 
   const filteredTodos = useMemo(() => (
@@ -174,7 +170,7 @@ export default function WorkbenchPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <div>
               <h2 className="text-base font-semibold">我的待处理任务</h2>
-              <p className="mt-0.5 text-xs text-slate-500">按阶段门、阻塞、逾期、待确认关闭和个人责任项排序</p>
+              <p className="mt-0.5 text-xs text-slate-500">按项目活动和子任务聚焦当前需要处理的计划项</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {FILTERS.map((item) => (
@@ -192,7 +188,15 @@ export default function WorkbenchPage() {
             </div>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div>
+            <div className="hidden grid-cols-[88px_112px_136px_minmax(0,1fr)_24px] gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-1.5 text-xs font-medium text-slate-500 md:grid">
+              <span>类型</span>
+              <span>计划完成时间</span>
+              <span>项目</span>
+              <span>事项</span>
+              <span />
+            </div>
+            <div className="max-h-60 divide-y divide-slate-100 overflow-y-auto overscroll-contain">
             {filteredTodos.length === 0 ? (
               <div className="flex min-h-28 items-center justify-center px-4 py-8 text-sm text-slate-500">
                 当前筛选下没有待处理任务
@@ -202,6 +206,7 @@ export default function WorkbenchPage() {
                 <TodoRow key={todo.id} todo={todo} />
               ))
             )}
+            </div>
           </div>
         </section>
 
@@ -240,24 +245,46 @@ export default function WorkbenchPage() {
 }
 
 function TodoRow({ todo }: { todo: TodoWithProject }) {
+  const kind = getTodoKind(todo);
   return (
     <Link
       href={projectTaskHref(todo.projectId, todo.id)}
-      className="grid grid-cols-[108px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition hover:bg-slate-50"
+      className="grid min-h-11 gap-2 px-4 py-2 transition hover:bg-slate-50 md:grid-cols-[88px_112px_136px_minmax(0,1fr)_24px] md:items-center"
     >
-      <span className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-semibold ${todoTone(todo.type)}`}>
-        {TODO_LABEL[todo.type]}
+      <span className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-semibold ${kind === 'project_activity' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+        {kind === 'project_activity' ? '项目活动' : '子任务'}
       </span>
+      <span className="text-xs text-slate-600 md:text-sm">{todo.dueAt ? formatDate(todo.dueAt) : '-'}</span>
+      <span className="min-w-0 truncate text-xs text-slate-600 md:text-sm">{todo.projectName}</span>
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-slate-950">{todo.stage} {todo.title}</span>
-        <span className="mt-0.5 block truncate text-xs text-slate-500">
-          {todo.projectName} / {todo.stage} / {todo.parentTitle} / {todo.ownerRole}
-          {todo.dueAt ? ` / ${formatDate(todo.dueAt)}` : ''}
-        </span>
+        <span className="mt-0.5 block truncate text-xs text-slate-500">{todo.parentTitle} / {todo.ownerRole}</span>
       </span>
       <ArrowRight className="h-4 w-4 text-slate-400" />
     </Link>
   );
+}
+
+function getTodoKind(todo: Pick<WorkbenchTodo, 'childId'>) {
+  return todo.childId ? 'child_task' : 'project_activity';
+}
+
+function compareTodos(a: TodoWithProject, b: TodoWithProject) {
+  const dateDiff = getDueTime(a.dueAt) - getDueTime(b.dueAt);
+  if (dateDiff !== 0) return dateDiff;
+  const typeDiff = getTodoKindRank(a) - getTodoKindRank(b);
+  if (typeDiff !== 0) return typeDiff;
+  const projectDiff = a.projectName.localeCompare(b.projectName, 'zh-CN');
+  if (projectDiff !== 0) return projectDiff;
+  return a.title.localeCompare(b.title, 'zh-CN');
+}
+
+function getTodoKindRank(todo: Pick<WorkbenchTodo, 'childId'>) {
+  return todo.childId ? 1 : 2;
+}
+
+function getDueTime(value: string | null) {
+  return value ? new Date(value).getTime() : Number.MAX_SAFE_INTEGER;
 }
 
 function ProjectCardView({ project }: { project: ProjectCard }) {
@@ -330,19 +357,6 @@ function roleFallback(role: WorkbenchRole) {
     admin: '系统管理员',
   };
   return map[role];
-}
-
-function todoTone(type: TodoType) {
-  const tones: Record<TodoType, string> = {
-    overdue: 'bg-red-50 text-red-700',
-    blocked: 'bg-amber-50 text-amber-700',
-    returned: 'bg-orange-50 text-orange-700',
-    missing_deliverable: 'bg-sky-50 text-sky-700',
-    responsibility: 'bg-slate-100 text-slate-700',
-    pending_parent_close: 'bg-teal-50 text-teal-700',
-    stage_gate: 'bg-indigo-50 text-indigo-700',
-  };
-  return tones[type];
 }
 
 function formatDate(value: string) {

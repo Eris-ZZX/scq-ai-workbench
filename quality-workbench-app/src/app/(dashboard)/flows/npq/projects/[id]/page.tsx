@@ -223,6 +223,17 @@ export default function ProjectWorkspacePage() {
     return () => window.clearTimeout(timeoutId);
   }, [todoParam, workspace]);
 
+  useEffect(() => {
+    if (!selection) return;
+    const timeoutId = window.setTimeout(() => {
+      const target = document.getElementById(selectionTreeTargetId(selection));
+      if (!target) return;
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+    }, 80);
+    return () => window.clearTimeout(timeoutId);
+  }, [selection, expandedStages, expandedParents]);
+
   const stageGroups = useMemo(() => groupParentsByStage(workspace?.parents ?? []), [workspace]);
   const selectedParent = useMemo(() => {
     if (!workspace || !selection || selection.kind === 'stage') return null;
@@ -344,11 +355,11 @@ export default function ProjectWorkspacePage() {
         body: JSON.stringify({ stage, conditionReleaseNote: gateNotes[stage] || null }),
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error ?? '阶段门处理失败');
+      if (!response.ok) throw new Error(body.error ?? '过点处理失败');
       setGateNotes((current) => ({ ...current, [stage]: '' }));
       await loadWorkspace();
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : '阶段门处理失败');
+      setErrorMsg(error instanceof Error ? error.message : '过点处理失败');
     } finally {
       setSaving(false);
     }
@@ -397,7 +408,7 @@ export default function ProjectWorkspacePage() {
                     href={`/flows/npq/activities?projectId=${project.id}`}
                     className={buttonVariants({ variant: 'outline', size: 'sm' })}
                   >
-                    批量修改
+                    计划维护
                   </Link>
                 </div>
               )}
@@ -406,39 +417,58 @@ export default function ProjectWorkspacePage() {
         </header>
 
         <div className="grid min-h-[680px] gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
-          <aside className="rounded-lg border border-slate-200 bg-white">
+          <aside className="flex min-h-[680px] flex-col rounded-lg border border-slate-200 bg-white">
             <div className="border-b border-slate-100 px-4 py-3">
               <h2 className="text-base font-semibold">项目任务树</h2>
               <p className="mt-0.5 text-xs text-slate-500">按阶段、项目活动、子任务展开</p>
             </div>
-            <div className="max-h-[calc(100vh-260px)] overflow-auto p-2">
+            <div className="max-h-[calc(100vh-180px)] flex-1 overflow-auto p-2">
               {stageGroups.map((group) => {
                 const expanded = expandedStages.has(group.stage);
-                const gate = stageGates.find((item) => item.stage === group.stage);
+                const isCurrentStage = group.stage === project.currentStage && project.status !== 'completed' && project.stageGateStatus !== 'completed';
                 return (
                   <div key={group.stage} className="mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedStages((current) => toggleSet(current, group.stage))}
-                      className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-semibold hover:bg-slate-50"
+                    <div
+                      className={`relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold hover:bg-slate-50 ${
+                        selection?.kind === 'stage' && selection.stage === group.stage ? 'bg-slate-100' : ''
+                      }`}
                     >
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        <span>{group.index}. {group.stage}</span>
+                      <button
+                        type="button"
+                        id={selectionTreeTargetId({ kind: 'stage', stage: group.stage })}
+                        onClick={() => setExpandedStages((current) => toggleSet(current, group.stage))}
+                        className="absolute inset-0 rounded-md"
+                        aria-label={`${expanded ? '收起' : '展开'} ${group.index}. ${group.stage} ${group.parents.length} 项目活动`}
+                      />
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none relative z-0 flex min-w-0 flex-1 items-center gap-1.5"
+                      >
+                        {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                        <span className="truncate">{group.index}. {group.stage}</span>
                         {group.stage === project.currentStage && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">当前</span>}
-                      </span>
-                      <span className="text-xs text-slate-500">{group.parents.length} 项目活动</span>
-                    </button>
+                        <span className="ml-auto shrink-0 text-xs text-slate-500">{group.parents.length} 项目活动</span>
+                      </div>
+                      {isCurrentStage && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            selectItem({ kind: 'stage', stage: group.stage });
+                          }}
+                          className={`relative z-10 shrink-0 rounded px-2 py-0.5 text-xs font-medium ${
+                            selection?.kind === 'stage' && selection.stage === group.stage
+                              ? 'bg-blue-700 text-white'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          过点
+                        </button>
+                      )}
+                    </div>
 
                     {expanded && (
                       <div className="ml-3 border-l border-slate-100 pl-2">
-                        <TreeButton
-                          selected={selection?.kind === 'stage' && selection.stage === group.stage}
-                          onClick={() => selectItem({ kind: 'stage', stage: group.stage })}
-                          title={`${group.index}.0 阶段门评审`}
-                          meta={`${gateStatusLabel(gate?.status)} / 未关闭 ${gate?.stats.open ?? 0} / 阻塞 ${gate?.stats.blocked ?? 0}`}
-                        />
-
                         {group.parents.map((parent, parentIndex) => {
                           const parentNumber = `${group.index}.${parentIndex + 1}`;
                           const parentExpanded = expandedParents.has(parent.id);
@@ -448,12 +478,14 @@ export default function ProjectWorkspacePage() {
                             <div key={parent.id}>
                               <button
                                 type="button"
+                                id={selectionTreeTargetId({ kind: 'parent', parentId: parent.id })}
                                 onClick={() => {
-                                  selectItem({ kind: 'parent', parentId: parent.id });
+                                  setSelection({ kind: 'parent', parentId: parent.id });
+                                  setExpandedStages((current) => new Set([...current, group.stage]));
                                   setExpandedParents((current) => toggleSet(current, parent.id));
                                 }}
-                                className={`mt-1 flex w-full items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-slate-50 ${
-                                  selection?.kind === 'parent' && selection.parentId === parent.id ? 'bg-slate-100' : ''
+                                className={`mt-1 flex w-full items-start gap-2 rounded-md px-2 py-2 text-left outline-none hover:bg-slate-50 ${
+                                  selection?.kind === 'parent' && selection.parentId === parent.id ? 'bg-slate-100 ring-2 ring-blue-200' : ''
                                 }`}
                               >
                                 {parentExpanded ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0" /> : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0" />}
@@ -472,6 +504,7 @@ export default function ProjectWorkspacePage() {
                                       key={child.id}
                                       selected={selection?.kind === 'child' && selection.childId === child.id}
                                       onClick={() => selectItem({ kind: 'child', parentId: parent.id, childId: child.id })}
+                                      targetId={selectionTreeTargetId({ kind: 'child', parentId: parent.id, childId: child.id })}
                                       title={`${parentNumber}.${childIndex + 1} ${child.thirdLevelPlan}`}
                                       meta={`${childStatusLabel(child.status)} / ${child.ownerRole}${child.isBlocked ? ' / 阻塞' : ''}${child.isNotApplicable ? ' / 不涉及' : ''}`}
                                     />
@@ -538,7 +571,7 @@ export default function ProjectWorkspacePage() {
 
                 {!selection && (
                   <div className="rounded-lg border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
-                    从左侧选择阶段门、项目活动或子任务
+                    从左侧选择过点、项目活动或子任务
                   </div>
                 )}
               </div>
@@ -578,7 +611,7 @@ function StageDetail({
   return (
     <section className="space-y-4">
       <DetailHeader
-        title={`${stage} 阶段门评审`}
+        title={`${stage} 过点评审`}
         subtitle={`未关闭 ${gate?.stats.open ?? 0} / 阻塞 ${gate?.stats.blocked ?? 0} / 项目活动 ${gate?.stats.total ?? 0}`}
         status={gateStatusLabel(gate?.status)}
       />
@@ -839,19 +872,22 @@ function EventList({ events }: { events: ActivityEvent[] }) {
 function TreeButton({
   selected,
   onClick,
+  targetId,
   title,
   meta,
 }: {
   selected: boolean;
   onClick: () => void;
+  targetId?: string;
   title: string;
   meta: string;
 }) {
   return (
     <button
       type="button"
+      id={targetId}
       onClick={onClick}
-      className={`mt-1 w-full rounded-md px-2 py-1.5 text-left hover:bg-slate-50 ${selected ? 'bg-slate-100' : ''}`}
+      className={`mt-1 w-full rounded-md px-2 py-1.5 text-left outline-none hover:bg-slate-50 ${selected ? 'bg-slate-100 ring-2 ring-blue-200' : ''}`}
     >
       <span className="block truncate text-sm">{title}</span>
       <span className="mt-0.5 block truncate text-xs text-slate-500">{meta}</span>
@@ -925,6 +961,12 @@ function resolveInitialSelection(todoId: string | null, parents: ActivityParent[
 function selectionStage(selection: Selection, parents: ActivityParent[]) {
   if (selection.kind === 'stage') return selection.stage;
   return parents.find((parent) => parent.id === selection.parentId)?.stage ?? null;
+}
+
+function selectionTreeTargetId(selection: Selection) {
+  if (selection.kind === 'stage') return `tree-stage-${selection.stage}`;
+  if (selection.kind === 'parent') return `tree-parent-${selection.parentId}`;
+  return `tree-child-${selection.childId}`;
 }
 
 function groupParentsByStage(parents: ActivityParent[]) {
@@ -1007,8 +1049,9 @@ function eventActionLabel(action: string) {
     upload_attachment: '上传附件',
     update_parent_plan: '调整项目活动计划',
     close_parent: '关闭项目活动',
-    pass_stage_gate: '阶段门通过',
-    conditional_release_stage_gate: '阶段门条件放行',
+    activate_stage_activities: '进入阶段',
+    pass_stage_gate: '过点通过',
+    conditional_release_stage_gate: '过点条件放行',
   };
   return labels[action] ?? action;
 }

@@ -113,6 +113,14 @@ export async function ensureProjectActivities(projectId: string, actorUserId?: s
       childCount += 1;
     }
 
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: { currentStage: true },
+    });
+    if (project?.currentStage) {
+      await activateProjectStageActivities(projectId, project.currentStage, actorUserId, tx);
+    }
+
     await tx.activityEvent.create({
       data: {
         projectId,
@@ -200,6 +208,14 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
       }
     }
 
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: { currentStage: true },
+    });
+    if (project?.currentStage) {
+      await activateProjectStageActivities(projectId, project.currentStage, actorUserId, tx);
+    }
+
     await tx.projectActivitySnapshotMeta.upsert({
       where: { projectId },
       create: {
@@ -230,6 +246,50 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
   });
 }
 
+export async function activateProjectStageActivities(
+  projectId: string,
+  stage: string,
+  actorUserId?: string | null,
+  tx: ActivityTx = prisma,
+) {
+  const parentResult = await tx.projectActivityParent.updateMany({
+    where: {
+      projectId,
+      stage,
+      status: PARENT_STATUS.NOT_STARTED,
+    },
+    data: { status: PARENT_STATUS.IN_PROGRESS },
+  });
+  const childResult = await tx.projectActivityChild.updateMany({
+    where: {
+      projectId,
+      status: CHILD_STATUS.NOT_STARTED,
+      isNotApplicable: false,
+      parent: { stage },
+    },
+    data: { status: CHILD_STATUS.IN_PROGRESS },
+  });
+
+  if (parentResult.count > 0 || childResult.count > 0) {
+    await tx.activityEvent.create({
+      data: {
+        projectId,
+        actorUserId: actorUserId ?? null,
+        actorRole: actorUserId ? 'NPQ' : null,
+        actionType: 'activate_stage_activities',
+        afterValue: JSON.stringify({
+          stage,
+          activatedParentCount: parentResult.count,
+          activatedChildCount: childResult.count,
+        }),
+        note: `进入 ${stage} 阶段，项目活动和子任务自动转为进行中`,
+      },
+    });
+  }
+
+  return parentResult.count + childResult.count;
+}
+
 function defaultDueDate(stage: string) {
   const offset: Record<string, number> = {
     TR1: 14,
@@ -252,6 +312,13 @@ function offsetDueDate(days: number) {
 
 export async function getProjectActivityView(projectId: string) {
   await ensureProjectActivities(projectId);
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { currentStage: true, status: true, stageGateStatus: true },
+  });
+  if (project && project.status !== 'completed' && project.stageGateStatus !== 'completed') {
+    await activateProjectStageActivities(projectId, project.currentStage);
+  }
   return prisma.projectActivityParent.findMany({
     where: { projectId },
     include: {
@@ -500,7 +567,7 @@ export async function refreshParentSummary(tx: ActivityTx, parentId: string) {
     status = PARENT_STATUS.CLOSED;
   } else if (total > 0 && completed === total) {
     status = PARENT_STATUS.PENDING_NPQ_CLOSE;
-  } else if (involvedChildren.some((child) => child.status !== CHILD_STATUS.NOT_STARTED)) {
+  } else if (parent.status === PARENT_STATUS.IN_PROGRESS || involvedChildren.some((child) => child.status !== CHILD_STATUS.NOT_STARTED)) {
     status = PARENT_STATUS.IN_PROGRESS;
   }
 
