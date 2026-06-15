@@ -19,7 +19,6 @@ type ActivityParentInput = {
   id?: string;
   stage?: string;
   projectTaskName?: string;
-  plannedDueDate?: string | null;
   sortOrder?: number;
   children?: ActivityChildInput[];
 };
@@ -28,7 +27,6 @@ type NormalizedParent = {
   id: string;
   stage: string;
   projectTaskName: string;
-  plannedDueDate: Date | null;
   sortOrder: number;
   children: {
     id: string;
@@ -59,19 +57,12 @@ async function checkProjectManager(projectId: string) {
   return { ok: true, session, access } as const;
 }
 
-function parseDate(value: string | null | undefined) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function projectActivitySelect() {
   return {
     id: true,
     stage: true,
     projectTaskName: true,
     status: true,
-    plannedDueDate: true,
     sortOrder: true,
     progressPercent: true,
     hasBlocked: true,
@@ -139,7 +130,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         id: clean(parent.id),
         stage,
         projectTaskName,
-        plannedDueDate: parseDate(parent.plannedDueDate),
         sortOrder: Number.isFinite(parent.sortOrder) ? Number(parent.sortOrder) : parentIndex + 1,
         children: (parent.children ?? []).map((child, childIndex) => {
           const thirdLevelPlan = clean(child.thirdLevelPlan);
@@ -202,7 +192,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
               data: {
                 stage: parent.stage,
                 projectTaskName: parent.projectTaskName,
-                plannedDueDate: parent.plannedDueDate,
                 sortOrder: parent.sortOrder,
               },
               select: { id: true },
@@ -212,7 +201,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
                 projectId,
                 stage: parent.stage,
                 projectTaskName: parent.projectTaskName,
-                plannedDueDate: parent.plannedDueDate,
                 sortOrder: parent.sortOrder,
               },
               select: { id: true },

@@ -53,12 +53,21 @@ type ActivityParent = {
   stage: string;
   projectTaskName: string;
   status: string;
+  plannedStartDate: string | null;
   plannedDueDate: string | null;
   progressPercent: number;
   hasBlocked: boolean;
   hasOverdue: boolean;
   updatedAt: string;
   children: ActivityChild[];
+};
+type StageGate = {
+  id: string;
+  stage: string;
+  status: string;
+  plannedStartDate: string | null;
+  plannedDueDate: string | null;
+  passedAt: string | null;
 };
 type ActivityEvent = {
   id: string;
@@ -94,6 +103,7 @@ export default function ActivityTrackingPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
   const [parents, setParents] = useState<ActivityParent[]>([]);
+  const [stageGates, setStageGates] = useState<StageGate[]>([]);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedChild, setSelectedChild] = useState<ActivityChild | null>(null);
@@ -126,6 +136,7 @@ export default function ActivityTrackingPage() {
     }
     const data = await res.json();
     setParents(data.parents ?? []);
+    setStageGates(data.stageGates ?? []);
     setEvents(data.events ?? []);
     setSelectedChildIds(new Set());
   }, []);
@@ -234,16 +245,40 @@ export default function ActivityTrackingPage() {
     if (res.ok) setSelectedChild(await res.json());
   }
 
-  async function updateParentPlan(parent: ActivityParent, plannedDueDate: string) {
+  async function updateParentPlan(parent: ActivityParent, patch: { plannedStartDate?: string; plannedDueDate?: string }) {
     setError('');
     const res = await fetch(`/api/npq/activities/parents/${parent.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plannedDueDate: plannedDueDate || null }),
+      body: JSON.stringify({
+        plannedStartDate: 'plannedStartDate' in patch ? patch.plannedStartDate || null : parent.plannedStartDate,
+        plannedDueDate: 'plannedDueDate' in patch ? patch.plannedDueDate || null : parent.plannedDueDate,
+      }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error ?? '项目活动计划时间保存失败');
+      return;
+    }
+    void loadActivities(projectId);
+  }
+
+  async function updateStagePlan(stage: string, patch: { plannedStartDate?: string; plannedDueDate?: string }) {
+    setError('');
+    const gate = stageGates.find((item) => item.stage === stage);
+    const res = await fetch(`/api/npq/projects/${projectId}/stage-gates`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updatePlan',
+        stage,
+        plannedStartDate: 'plannedStartDate' in patch ? patch.plannedStartDate || null : gate?.plannedStartDate ?? null,
+        plannedDueDate: 'plannedDueDate' in patch ? patch.plannedDueDate || null : gate?.plannedDueDate ?? null,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? '阶段计划时间保存失败');
       return;
     }
     void loadActivities(projectId);
@@ -304,6 +339,7 @@ export default function ActivityTrackingPage() {
 
   const grouped = STAGES.map((stage) => ({
     stage,
+    gate: stageGates.find((gate) => gate.stage === stage) ?? null,
     parents: filteredParents.filter((parent) => parent.stage === stage),
   })).filter((group) => group.parents.length > 0);
   const backHref = projectId ? `/flows/npq/projects/${projectId}` : '/workbench';
@@ -380,11 +416,12 @@ export default function ActivityTrackingPage() {
         </div>
 
         <div className="overflow-hidden rounded-md border border-border bg-white shadow-sm">
-          <div className="grid grid-cols-[minmax(260px,1.5fr)_120px_120px_120px_130px_120px] border-b bg-muted/50 px-4 py-2 text-xs font-semibold text-muted-foreground">
+          <div className="grid grid-cols-[minmax(240px,1.5fr)_105px_105px_105px_118px_118px_105px] border-b bg-muted/50 px-4 py-2 text-xs font-semibold text-muted-foreground">
             <span>项目任务</span>
             <span>状态</span>
             <span>完成率</span>
             <span>标记</span>
+            <span>计划开始</span>
             <span>计划完成</span>
             <span>最后更新</span>
           </div>
@@ -393,12 +430,32 @@ export default function ActivityTrackingPage() {
             <div className="p-10 text-center text-sm text-muted-foreground">暂无匹配活动</div>
           ) : grouped.map((group) => (
             <section key={group.stage}>
-              <div className="border-b bg-slate-50 px-4 py-2 text-sm font-semibold text-foreground">{group.stage}</div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-2">
+                <div className="text-sm font-semibold text-foreground">{group.stage}</div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>阶段计划</span>
+                  <input
+                    type="date"
+                    value={toDateInput(group.gate?.plannedStartDate ?? null)}
+                    onChange={(event) => updateStagePlan(group.stage, { plannedStartDate: event.target.value })}
+                    className="w-[7.5rem] rounded border bg-white px-2 py-1 text-xs"
+                    aria-label={`${group.stage} planned start`}
+                  />
+                  <span>-</span>
+                  <input
+                    type="date"
+                    value={toDateInput(group.gate?.plannedDueDate ?? null)}
+                    onChange={(event) => updateStagePlan(group.stage, { plannedDueDate: event.target.value })}
+                    className="w-[7.5rem] rounded border bg-white px-2 py-1 text-xs"
+                    aria-label={`${group.stage} planned finish`}
+                  />
+                </div>
+              </div>
               {group.parents.map((parent) => {
                 const isOpen = expanded.has(parent.id);
                 return (
                   <div key={parent.id} className="border-b last:border-b-0">
-                    <div className="grid grid-cols-[minmax(260px,1.5fr)_120px_120px_120px_130px_120px] items-center px-4 py-3 text-sm">
+                    <div className="grid grid-cols-[minmax(240px,1.5fr)_105px_105px_105px_118px_118px_105px] items-center px-4 py-3 text-sm">
                       <button
                         onClick={() => setExpanded((current) => toggleSet(current, parent.id))}
                         className="flex min-w-0 items-center gap-2 text-left font-medium text-foreground hover:text-primary"
@@ -420,8 +477,14 @@ export default function ActivityTrackingPage() {
                       </div>
                       <input
                         type="date"
+                        value={toDateInput(parent.plannedStartDate)}
+                        onChange={(event) => updateParentPlan(parent, { plannedStartDate: event.target.value })}
+                        className="w-28 rounded border px-2 py-1 text-xs"
+                      />
+                      <input
+                        type="date"
                         value={toDateInput(parent.plannedDueDate)}
-                        onChange={(event) => updateParentPlan(parent, event.target.value)}
+                        onChange={(event) => updateParentPlan(parent, { plannedDueDate: event.target.value })}
                         className="w-28 rounded border px-2 py-1 text-xs"
                       />
                       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, Edit3, Layers3, Trash2, X } from 'lucide-react';
 
@@ -20,7 +20,10 @@ export type ActivityStructureParent = {
   name: string;
   description: string | null;
   closureStandard: string | null;
+  plannedStartOffsetDays?: number | null;
   plannedOffsetDays: number | null;
+  plannedStartDate?: string | null;
+  plannedDueDate?: string | null;
   sortOrder: number;
   children: ActivityStructureChild[];
 };
@@ -28,13 +31,17 @@ export type ActivityStructureParent = {
 export type ActivityStructureStage = {
   id: string;
   name: string;
+  plannedStartOffsetDays?: number | null;
+  plannedDueOffsetDays?: number | null;
+  plannedStartDate?: string | null;
+  plannedDueDate?: string | null;
   sortOrder: number;
   parents: ActivityStructureParent[];
 };
 
 type TemplateItemDialog =
-  | { kind: 'stage'; mode: 'create' | 'edit'; stageId?: string; name: string }
-  | { kind: 'parent'; mode: 'create' | 'edit'; stageId: string; parentId?: string; name: string }
+  | { kind: 'stage'; mode: 'create' | 'edit'; stageId?: string; name: string; plannedStartDate: string; plannedDueDate: string }
+  | { kind: 'parent'; mode: 'create' | 'edit'; stageId: string; parentId?: string; name: string; plannedStartDate: string; plannedDueDate: string }
   | {
       kind: 'child';
       mode: 'create' | 'edit';
@@ -98,6 +105,7 @@ export function ActivityStructureEditor({
   title = '活动模板',
   subtitle,
   headerActions,
+  planMode = 'none',
   onChange,
 }: {
   stages: ActivityStructureStage[];
@@ -106,6 +114,7 @@ export function ActivityStructureEditor({
   title?: string;
   subtitle?: string;
   headerActions?: ReactNode;
+  planMode?: 'none' | 'date';
   onChange: (stages: ActivityStructureStage[]) => void;
 }) {
   const [itemDialog, setItemDialog] = useState<TemplateItemDialog | null>(null);
@@ -114,16 +123,23 @@ export function ActivityStructureEditor({
     onChange(updater(stages));
   }
 
-  function updateStage(stageId: string, fields: Partial<Pick<ActivityStructureStage, 'name'>>) {
+  function updateStage(stageId: string, fields: Partial<Pick<ActivityStructureStage, 'name' | 'plannedStartDate' | 'plannedDueDate'>>) {
     updateStages((current) => current.map((stage) => (stage.id === stageId ? { ...stage, ...fields } : stage)));
   }
 
   function openCreateStage() {
-    setItemDialog({ kind: 'stage', mode: 'create', name: '新阶段' });
+    setItemDialog({ kind: 'stage', mode: 'create', name: '新阶段', plannedStartDate: '', plannedDueDate: '' });
   }
 
   function openEditStage(stage: ActivityStructureStage) {
-    setItemDialog({ kind: 'stage', mode: 'edit', stageId: stage.id, name: stage.name });
+    setItemDialog({
+      kind: 'stage',
+      mode: 'edit',
+      stageId: stage.id,
+      name: stage.name,
+      plannedStartDate: toDateInput(stage.plannedStartDate ?? null),
+      plannedDueDate: toDateInput(stage.plannedDueDate ?? null),
+    });
   }
 
   function removeStage(stageId: string) {
@@ -134,18 +150,26 @@ export function ActivityStructureEditor({
     updateStages((current) => reorderById(current, stageId, direction));
   }
 
-  function updateParent(stageId: string, parentId: string, fields: Partial<Pick<ActivityStructureParent, 'name'>>) {
+  function updateParent(stageId: string, parentId: string, fields: Partial<Pick<ActivityStructureParent, 'name' | 'plannedStartDate' | 'plannedDueDate'>>) {
     updateStages((current) => current.map((stage) => stage.id === stageId
       ? { ...stage, parents: stage.parents.map((parent) => (parent.id === parentId ? { ...parent, ...fields } : parent)) }
       : stage));
   }
 
   function openCreateParent(stageId: string) {
-    setItemDialog({ kind: 'parent', mode: 'create', stageId, name: '新项目活动' });
+    setItemDialog({ kind: 'parent', mode: 'create', stageId, name: '新项目活动', plannedStartDate: '', plannedDueDate: '' });
   }
 
   function openEditParent(stageId: string, parent: ActivityStructureParent) {
-    setItemDialog({ kind: 'parent', mode: 'edit', stageId, parentId: parent.id, name: parent.name });
+    setItemDialog({
+      kind: 'parent',
+      mode: 'edit',
+      stageId,
+      parentId: parent.id,
+      name: parent.name,
+      plannedStartDate: toDateInput(parent.plannedStartDate ?? null),
+      plannedDueDate: toDateInput(parent.plannedDueDate ?? null),
+    });
   }
 
   function removeParent(stageId: string, parentId: string) {
@@ -230,13 +254,18 @@ export function ActivityStructureEditor({
         return;
       }
       if (itemDialog.mode === 'edit' && itemDialog.stageId) {
-        updateStage(itemDialog.stageId, { name });
+        updateStage(itemDialog.stageId, {
+          name,
+          ...(planMode === 'date' ? { plannedStartDate: itemDialog.plannedStartDate || null, plannedDueDate: itemDialog.plannedDueDate || null } : {}),
+        });
       } else {
         updateStages((current) => [
           ...current,
           {
             id: newId('stage'),
             name,
+            plannedStartDate: planMode === 'date' ? itemDialog.plannedStartDate || null : null,
+            plannedDueDate: planMode === 'date' ? itemDialog.plannedDueDate || null : null,
             sortOrder: current.length + 1,
             parents: [],
           },
@@ -253,7 +282,10 @@ export function ActivityStructureEditor({
         return;
       }
       if (itemDialog.mode === 'edit' && itemDialog.parentId) {
-        updateParent(itemDialog.stageId, itemDialog.parentId, { name });
+        updateParent(itemDialog.stageId, itemDialog.parentId, {
+          name,
+          ...(planMode === 'date' ? { plannedStartDate: itemDialog.plannedStartDate || null, plannedDueDate: itemDialog.plannedDueDate || null } : {}),
+        });
       } else {
         updateStages((current) => current.map((stage) => stage.id === itemDialog.stageId
           ? {
@@ -265,6 +297,8 @@ export function ActivityStructureEditor({
                 name,
                 description: null,
                 closureStandard: null,
+                plannedStartDate: planMode === 'date' ? itemDialog.plannedStartDate || null : null,
+                plannedDueDate: planMode === 'date' ? itemDialog.plannedDueDate || null : null,
                 plannedOffsetDays: null,
                 sortOrder: stage.parents.length + 1,
                 children: [],
@@ -345,6 +379,9 @@ export function ActivityStructureEditor({
                   <Layers3 className="h-4 w-4 shrink-0 text-ws-blue" />
                   <span className="shrink-0 rounded bg-white px-2 py-0.5 text-xs font-semibold text-muted-foreground">{stageIndex + 1}</span>
                   <span className="truncate text-sm font-semibold text-foreground">{stage.name}</span>
+                  {planMode === 'date' && (
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatPlanRange(stage.plannedStartDate, stage.plannedDueDate)}</span>
+                  )}
                   <span className="shrink-0 text-xs text-muted-foreground">{stage.parents.length} 项目活动</span>
                 </div>
                 {editable && (
@@ -419,6 +456,9 @@ export function ActivityStructureEditor({
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-muted-foreground">{stageIndex + 1}.{parentIndex + 1}</span>
                           <span className="truncate text-sm font-medium">{parent.name}</span>
+                          {planMode === 'date' && (
+                            <span className="shrink-0 text-xs text-muted-foreground">{formatPlanRange(parent.plannedStartDate, parent.plannedDueDate)}</span>
+                          )}
                           <span className="shrink-0 text-xs text-muted-foreground">{parent.children.length} 子任务</span>
                         </div>
                         {editable && (
@@ -561,25 +601,31 @@ export function ActivityStructureEditor({
             </div>
             <div className="space-y-4 p-4">
               {itemDialog.kind === 'stage' && (
-                <label className="block text-xs font-medium text-muted-foreground">
-                  阶段名称
-                  <input
-                    className={fieldClass('mt-1 h-9 w-full')}
-                    value={itemDialog.name}
-                    onChange={(event) => setItemDialog((current) => (current?.kind === 'stage' ? { ...current, name: event.target.value } : current))}
-                  />
-                </label>
+                <>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    阶段名称
+                    <input
+                      className={fieldClass('mt-1 h-9 w-full')}
+                      value={itemDialog.name}
+                      onChange={(event) => setItemDialog((current) => (current?.kind === 'stage' ? { ...current, name: event.target.value } : current))}
+                    />
+                  </label>
+                  {planMode === 'date' && <DateRangeFields dialog={itemDialog} onChange={setItemDialog} />}
+                </>
               )}
 
               {itemDialog.kind === 'parent' && (
-                <label className="block text-xs font-medium text-muted-foreground">
-                  项目活动名称
-                  <input
-                    className={fieldClass('mt-1 h-9 w-full')}
-                    value={itemDialog.name}
-                    onChange={(event) => setItemDialog((current) => (current?.kind === 'parent' ? { ...current, name: event.target.value } : current))}
-                  />
-                </label>
+                <>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    项目活动名称
+                    <input
+                      className={fieldClass('mt-1 h-9 w-full')}
+                      value={itemDialog.name}
+                      onChange={(event) => setItemDialog((current) => (current?.kind === 'parent' ? { ...current, name: event.target.value } : current))}
+                    />
+                  </label>
+                  {planMode === 'date' && <DateRangeFields dialog={itemDialog} onChange={setItemDialog} />}
+                </>
               )}
 
               {itemDialog.kind === 'child' && (
@@ -630,4 +676,58 @@ export function ActivityStructureEditor({
       )}
     </main>
   );
+}
+
+function DateRangeFields({
+  dialog,
+  onChange,
+}: {
+  dialog: Extract<TemplateItemDialog, { kind: 'stage' | 'parent' }>;
+  onChange: Dispatch<SetStateAction<TemplateItemDialog | null>>;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="block text-xs font-medium text-muted-foreground">
+        计划开始
+        <input
+          type="date"
+          className={fieldClass('mt-1 h-9 w-full')}
+          value={dialog.plannedStartDate}
+          onChange={(event) => onChange((current) => (
+            current?.kind === 'stage' || current?.kind === 'parent'
+              ? { ...current, plannedStartDate: event.target.value }
+              : current
+          ))}
+        />
+      </label>
+      <label className="block text-xs font-medium text-muted-foreground">
+        计划完成
+        <input
+          type="date"
+          className={fieldClass('mt-1 h-9 w-full')}
+          value={dialog.plannedDueDate}
+          onChange={(event) => onChange((current) => (
+            current?.kind === 'stage' || current?.kind === 'parent'
+              ? { ...current, plannedDueDate: event.target.value }
+              : current
+          ))}
+        />
+      </label>
+    </div>
+  );
+}
+
+function toDateInput(value: string | null) {
+  if (!value) return '';
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function formatPlanRange(start?: string | null, due?: string | null) {
+  if (!start && !due) return '计划 -';
+  return `${formatShortDate(start)} - ${formatShortDate(due)}`;
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }

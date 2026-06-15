@@ -22,7 +22,6 @@ type ProjectActivityParent = {
   id: string;
   stage: string;
   projectTaskName: string;
-  plannedDueDate: string | null;
   sortOrder: number;
   children: ProjectActivityChild[];
 };
@@ -83,21 +82,20 @@ function toStructure(parents: ProjectActivityParent[]): ActivityStructureStage[]
 
 function toProjectPayload(stages: ActivityStructureStage[]) {
   return stages.flatMap((stage) => stage.parents.map((parent) => ({
-    id: isDraftId(parent.id) ? '' : parent.id,
-    stage: stage.name,
-    projectTaskName: parent.name,
-    plannedDueDate: null,
-    sortOrder: parent.sortOrder,
-    children: parent.children.map((child) => ({
-      id: isDraftId(child.id) ? '' : child.id,
-      thirdLevelPlan: child.title,
-      ownerRole: child.ownerRoleName || child.roleGroup,
-      roleGroup: child.roleGroup,
-      requiresDeliverable: child.requiresDeliverable,
-      deliverableName: child.deliverableName,
-      sortOrder: child.sortOrder,
-    })),
-  })));
+      id: isDraftId(parent.id) ? '' : parent.id,
+      stage: stage.name,
+      projectTaskName: parent.name,
+      sortOrder: parent.sortOrder,
+      children: parent.children.map((child) => ({
+        id: isDraftId(child.id) ? '' : child.id,
+        thirdLevelPlan: child.title,
+        ownerRole: child.ownerRoleName || child.roleGroup,
+        roleGroup: child.roleGroup,
+        requiresDeliverable: child.requiresDeliverable,
+        deliverableName: child.deliverableName,
+        sortOrder: child.sortOrder,
+      })),
+    })));
 }
 
 function ProjectActivityEditorView({ projectId }: { projectId: string }) {

@@ -87,6 +87,7 @@ export async function ensureProjectActivities(projectId: string, actorUserId?: s
             projectId,
             stage: template.stage,
             projectTaskName: template.projectTaskName,
+            plannedStartDate: defaultStartDate(template.stage),
             plannedDueDate: defaultDueDate(template.stage),
             sortOrder: parentIndex,
           },
@@ -166,9 +167,20 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
     let childCount = 0;
     for (const stage of version.stages) {
       const stageName = stage.name;
+      const stageStartDate = stage.plannedStartOffsetDays != null
+        ? offsetDate(stage.plannedStartOffsetDays)
+        : defaultStartDate(stageName);
+      const stageDueDate = stage.plannedDueOffsetDays != null
+        ? offsetDate(stage.plannedDueOffsetDays)
+        : defaultDueDate(stageName);
       await tx.stageGateRecord.upsert({
         where: { projectId_stage: { projectId, stage: stageName } },
-        create: { projectId, stage: stageName },
+        create: {
+          projectId,
+          stage: stageName,
+          plannedStartDate: stageStartDate,
+          plannedDueDate: stageDueDate,
+        },
         update: {},
       });
 
@@ -180,7 +192,10 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
             templateParentId: parent.id,
             stage: stageName,
             projectTaskName: parent.name,
-            plannedDueDate: parent.plannedOffsetDays ? offsetDueDate(parent.plannedOffsetDays) : defaultDueDate(stageName),
+            plannedStartDate: parent.plannedStartOffsetDays != null
+              ? offsetDate(parent.plannedStartOffsetDays)
+              : stageStartDate,
+            plannedDueDate: parent.plannedOffsetDays != null ? offsetDate(parent.plannedOffsetDays) : stageDueDate,
             sortOrder: parent.sortOrder || parentCount,
           },
           select: { id: true },
@@ -304,7 +319,19 @@ function defaultDueDate(stage: string) {
   return date;
 }
 
-function offsetDueDate(days: number) {
+function defaultStartDate(stage: string) {
+  const offset: Record<string, number> = {
+    TR1: 0,
+    'TR2&3': 14,
+    TR4: 30,
+    TR4A: 45,
+    TR5: 60,
+    TR6: 75,
+  };
+  return offsetDate(offset[stage] ?? 0);
+}
+
+function offsetDate(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date;
@@ -343,6 +370,7 @@ export async function getActivityEvents(projectId: string, childId?: string) {
 export async function updateActivityParent(params: {
   parentId: string;
   actorUserId: string;
+  plannedStartDate?: string | null;
   plannedDueDate?: string | null;
   close?: boolean;
 }) {
@@ -355,11 +383,15 @@ export async function updateActivityParent(params: {
 
     const before = {
       status: parent.status,
+      plannedStartDate: parent.plannedStartDate,
       plannedDueDate: parent.plannedDueDate,
       closedAt: parent.closedAt,
     };
 
     const updateData: Record<string, unknown> = {};
+    if ('plannedStartDate' in params) {
+      updateData.plannedStartDate = params.plannedStartDate ? new Date(params.plannedStartDate) : null;
+    }
     if ('plannedDueDate' in params) {
       updateData.plannedDueDate = params.plannedDueDate ? new Date(params.plannedDueDate) : null;
     }
@@ -388,6 +420,7 @@ export async function updateActivityParent(params: {
         beforeValue: JSON.stringify(before),
         afterValue: JSON.stringify({
           status: updated.status,
+          plannedStartDate: updated.plannedStartDate,
           plannedDueDate: updated.plannedDueDate,
           closedAt: updated.closedAt,
         }),

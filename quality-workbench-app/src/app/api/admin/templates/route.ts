@@ -27,6 +27,7 @@ type TemplateParentInput = {
   name: string;
   description: string | null;
   closureStandard: string | null;
+  plannedStartOffsetDays: number | null;
   plannedOffsetDays: number | null;
   sortOrder: number;
   children: TemplateChildInput[];
@@ -34,6 +35,8 @@ type TemplateParentInput = {
 
 type TemplateStageInput = {
   name: string;
+  plannedStartOffsetDays: number | null;
+  plannedDueOffsetDays: number | null;
   sortOrder: number;
   parents: TemplateParentInput[];
 };
@@ -111,6 +114,7 @@ function parseTemplateStages(value: unknown): TemplateStageInput[] {
         name: parentName,
         description: cleanOptionalText(parentRecord.description),
         closureStandard: cleanOptionalText(parentRecord.closureStandard),
+        plannedStartOffsetDays: cleanNumber(parentRecord.plannedStartOffsetDays),
         plannedOffsetDays: cleanNumber(parentRecord.plannedOffsetDays),
         sortOrder: parentIndex + 1,
         children,
@@ -119,6 +123,8 @@ function parseTemplateStages(value: unknown): TemplateStageInput[] {
 
     stages.push({
       name,
+      plannedStartOffsetDays: cleanNumber(stageRecord.plannedStartOffsetDays),
+      plannedDueOffsetDays: cleanNumber(stageRecord.plannedDueOffsetDays),
       sortOrder: stageIndex + 1,
       parents,
     });
@@ -231,11 +237,14 @@ async function copyVersionStructure(client: TemplateWriteClient, sourceVersionId
 
   const stages = source.stages.map((stage) => ({
     name: stage.name,
+    plannedStartOffsetDays: stage.plannedStartOffsetDays,
+    plannedDueOffsetDays: stage.plannedDueOffsetDays,
     sortOrder: stage.sortOrder,
     parents: stage.parents.map((parent) => ({
       name: parent.name,
       description: parent.description,
       closureStandard: parent.closureStandard,
+      plannedStartOffsetDays: parent.plannedStartOffsetDays,
       plannedOffsetDays: parent.plannedOffsetDays,
       sortOrder: parent.sortOrder,
       children: parent.children.map((child) => ({
@@ -265,9 +274,11 @@ async function createVersionStructure(client: TemplateWriteClient, targetVersion
   for (const stage of stages) {
     const createdStage = await client.activityTemplateStage.create({
       data: {
-        versionId: targetVersionId,
-        name: stage.name,
-        sortOrder: stage.sortOrder,
+          versionId: targetVersionId,
+          name: stage.name,
+          plannedStartOffsetDays: stage.plannedStartOffsetDays,
+          plannedDueOffsetDays: stage.plannedDueOffsetDays,
+          sortOrder: stage.sortOrder,
       },
       select: { id: true },
     });
@@ -279,6 +290,7 @@ async function createVersionStructure(client: TemplateWriteClient, targetVersion
           name: parent.name,
           description: parent.description,
           closureStandard: parent.closureStandard,
+          plannedStartOffsetDays: parent.plannedStartOffsetDays,
           plannedOffsetDays: parent.plannedOffsetDays,
           sortOrder: parent.sortOrder,
         },

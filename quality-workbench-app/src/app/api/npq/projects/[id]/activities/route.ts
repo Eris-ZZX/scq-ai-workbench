@@ -45,9 +45,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     : await getProjectById(id, session.sub);
   if (!project) return NextResponse.json({ error: '项目不存在' }, { status: 404 });
 
-  const parents = await getProjectActivityView(id);
-  const events = await getActivityEvents(id);
-  return NextResponse.json({ project, parents, events });
+  const [parents, events, stageGates] = await Promise.all([
+    getProjectActivityView(id),
+    getActivityEvents(id),
+    prisma.stageGateRecord.findMany({ where: { projectId: id }, orderBy: { stage: 'asc' } }),
+  ]);
+  return NextResponse.json({ project, parents, events, stageGates });
 }
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {

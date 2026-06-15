@@ -240,6 +240,8 @@ model ActivityTemplateStage {
   id         String   @id @default(cuid())
   versionId  String
   name       String
+  plannedStartOffsetDays Int?
+  plannedDueOffsetDays   Int?
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -257,6 +259,7 @@ model ActivityTemplateParent {
   name           String
   description    String?
   closureStandard String?
+  plannedStartOffsetDays Int?
   plannedOffsetDays Int?
   sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())
@@ -345,6 +348,7 @@ model ProjectActivityParent {
   stage           String
   projectTaskName String
   status          String   @default("not_started") // "not_started" | "in_progress" | "pending_npq_close" | "closed"
+  plannedStartDate DateTime?
   plannedDueDate  DateTime?
   closedAt        DateTime?
   closedById      String?
@@ -521,6 +525,8 @@ model StageGateRecord {
   projectId            String
   stage                String
   status               String   @default("pending") // "pending" | "passed" | "conditional_release"
+  plannedStartDate     DateTime?
+  plannedDueDate       DateTime?
   passedAt             DateTime?
   passedById           String?
   conditionReleaseNote String?

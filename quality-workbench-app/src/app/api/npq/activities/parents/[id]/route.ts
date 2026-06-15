@@ -16,7 +16,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
   if (!parent) return NextResponse.json({ error: '项目活动不存在' }, { status: 404 });
 
-  let body: { plannedDueDate?: string | null; close?: boolean };
+  let body: { plannedStartDate?: string | null; plannedDueDate?: string | null; close?: boolean };
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
   }
@@ -29,6 +29,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const updated = await updateActivityParent({
       parentId: id,
       actorUserId: session.sub,
+      plannedStartDate: body.plannedStartDate,
       plannedDueDate: body.plannedDueDate,
       close: body.close,
     });

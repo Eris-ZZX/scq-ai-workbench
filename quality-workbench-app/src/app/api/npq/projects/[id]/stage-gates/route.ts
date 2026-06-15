@@ -51,17 +51,45 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const session = await getSession();
   if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
   const { id: projectId } = await params;
-  const allowed = await canExecuteNpqAction({ actionKey: 'stage_gate.pass', session, projectId });
-  if (!allowed) return NextResponse.json({ error: '无权执行过点' }, { status: 403 });
 
-  let body: { stage?: string; conditionReleaseNote?: string | null };
+  let body: {
+    action?: string;
+    stage?: string;
+    conditionReleaseNote?: string | null;
+    plannedStartDate?: string | null;
+    plannedDueDate?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
   }
+
   const stage = body.stage?.trim();
   if (!stage || !STAGES.includes(stage)) return NextResponse.json({ error: '无效阶段' }, { status: 400 });
+
+  if (body.action === 'updatePlan') {
+    const allowed = await canExecuteNpqAction({ actionKey: 'activity.snapshot_adjust', session, projectId });
+    if (!allowed) return NextResponse.json({ error: '无权维护阶段计划' }, { status: 403 });
+
+    const updated = await prisma.stageGateRecord.upsert({
+      where: { projectId_stage: { projectId, stage } },
+      create: {
+        projectId,
+        stage,
+        plannedStartDate: parseDate(body.plannedStartDate),
+        plannedDueDate: parseDate(body.plannedDueDate),
+      },
+      update: {
+        plannedStartDate: parseDate(body.plannedStartDate),
+        plannedDueDate: parseDate(body.plannedDueDate),
+      },
+    });
+    return NextResponse.json(updated);
+  }
+
+  const allowed = await canExecuteNpqAction({ actionKey: 'stage_gate.pass', session, projectId });
+  if (!allowed) return NextResponse.json({ error: '无权执行过点' }, { status: 403 });
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -153,4 +181,10 @@ function nextStageOf(stage: string) {
   const index = STAGES.indexOf(stage);
   if (index < 0 || index >= STAGES.length - 1) return null;
   return STAGES[index + 1]!;
+}
+
+function parseDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }

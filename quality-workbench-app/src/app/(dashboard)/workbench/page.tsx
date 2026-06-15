@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, RefreshCw, Search, ShieldCheck } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 
 type WorkbenchRole = 'npq' | 'executor' | 'manager' | 'admin';
 type TodoType =
@@ -196,7 +196,7 @@ export default function WorkbenchPage() {
               <span>事项</span>
               <span />
             </div>
-            <div className="max-h-60 divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+            <div className="max-h-[8.5rem] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
             {filteredTodos.length === 0 ? (
               <div className="flex min-h-28 items-center justify-center px-4 py-8 text-sm text-slate-500">
                 当前筛选下没有待处理任务
@@ -295,7 +295,14 @@ function ProjectCardView({ project }: { project: ProjectCard }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-950">{project.projectName}</div>
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="truncate text-sm font-semibold text-slate-950">{project.projectName}</div>
+            {project.riskFlags.length === 0 && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                <ShieldCheck className="h-3.5 w-3.5" /> 平稳推进
+              </span>
+            )}
+          </div>
           <div className="mt-1 text-xs text-slate-500">当前阶段：{project.currentStage}</div>
         </div>
         <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{project.todoCount} 项待办</span>
@@ -311,19 +318,15 @@ function ProjectCardView({ project }: { project: ProjectCard }) {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {project.riskFlags.length === 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
-            <ShieldCheck className="h-3.5 w-3.5" /> 平稳推进
-          </span>
-        ) : (
-          project.riskFlags.map((flag) => (
+      {project.riskFlags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {project.riskFlags.map((flag) => (
             <span key={flag} className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-700">
               <AlertTriangle className="h-3.5 w-3.5" /> {flag}
             </span>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-auto pt-3">
         {project.nextTodo ? (
@@ -337,9 +340,6 @@ function ProjectCardView({ project }: { project: ProjectCard }) {
         ) : (
           <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">当前没有需要立即处理的任务</div>
         )}
-        <div className={buttonVariants({ variant: 'ghost', size: 'xs', className: 'mt-2 w-full justify-center' })}>
-          进入项目工作区
-        </div>
       </div>
     </Link>
   );
