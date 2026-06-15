@@ -16,11 +16,11 @@ export default function AdminHome() {
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Admin Config</p>
             <h1 className="mt-1 text-2xl font-semibold text-foreground">配置中心</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              后台用于维护模板、用户岗位、组件和运行日志；日常项目处理请回到个人工作台。
+              后台用于维护模板、用户岗位、组件和运行日志；日常项目处理请回到个人项目工作台。
             </p>
           </div>
           <Link href="/workbench" className="rounded-md border border-border bg-white px-3 py-2 text-sm hover:border-primary">
-            返回个人工作台
+            返回个人项目工作台
           </Link>
         </div>
 

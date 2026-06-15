@@ -313,8 +313,8 @@ export default function ActivityTrackingPage() {
       <div className="mx-auto max-w-7xl px-6 py-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">新产品导入活动跟踪</h1>
-            <p className="mt-1 text-sm text-muted-foreground">按阶段管理项目活动，展开后维护责任人子任务、附件、退回和不涉及项。</p>
+            <h1 className="text-2xl font-bold text-foreground">批量修改</h1>
+            <p className="mt-1 text-sm text-muted-foreground">按阶段筛选并批量维护当前项目的活动子任务、附件、退回和不涉及项。</p>
           </div>
           <Button variant="outline" onClick={() => loadActivities(projectId)}>
             <RefreshCw className="mr-1 h-4 w-4" /> 刷新

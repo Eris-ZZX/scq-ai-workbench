@@ -36,14 +36,14 @@ export function AppShell({
           <Link
             href="/workbench"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-ws-blue to-ws-green text-xs font-bold text-white"
-            title="个人工作台"
+            title="个人项目工作台"
           >
             SCQ
           </Link>
           {!collapsed && (
             <Link href="/workbench" className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-white">供应链质量部</div>
-              <div className="truncate text-xs text-ws-sidebar-text/60">质量项目工作台</div>
+              <div className="truncate text-xs text-ws-sidebar-text/60">个人项目工作台</div>
             </Link>
           )}
           <button
@@ -72,7 +72,7 @@ export function AppShell({
                     {session.role === 'admin' ? '系统管理员' : '项目成员'}
                   </div>
                 </div>
-                <Link href="/workbench" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="个人工作台">
+                <Link href="/workbench" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="个人项目工作台">
                   首页
                 </Link>
               </>

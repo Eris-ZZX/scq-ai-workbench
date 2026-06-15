@@ -104,16 +104,15 @@ async function main() {
   console.log(`  F3 position roles: ${positionRoleSeeds.length} seeded`);
 
   const components = [
-    ['cmp-workbench', '个人工作台', '/workbench', 1],
-    ['cmp-project-workbench', '项目工作台', '/project-workbench', 2],
-    ['cmp-npq-activities', '导入活动跟踪', '/flows/npq/activities', 3],
-    ['cmp-npq-activity-dashboard', '活动管理看板', '/flows/npq/activity-dashboard', 4],
-    ['cmp-admin-projects', '项目管理', '/admin/projects', 5],
-    ['cmp-admin-templates', '模板中心', '/admin/templates', 6],
-    ['cmp-admin-positions', '岗位角色', '/admin/positions', 7],
-    ['cmp-admin-users', '用户管理', '/admin/users', 8],
-    ['cmp-admin-components', '功能组件管理', '/admin/components', 9],
-    ['cmp-admin-observability', '运行日志', '/admin/observability', 10],
+    ['cmp-workbench', '个人项目工作台', '/workbench', 1],
+    ['cmp-npq-activities', '批量修改', '/flows/npq/activities', 2],
+    ['cmp-npq-activity-dashboard', '活动管理看板', '/flows/npq/activity-dashboard', 3],
+    ['cmp-admin-projects', '项目管理', '/admin/projects', 4],
+    ['cmp-admin-templates', '模板中心', '/admin/templates', 5],
+    ['cmp-admin-positions', '岗位角色', '/admin/positions', 6],
+    ['cmp-admin-users', '用户管理', '/admin/users', 7],
+    ['cmp-admin-components', '功能组件管理', '/admin/components', 8],
+    ['cmp-admin-observability', '运行日志', '/admin/observability', 9],
   ] as const;
 
   for (const [id, name, cp, order] of components) {
@@ -137,6 +136,13 @@ async function main() {
     `DELETE FROM ComponentConfig
      WHERE id IN ('cmp-npq-projects', 'cmp-npq-todos', 'cmp-npq-tasks')
         OR path IN ('/flows/npq/projects', '/flows/npq/todos', '/flows/npq/tasks')`,
+    [],
+  );
+  await executeWithRetry(
+    `DELETE FROM ComponentConfig
+     WHERE id = 'cmp-project-workbench'
+        OR path = '/project-workbench'`,
+    [],
   );
   console.log(`  ✓ Component configs: ${components.length} registered (with F3 positions)`);
 
@@ -236,6 +242,7 @@ async function main() {
 
   const fixedUsers = [
     ['seed-user-npq', 'npq', 'npq@example.com', 'pos-npq', 'owner'],
+    ['seed-user-npq2', 'NPQ2', 'npq2@example.com', 'pos-npq', 'member'],
     ['seed-user-pqe', 'pqe', 'pqe@example.com', 'pos-pqe', 'member'],
     ['seed-user-sqe', 'sqe', 'sqe@example.com', 'pos-sqe', 'member'],
     ['seed-user-fae', 'fae', 'fae@example.com', 'pos-fae', 'member'],

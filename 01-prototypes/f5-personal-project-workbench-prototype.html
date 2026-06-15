@@ -1,0 +1,1152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>F5 个人项目工作台原型</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --line: #d8dee9;
+      --line-soft: #e9edf4;
+      --text: #172033;
+      --muted: #667085;
+      --brand: #2563eb;
+      --brand-soft: #eef5ff;
+      --green: #0f766e;
+      --green-soft: #e7f6f3;
+      --amber: #b45309;
+      --amber-soft: #fff4dc;
+      --red: #b42318;
+      --red-soft: #feeceb;
+      --slate: #334155;
+      --slate-soft: #eef2f7;
+      --side: #101828;
+      --shadow: 0 10px 24px rgba(16, 24, 40, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12px;
+      font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .shell {
+      display: grid;
+      min-height: 100vh;
+      grid-template-columns: 248px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: var(--side);
+      color: #e5e7eb;
+      padding: 20px 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 8px 22px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .logo {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #0284c7, #14b8a6);
+      font-size: 12px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .brand strong {
+      display: block;
+      color: #fff;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 3px;
+      font-size: 12px;
+      color: rgba(229, 231, 235, 0.64);
+    }
+
+    .nav-section {
+      margin-top: 24px;
+      padding: 0 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(229, 231, 235, 0.5);
+    }
+
+    .nav-link {
+      display: block;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    .user {
+      margin-top: 28px;
+      padding: 14px 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 12px;
+      color: rgba(229, 231, 235, 0.72);
+    }
+
+    .main {
+      min-width: 0;
+      padding: 26px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.25;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 12px;
+      transition: 0.15s ease;
+    }
+
+    .btn:hover {
+      border-color: var(--brand);
+      color: var(--brand);
+    }
+
+    .btn.primary {
+      border-color: var(--brand);
+      background: var(--brand);
+      color: #fff;
+    }
+
+    .btn.danger {
+      border-color: #fecaca;
+      background: #fff;
+      color: var(--red);
+    }
+
+    .grid-home {
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .panel-body {
+      padding: 16px 18px 18px;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .filter {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: var(--slate-soft);
+      color: var(--muted);
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .filter.active {
+      border-color: #bfdbfe;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-weight: 700;
+    }
+
+    .task-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .task-row {
+      display: grid;
+      width: 100%;
+      grid-template-columns: 110px minmax(0, 1fr) 108px 110px 90px;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 7px;
+      background: #fff;
+      padding: 11px 12px;
+      text-align: left;
+      color: inherit;
+    }
+
+    .task-row:hover {
+      border-color: #bfdbfe;
+      background: #fbfdff;
+    }
+
+    .title {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .subline {
+      display: block;
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.red {
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .tag.amber {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .tag.green {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .tag.blue {
+      background: var(--brand-soft);
+      color: var(--brand);
+    }
+
+    .tag.slate {
+      background: var(--slate-soft);
+      color: var(--slate);
+    }
+
+    .project-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search {
+      width: 240px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px 10px;
+      color: var(--text);
+    }
+
+    .projects {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .project-card {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px;
+      text-align: left;
+      color: inherit;
+    }
+
+    .project-card:hover {
+      border-color: #bfdbfe;
+      background: #fbfdff;
+    }
+
+    .project-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .progress {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #edf1f7;
+    }
+
+    .progress span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--brand);
+    }
+
+    .next-action {
+      border-radius: 7px;
+      background: #f8fafc;
+      padding: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .next-action strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .workspace {
+      display: none;
+      gap: 14px;
+    }
+
+    .workspace.active,
+    .home.active {
+      display: grid;
+    }
+
+    .home {
+      display: none;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) repeat(5, auto);
+      align-items: center;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .metric {
+      min-width: 88px;
+      border-left: 1px solid var(--line-soft);
+      padding-left: 12px;
+    }
+
+    .metric b {
+      display: block;
+      font-size: 15px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .work-grid {
+      display: grid;
+      grid-template-columns: 410px minmax(0, 1fr);
+      gap: 14px;
+      min-height: 660px;
+    }
+
+    .tree {
+      overflow: hidden;
+    }
+
+    .tree-scroll {
+      max-height: 620px;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .stage {
+      margin-bottom: 10px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .stage-head,
+    .activity-head,
+    .child-task {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 10px 12px;
+    }
+
+    .stage-head {
+      background: #f8fafc;
+      font-weight: 800;
+    }
+
+    .activity {
+      border-top: 1px solid var(--line-soft);
+    }
+
+    .activity-head {
+      background: #fff;
+      font-weight: 700;
+    }
+
+    .children {
+      padding: 0 8px 8px 18px;
+    }
+
+    .child-task {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: #fff;
+      text-align: left;
+    }
+
+    .child-task.active {
+      border-color: #bfdbfe;
+      background: var(--brand-soft);
+    }
+
+    .task-name {
+      min-width: 0;
+    }
+
+    .task-row > span:nth-child(2) {
+      min-width: 0;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 21px;
+      border-radius: 999px;
+      padding: 2px 7px;
+      background: var(--slate-soft);
+      color: var(--slate);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge.red {
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .badge.amber {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .badge.green {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .badge.blue {
+      background: var(--brand-soft);
+      color: var(--brand);
+    }
+
+    .detail {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      overflow: hidden;
+    }
+
+    .detail-section {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .info-item {
+      border-radius: 7px;
+      background: #f8fafc;
+      padding: 9px 10px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .info-item strong {
+      display: block;
+      margin-top: 4px;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    textarea,
+    .fake-input {
+      width: 100%;
+      min-height: 74px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 9px 10px;
+      color: var(--text);
+    }
+
+    .fake-input {
+      display: flex;
+      min-height: 40px;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .history {
+      overflow: auto;
+      padding: 16px 18px;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .event {
+      border-left: 3px solid #cbd5e1;
+      padding: 2px 0 2px 10px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .event strong {
+      display: block;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .collapsed-note {
+      padding: 10px 12px;
+      border-top: 1px solid var(--line-soft);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    @media (max-width: 1180px) {
+      .shell {
+        grid-template-columns: 72px minmax(0, 1fr);
+      }
+
+      .brand-text,
+      .nav-section span,
+      .nav-link span,
+      .user {
+        display: none;
+      }
+
+      .sidebar {
+        padding: 18px 10px;
+      }
+
+      .brand {
+        justify-content: center;
+        padding: 6px 0 20px;
+      }
+
+      .nav-link {
+        display: grid;
+        place-items: center;
+        padding: 10px 0;
+      }
+
+      .projects {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .summary {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      .metric {
+        border-left: 0;
+        padding-left: 0;
+      }
+
+      .work-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        display: block;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .main {
+        padding: 16px;
+      }
+
+      .topbar {
+        display: grid;
+      }
+
+      .task-row {
+        grid-template-columns: 1fr;
+      }
+
+      .projects {
+        grid-template-columns: 1fr;
+      }
+
+      .search {
+        width: 100%;
+      }
+
+      .project-toolbar {
+        display: grid;
+        width: 100%;
+      }
+
+      .summary,
+      .info-grid,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">SCQ</div>
+        <div class="brand-text">
+          <strong>供应链质量部</strong>
+          <span>质量项目工作台</span>
+        </div>
+      </div>
+      <div class="nav-section"><span>业务</span></div>
+      <a class="nav-link" href="#" onclick="showHome(); return false;"><span>个人项目工作台</span></a>
+      <div class="user">当前用户：npq<br />角色：NPQ</div>
+    </aside>
+
+    <main class="main">
+      <section id="home" class="home active">
+        <div class="topbar">
+          <div>
+            <div class="eyebrow">
+              <span>2026/06/15</span>
+              <span class="tag blue">NPQ</span>
+              <span>个人项目工作台</span>
+            </div>
+            <h1>npq，先处理这些，再看项目推进</h1>
+          </div>
+          <button class="btn">刷新</button>
+        </div>
+
+        <div class="grid-home">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>我的待处理任务</h2>
+                <div class="subline">按优先级排序：逾期 / 阻塞 / 退回 / 待确认关闭 / 责任项</div>
+              </div>
+              <div class="filters">
+                <button class="filter active">全部 8</button>
+                <button class="filter">逾期 2</button>
+                <button class="filter">阻塞 1</button>
+                <button class="filter">退回 1</button>
+                <button class="filter">待确认关闭 2</button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="task-list">
+                <button class="task-row" onclick="showWorkspace('task-risk-review')">
+                  <span class="tag red">逾期</span>
+                  <span>
+                    <span class="title">TR2 试产问题闭环确认</span>
+                    <span class="subline">Aero Buds X1 / TR2&3 / 试产质量问题管理</span>
+                  </span>
+                  <span class="muted">责任角色 SQE</span>
+                  <span class="muted">06/12 到期</span>
+                  <span class="muted">进入处理</span>
+                </button>
+                <button class="task-row" onclick="showWorkspace('task-close-parent')">
+                  <span class="tag green">待确认关闭</span>
+                  <span>
+                    <span class="title">TR2&3 可靠性验证计划已完成，待 NPQ 关闭</span>
+                    <span class="subline">Aero Buds X1 / TR2&3 / 可靠性验证</span>
+                  </span>
+                  <span class="muted">责任角色 NPQ</span>
+                  <span class="muted">06/14 到期</span>
+                  <span class="muted">进入处理</span>
+                </button>
+                <button class="task-row" onclick="showWorkspace('task-returned')">
+                  <span class="tag amber">退回</span>
+                  <span>
+                    <span class="title">供应商 PPAP 资料补充</span>
+                    <span class="subline">Sensor Hub P2 / TR4 / 供应商质量准入</span>
+                  </span>
+                  <span class="muted">责任角色 SQE</span>
+                  <span class="muted">06/17 到期</span>
+                  <span class="muted">进入处理</span>
+                </button>
+                <button class="task-row" onclick="showWorkspace('task-responsibility')">
+                  <span class="tag blue">责任项</span>
+                  <span>
+                    <span class="title">TR4A 量产检验计划确认</span>
+                    <span class="subline">Aero Buds X1 / TR4A / 量产质量策划</span>
+                  </span>
+                  <span class="muted">责任角色 QCM</span>
+                  <span class="muted">06/20 到期</span>
+                  <span class="muted">进入处理</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>我的项目</h2>
+                <div class="subline">推进型项目卡片，按项目推进优先级排序</div>
+              </div>
+              <div class="project-toolbar">
+                <input class="search" value="" placeholder="搜索项目名" />
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="projects">
+                <button class="project-card" onclick="showWorkspace('task-risk-review')">
+                  <div>
+                    <h3>Aero Buds X1</h3>
+                    <div class="project-meta">
+                      <span>TR2&3</span>
+                      <span class="tag red">逾期 2</span>
+                      <span class="tag green">待确认关闭 1</span>
+                    </div>
+                  </div>
+                  <div class="progress"><span style="width: 46%"></span></div>
+                  <div class="next-action">
+                    <strong>下一待处理：试产问题闭环确认</strong>
+                    阶段门仍有逾期事项，需先推动 SQE 完成问题闭环。
+                  </div>
+                </button>
+                <button class="project-card" onclick="showWorkspace('task-returned')">
+                  <div>
+                    <h3>Sensor Hub P2</h3>
+                    <div class="project-meta">
+                      <span>TR4</span>
+                      <span class="tag amber">退回 1</span>
+                      <span class="tag red">阻塞 1</span>
+                    </div>
+                  </div>
+                  <div class="progress"><span style="width: 63%"></span></div>
+                  <div class="next-action">
+                    <strong>下一待处理：PPAP 资料补充</strong>
+                    供应商资料被 NPQ 退回，需要责任角色补齐附件。
+                  </div>
+                </button>
+                <button class="project-card" onclick="showWorkspace('task-responsibility')">
+                  <div>
+                    <h3>Dock Pro M3</h3>
+                    <div class="project-meta">
+                      <span>TR4A</span>
+                      <span class="tag blue">责任项 3</span>
+                    </div>
+                  </div>
+                  <div class="progress"><span style="width: 72%"></span></div>
+                  <div class="next-action">
+                    <strong>下一待处理：量产检验计划确认</strong>
+                    当前阶段仍有 QCM 责任项需要确认。
+                  </div>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace">
+        <div class="topbar">
+          <div>
+            <div class="eyebrow">
+              <button class="btn" onclick="showHome()">返回个人项目工作台</button>
+              <span class="tag blue">项目工作区</span>
+            </div>
+            <h1>Aero Buds X1</h1>
+          </div>
+          <button class="btn">刷新</button>
+        </div>
+
+        <div class="summary">
+          <div>
+            <h2>Aero Buds X1 / TR2&3</h2>
+            <div class="subline">当前阶段展开，其他阶段折叠。待办进入后自动选中对应任务。</div>
+          </div>
+          <div class="metric"><b>46%</b><span>整体进度</span></div>
+          <div class="metric"><b>2</b><span>逾期</span></div>
+          <div class="metric"><b>1</b><span>阻塞</span></div>
+          <div class="metric"><b>1</b><span>待确认关闭</span></div>
+          <div class="metric"><b>卡住</b><span>阶段门</span></div>
+        </div>
+
+        <div class="work-grid">
+          <section class="panel tree">
+            <div class="panel-head">
+              <div>
+                <h2>项目活动</h2>
+                <div class="subline">阶段 / 项目活动 / 子任务</div>
+              </div>
+            </div>
+            <div class="tree-scroll">
+              <div class="stage">
+                <div class="stage-head">
+                  <span>TR1 概念评审</span>
+                  <span class="badge green">已完成</span>
+                </div>
+                <div class="collapsed-note">3 个项目活动已关闭</div>
+              </div>
+
+              <div class="stage">
+                <div class="stage-head">
+                  <span>TR2&3 方案与样机评审</span>
+                  <span class="badges">
+                    <span class="badge red">异常 3</span>
+                    <span class="badge amber">待办 5</span>
+                  </span>
+                </div>
+                <div class="activity">
+                  <div class="activity-head">
+                    <span>1.1 试产质量问题管理</span>
+                    <span class="badges">
+                      <span class="badge red">逾期 1</span>
+                      <span class="badge amber">阻塞 1</span>
+                    </span>
+                  </div>
+                  <div class="children">
+                    <button id="task-risk-review" class="child-task active" onclick="selectTask('task-risk-review')">
+                      <span class="task-name">
+                        <span class="title">1.1.1 试产问题闭环确认</span>
+                        <span class="subline">SQE / 06-12 到期</span>
+                      </span>
+                      <span class="badge red">逾期</span>
+                    </button>
+                    <button class="child-task" onclick="selectTask('task-blocked')">
+                      <span class="task-name">
+                        <span class="title">1.1.2 Top 问题复测结论</span>
+                        <span class="subline">PQE / 06-16 到期</span>
+                      </span>
+                      <span class="badge amber">阻塞</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="activity">
+                  <div class="activity-head">
+                    <span>1.2 可靠性验证</span>
+                    <span class="badges">
+                      <span class="badge green">待确认关闭</span>
+                      <span class="badge slate">3/3</span>
+                    </span>
+                  </div>
+                  <div class="children">
+                    <button id="task-close-parent" class="child-task" onclick="selectTask('task-close-parent')">
+                      <span class="task-name">
+                        <span class="title">1.2 项目活动待确认关闭</span>
+                        <span class="subline">NPQ / 所有涉及子任务已完成</span>
+                      </span>
+                      <span class="badge green">待确认关闭</span>
+                    </button>
+                    <button class="child-task">
+                      <span class="task-name">
+                        <span class="title">1.2.1 可靠性测试报告上传</span>
+                        <span class="subline">RAM / 已完成</span>
+                      </span>
+                      <span class="badge green">已完成</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stage">
+                <div class="stage-head">
+                  <span>TR4 试产评审</span>
+                  <span class="badges">
+                    <span class="badge amber">待办 4</span>
+                  </span>
+                </div>
+                <div class="collapsed-note">默认折叠，点击阶段后展开项目活动。</div>
+              </div>
+
+              <div class="stage">
+                <div class="stage-head">
+                  <span>TR4A 量产准入</span>
+                  <span class="badges">
+                    <span class="badge blue">未开始</span>
+                  </span>
+                </div>
+                <div class="collapsed-note">未开始事项不进入待处理计算。</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel detail">
+            <div class="detail-section">
+              <div class="eyebrow">
+                <span id="detail-status" class="tag red">逾期</span>
+                <span>角色动作集：NPQ</span>
+              </div>
+              <h2 id="detail-title">试产问题闭环确认</h2>
+              <div class="info-grid">
+                <div class="info-item">阶段<strong>TR2&3</strong></div>
+                <div class="info-item">项目活动<strong>试产质量问题管理</strong></div>
+                <div class="info-item">责任角色<strong>SQE</strong></div>
+                <div class="info-item">计划时间<strong>2026-06-12</strong></div>
+                <div class="info-item">当前状态<strong id="detail-state">进行中 / 逾期</strong></div>
+                <div class="info-item">处理权限<strong>NPQ 可代维护并留痕</strong></div>
+              </div>
+            </div>
+
+            <div class="detail-section">
+              <h2>提交与动作</h2>
+              <div class="form-grid">
+                <label>
+                  提交标准
+                  <div class="fake-input" id="detail-standard">上传问题闭环清单，并填写复测结论。</div>
+                </label>
+                <label>
+                  附件
+                  <div class="fake-input">试产问题闭环清单.xlsx <button class="btn">上传</button></div>
+                </label>
+                <label>
+                  完成说明
+                  <textarea>Top3 问题已复测，剩余 1 项需 SQE 补充供应商原因分析。</textarea>
+                </label>
+                <label>
+                  阻塞说明 / 退回原因
+                  <textarea>供应商 8D 报告缺少纠正措施验证证据。</textarea>
+                </label>
+              </div>
+              <div class="actions">
+                <button class="btn primary">保存</button>
+                <button class="btn">标记完成</button>
+                <button class="btn">标记阻塞</button>
+                <button class="btn danger">退回责任人</button>
+                <button class="btn">标记不涉及</button>
+              </div>
+            </div>
+
+            <div class="history">
+              <h2>历史</h2>
+              <div class="subline">当前任务历史 + 所属项目活动关键历史</div>
+              <div class="timeline">
+                <div class="event">
+                  <strong>2026-06-15 08:20 / NPQ 代维护</strong>
+                  补充阻塞说明：供应商 8D 报告缺少验证证据。
+                </div>
+                <div class="event">
+                  <strong>2026-06-14 17:36 / SQE 上传附件</strong>
+                  上传试产问题闭环清单.xlsx。
+                </div>
+                <div class="event">
+                  <strong>2026-06-13 10:10 / 项目活动关键历史</strong>
+                  试产质量问题管理被标记为存在阻塞，阶段门暂不可通过。
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const details = {
+      "task-risk-review": {
+        title: "试产问题闭环确认",
+        status: "逾期",
+        statusClass: "tag red",
+        state: "进行中 / 逾期",
+        standard: "上传问题闭环清单，并填写复测结论。"
+      },
+      "task-close-parent": {
+        title: "可靠性验证项目活动待确认关闭",
+        status: "待确认关闭",
+        statusClass: "tag green",
+        state: "待 NPQ 确认关闭",
+        standard: "所有涉及子任务已完成，NPQ 确认后关闭项目活动。"
+      },
+      "task-blocked": {
+        title: "Top 问题复测结论",
+        status: "阻塞",
+        statusClass: "tag amber",
+        state: "进行中 / 阻塞",
+        standard: "补齐复测记录，说明阻塞原因和预计解除时间。"
+      },
+      "task-returned": {
+        title: "供应商 PPAP 资料补充",
+        status: "退回",
+        statusClass: "tag amber",
+        state: "已退回",
+        standard: "补齐 PPAP 资料并重新提交附件。"
+      },
+      "task-responsibility": {
+        title: "量产检验计划确认",
+        status: "责任项",
+        statusClass: "tag blue",
+        state: "未开始",
+        standard: "确认量产检验项目、抽样频次和责任人。"
+      }
+    };
+
+    function showHome() {
+      document.getElementById("home").classList.add("active");
+      document.getElementById("workspace").classList.remove("active");
+    }
+
+    function showWorkspace(taskId) {
+      document.getElementById("home").classList.remove("active");
+      document.getElementById("workspace").classList.add("active");
+      selectTask(taskId || "task-risk-review");
+    }
+
+    function selectTask(taskId) {
+      const data = details[taskId] || details["task-risk-review"];
+      document.querySelectorAll(".child-task").forEach((node) => node.classList.remove("active"));
+      const node = document.getElementById(taskId);
+      if (node) node.classList.add("active");
+      document.getElementById("detail-title").textContent = data.title;
+      document.getElementById("detail-status").textContent = data.status;
+      document.getElementById("detail-status").className = data.statusClass;
+      document.getElementById("detail-state").textContent = data.state;
+      document.getElementById("detail-standard").textContent = data.standard;
+    }
+  </script>
+</body>
+</html>

@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { ProjectActivityEditor } from './project-activity-editor';
@@ -350,9 +349,6 @@ export default function AdminProjectsPage() {
                   <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                     <div className="text-sm font-semibold">项目基本信息</div>
                     <div className="flex items-center gap-2">
-                      <Link className={actionButton()} href={`/flows/npq/activities?projectId=${selectedProject.id}`}>
-                        维护任务状态
-                      </Link>
                       <button className={dangerButton()} onClick={() => deleteProject(selectedProject)} disabled={saving}>
                         <Trash2 className="h-4 w-4" />删除项目
                       </button>

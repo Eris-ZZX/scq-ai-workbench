@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/platform/auth/auth.config';
 
-const TEST_ACCOUNTS = ['npq', 'pqe', 'sqe', 'fae', 'ram', 'qcm', 'manager', 'admin'];
+const TEST_ACCOUNTS = ['npq', 'NPQ2', 'pqe', 'sqe', 'fae', 'ram', 'qcm', 'manager', 'admin'];
 const TEST_PASSWORD = 'qe123456';
 
 type SearchParams = Record<string, string | string[] | undefined>;

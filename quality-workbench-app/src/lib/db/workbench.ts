@@ -117,12 +117,21 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
         ? Math.round(project.activityParents.reduce((sum, parent) => sum + parent.progressPercent, 0) / parentCount)
         : 0;
       const riskFlags = group?.riskFlags ?? getProjectRiskFlagsFromParents(project.activityParents);
+      const nextTodo = group?.todos[0] ?? null;
       return {
         projectId: project.id,
         projectName: project.name,
         currentStage: project.currentStage,
         progressPercent,
         todoCount: group?.todoCount ?? 0,
+        nextTodo: nextTodo ? {
+          id: nextTodo.id,
+          type: nextTodo.type,
+          title: nextTodo.title,
+          parentTitle: nextTodo.parentTitle,
+          stage: nextTodo.stage,
+          dueAt: nextTodo.dueAt,
+        } : null,
         riskFlags,
         updatedAt: project.updatedAt.toISOString(),
         sortScore: getProjectSortScore(group?.todos ?? [], riskFlags, project.updatedAt),
@@ -135,6 +144,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
       currentStage: card.currentStage,
       progressPercent: card.progressPercent,
       todoCount: card.todoCount,
+      nextTodo: card.nextTodo,
       riskFlags: card.riskFlags,
       updatedAt: card.updatedAt,
     }));
@@ -402,15 +412,15 @@ function getChildTodoType(
 
 function getTodoPriority(type: TodoType, dueAt: Date | null, now: Date) {
   const base: Record<TodoType, number> = {
-    overdue: 10,
+    stage_gate: 10,
     blocked: 20,
-    returned: 30,
-    stage_gate: 40,
-    pending_parent_close: 50,
+    overdue: 30,
+    pending_parent_close: 40,
+    returned: 50,
     missing_deliverable: 60,
     responsibility: 100,
   };
-  const days = dueAt ? Math.floor((dueAt.getTime() - now.getTime()) / 86_400_000) : 99;
+  const days = dueAt ? Math.floor((dueAt.getTime() - now.getTime()) / 86_400_000) : 0;
   return base[type] + Math.max(Math.min(days, 30), -30);
 }
 
@@ -430,6 +440,7 @@ function getProjectRiskFlags(todos: { type: string }[]) {
   const flags = new Set<string>();
   if (todos.some((todo) => todo.type === 'overdue')) flags.add('逾期');
   if (todos.some((todo) => todo.type === 'blocked')) flags.add('阻塞');
+  if (todos.some((todo) => todo.type === 'pending_parent_close')) flags.add('待确认关闭');
   if (todos.some((todo) => todo.type === 'missing_deliverable')) flags.add('缺交付件');
   if (todos.some((todo) => todo.type === 'stage_gate')) flags.add('阶段门');
   return Array.from(flags);
@@ -439,14 +450,17 @@ function getProjectRiskFlagsFromParents(parents: { hasOverdue: boolean; hasBlock
   const flags = new Set<string>();
   if (parents.some((parent) => parent.hasOverdue)) flags.add('逾期');
   if (parents.some((parent) => parent.hasBlocked)) flags.add('阻塞');
+  if (parents.some((parent) => parent.status === 'pending_npq_close')) flags.add('待确认关闭');
   return Array.from(flags);
 }
 
 function getProjectSortScore(todos: { type: string }[], riskFlags: string[], updatedAt: Date) {
   let score = Math.floor(updatedAt.getTime() / 1_000_000_000);
   if (todos.length > 0) score += 10_000;
-  if (riskFlags.includes('逾期') || riskFlags.includes('阻塞')) score += 8_000;
-  if (riskFlags.includes('阶段门')) score += 5_000;
+  if (todos.some((todo) => todo.type === 'stage_gate') || riskFlags.includes('阶段门')) score += 12_000;
+  if (todos.some((todo) => todo.type === 'blocked') || riskFlags.includes('阻塞')) score += 10_000;
+  if (todos.some((todo) => todo.type === 'overdue') || riskFlags.includes('逾期')) score += 8_000;
+  if (todos.some((todo) => todo.type === 'pending_parent_close') || riskFlags.includes('待确认关闭')) score += 6_000;
   return score;
 }
 

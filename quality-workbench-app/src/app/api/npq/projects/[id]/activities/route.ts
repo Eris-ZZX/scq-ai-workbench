@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/platform/auth/auth.config';
 import { getProjectById } from '@/lib/db/projects';
+import { prisma } from '@/lib/prisma';
 import {
   canAccessProject,
   ensureProjectActivities,
@@ -16,7 +17,34 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const allowed = await canAccessProject(id, session.sub, session.role);
   if (!allowed) return NextResponse.json({ error: '无权访问' }, { status: 403 });
 
-  const project = await getProjectById(id, session.sub);
+  const project = session.role === 'admin'
+    ? await prisma.project.findUnique({
+        where: { id },
+        include: {
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  positionBinding: {
+                    select: {
+                      positionRoleId: true,
+                      positionRole: { select: { id: true, code: true, name: true, roleGroup: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          stages: { orderBy: { order: 'asc' } },
+          tasks: { orderBy: { createdAt: 'desc' }, take: 50 },
+          _count: { select: { tasks: true } },
+        },
+      })
+    : await getProjectById(id, session.sub);
+  if (!project) return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+
   const parents = await getProjectActivityView(id);
   const events = await getActivityEvents(id);
   return NextResponse.json({ project, parents, events });

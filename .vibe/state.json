@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
   "projectRoot": "D:\\Users\\vox1814\\Desktop\\AIspace\\5.Huge-App\\260608-QEworkspace",
-  "updatedAt": "2026-06-12T17:10:14+08:00",
-  "lastSessionId": "session-1781255385708",
+  "updatedAt": "2026-06-15T09:34:03+08:00",
+  "lastSessionId": "session-1781485347907",
   "source": "codex",
   "status": "in_progress",
-  "currentTask": "调整项目工作台文案和项目详情返回路径",
+  "currentTask": "F5 个人项目工作台已实现并准备提交",
   "features": [
     {
       "id": "F1",
@@ -14,216 +14,155 @@
       "steps": [
         {
           "id": "S1",
-          "title": "平台基础骨架、认证、NPI 项目管理、基础任务流转、管理员后台、组件开关和可观测性",
+          "title": "平台基础骨架、认证和 NPI 项目管理",
+          "status": "done"
+        },
+        {
+          "id": "S2",
+          "title": "基础任务流转、管理员后台、组件开关和可观测性",
+          "status": "done"
+        },
+        {
+          "id": "S3",
+          "title": "MVP fulltest",
           "status": "done"
         }
       ]
     },
     {
       "id": "F2",
-      "title": "新产品导入活动跟踪 + 跨角色协同 + 管理看板",
+      "title": "新产品导入活动跟踪",
       "status": "done",
       "steps": [
         {
           "id": "S1",
-          "title": "解析用户已有质量活动清单，确认 Excel 字段和数据规模",
+          "title": "活动模板库和项目活动实例",
           "status": "done"
         },
         {
           "id": "S2",
-          "title": "定义子母任务、交付件、状态和关闭标准数据模型",
+          "title": "母子任务跟踪、NPQ 关闭/代维护留痕",
           "status": "done"
         },
         {
           "id": "S3",
-          "title": "定义 NPQ、负责方、管理层的协同和权限规则",
-          "status": "done"
-        },
-        {
-          "id": "S4",
-          "title": "定义管理层看板指标、风险口径和角色按时完成率",
-          "status": "done"
-        },
-        {
-          "id": "S5",
-          "title": "固化 F2 页面结构、交互、数据模型、工作流和验收标准到 plan.md",
-          "status": "done"
-        },
-        {
-          "id": "S6",
-          "title": "扩展 Prisma 数据模型和 seed，将 Excel 模板转为活动模板库与示例项目活动实例",
-          "status": "done"
-        },
-        {
-          "id": "S7",
-          "title": "实现母任务按阶段折叠列表、默认列、筛选和子任务展开表格",
-          "status": "done"
-        },
-        {
-          "id": "S8",
-          "title": "实现子任务右侧详情抽屉、状态流转、交付件校验、阻塞/逾期标记、NPQ 关闭和代维护留痕",
-          "status": "done"
-        },
-        {
-          "id": "S9",
-          "title": "实现管理层看板和角色维度子任务按时完成率统计",
-          "status": "done"
-        },
-        {
-          "id": "S10",
-          "title": "补充单元测试、集成测试、权限测试、UI 冒烟和 fulltest",
+          "title": "管理看板和基础业务闭环",
           "status": "done"
         }
       ]
     },
     {
       "id": "F3",
-      "title": "NPQ 活动流真实运转 + 配套后台底座完善",
+      "title": "NPQ 活动流真实运转",
       "status": "done",
       "steps": [
         {
           "id": "S1",
-          "title": "设计并实现模板中心数据模型：多模板、最新发布版本、阶段/母任务/子任务三级结构",
+          "title": "模板中心、项目创建向导和模板快照",
           "status": "done"
         },
         {
           "id": "S2",
-          "title": "实现后台模板中心页面：模板列表、复制、编辑草稿、发布、停用、三级结构维护",
+          "title": "岗位任命、权限矩阵和项目活动快照",
           "status": "done"
         },
         {
           "id": "S3",
-          "title": "实现岗位角色与用户单岗位绑定：岗位字典、用户岗位、项目岗位任命",
+          "title": "待办、附件、退回、不涉及和批量操作",
           "status": "done"
         },
         {
           "id": "S4",
-          "title": "实现 NPQ 活动流动作级权限矩阵，并接入关键 API/页面动作",
-          "status": "done"
-        },
-        {
-          "id": "S5",
-          "title": "重构项目创建为轻量 4 步向导：项目信息、模板选择、岗位任命、预览生成快照",
-          "status": "done"
-        },
-        {
-          "id": "S6",
-          "title": "升级项目活动快照：负责人映射、不涉及标记、项目内新增/调整、批量操作、动态记录",
-          "status": "done"
-        },
-        {
-          "id": "S7",
-          "title": "简化子任务状态并实现 NPQ 退回：未开始/进行中/已退回/已完成，退回原因和待办回流",
-          "status": "done"
-        },
-        {
-          "id": "S8",
-          "title": "实现轻量附件上传：上传、下载、删除、附件完成校验、删除留痕",
-          "status": "done"
-        },
-        {
-          "id": "S9",
-          "title": "实现我的待办和站内提醒：责任项、退回、即将到期、逾期、待补交付件、待关闭母任务",
-          "status": "done"
-        },
-        {
-          "id": "S10",
-          "title": "实现 TR 阶段门和时间视图：阶段时间线、阶段通过、条件放行、当前阶段剩余事项、到期列表",
-          "status": "done"
-        },
-        {
-          "id": "S11",
-          "title": "将后台可观测性重命名并重组为运行日志：操作日志、系统错误、接口请求；业务详情保留动态记录",
-          "status": "done"
-        },
-        {
-          "id": "S12",
-          "title": "补充测试与 fulltest：权限、模板版本、项目快照、待办、附件、阶段门、批量操作、运行日志、本地冒烟",
+          "title": "阶段门、运行日志和 fulltest",
           "status": "done"
         }
       ]
     },
     {
       "id": "F4",
-      "title": "工作台可用性重构：按角色差异化的行动优先质量项目工作台",
+      "title": "工作台可用性重构",
       "status": "done",
       "steps": [
         {
           "id": "S1",
-          "title": "实现 workbench 聚合 helper 与 /api/npq/workbench",
+          "title": "workbench 聚合 helper 与单页工作台",
           "status": "done"
         },
         {
           "id": "S2",
-          "title": "新建 /workbench 单页工作台",
+          "title": "右侧处理抽屉和角色化动作集",
           "status": "done"
         },
         {
           "id": "S3",
-          "title": "实现右侧处理抽屉和角色化动作集",
+          "title": "项目详情待办优先和导航收敛",
           "status": "done"
         },
         {
           "id": "S4",
-          "title": "调整项目详情页为项目待办优先",
-          "status": "done"
-        },
-        {
-          "id": "S5",
-          "title": "收敛导航为工作台 + 后台配置，弱化旧业务入口",
-          "status": "done"
-        },
-        {
-          "id": "S6",
-          "title": "轻量整理后台首页为配置中心",
-          "status": "done"
-        },
-        {
-          "id": "S7",
-          "title": "更新 seed，创建 8 个固定测试账号和角色化样例数据",
-          "status": "done"
-        },
-        {
-          "id": "S8",
-          "title": "补充测试与 fulltest",
+          "title": "配置中心、固定测试账号和 fulltest",
           "status": "done"
         }
       ]
     },
     {
       "id": "F5",
-      "title": "原 F4 扩展能力：审批、交付件在线预览、外部通知等",
-      "status": "todo",
+      "title": "个人项目工作台",
+      "status": "done",
       "steps": [
         {
           "id": "S1",
-          "title": "审批功能",
-          "status": "todo"
+          "title": "收敛信息架构和导航：移除个人/项目双入口，建立“个人项目工作台”统一入口和路由策略",
+          "status": "done"
         },
         {
           "id": "S2",
-          "title": "交付件在线预览",
-          "status": "todo"
+          "title": "重构首页：我的待处理任务统一优先级列表、轻量筛选、我的项目搜索和推进型项目卡片",
+          "status": "done"
         },
         {
           "id": "S3",
-          "title": "外部通知",
-          "status": "todo"
+          "title": "实现项目工作区基础布局：顶部项目摘要条、左侧阶段/项目活动/子任务结构、右侧详情面板",
+          "status": "done"
+        },
+        {
+          "id": "S4",
+          "title": "实现待办/项目跳转闭环：待办直达具体任务并展开详情，项目进入当前阶段工作区",
+          "status": "done"
+        },
+        {
+          "id": "S5",
+          "title": "实现详情面板角色化动作：NPQ、当前责任角色、管理者、管理员差异化动作与只读状态",
+          "status": "done"
+        },
+        {
+          "id": "S6",
+          "title": "补齐任务历史和项目活动关键历史展示，确保代维护、退回、关闭、不涉及等留痕可见",
+          "status": "done"
+        },
+        {
+          "id": "S7",
+          "title": "调整后端聚合 API 和排序规则：项目推进优先级、下一待处理、状态标签和数量徽标",
+          "status": "done"
+        },
+        {
+          "id": "S8",
+          "title": "补充测试与走查：NPQ、一线角色、管理者、管理员入口和核心跳转处理链路",
+          "status": "done"
         }
       ]
     }
   ],
   "completedSteps": [
     "MVP版本",
-    "新产品导入活动跟踪 + 跨角色协同 + 管理看板",
-    "NPQ 活动流真实运转 + 配套后台底座完善",
-    "工作台可用性重构：按角色差异化的行动优先质量项目工作台"
+    "新产品导入活动跟踪",
+    "NPQ 活动流真实运转",
+    "工作台可用性重构",
+    "个人项目工作台"
   ],
   "inProgressSteps": [],
-  "pendingSteps": [
-    "原 F4 扩展能力：审批、交付件在线预览、外部通知等"
-  ],
+  "pendingSteps": [],
   "blocker": "",
-  "lastAction": "已将项目工作台列表标题改为“我的项目”，项目详情左上角返回改为“返回项目工作台”。",
-  "nextStep": "用户刷新项目工作台和项目详情页，确认标题与返回路径符合预期。"
+  "lastAction": "创建并切换到 codex/f5 分支，准备提交 F5 变更。",
+  "nextStep": "提交 F5 变更到 codex/f5 分支后交由用户实测。"
 }
