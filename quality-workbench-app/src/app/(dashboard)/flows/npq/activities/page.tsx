@@ -128,6 +128,7 @@ export default function ActivityTrackingPage() {
   const loadActivities = useCallback(async (id: string) => {
     if (!id) return;
     setError('');
+    try {
     const res = await fetch(`/api/npq/projects/${id}/activities`);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -139,10 +140,14 @@ export default function ActivityTrackingPage() {
     setStageGates(data.stageGates ?? []);
     setEvents(data.events ?? []);
     setSelectedChildIds(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '活动数据加载失败');
+    }
   }, []);
 
   useEffect(() => {
     (async () => {
+      try {
       const res = await fetch('/api/npq/projects');
       if (res.ok) {
         const data = await res.json();
@@ -154,7 +159,11 @@ export default function ActivityTrackingPage() {
         setProjectId(selectedId);
         if (selectedId) await loadActivities(selectedId);
       }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '项目列表加载失败');
+      } finally {
       setLoading(false);
+      }
     })();
   }, [loadActivities]);
 

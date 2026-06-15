@@ -31,10 +31,16 @@ export default function AdminRoleManagementPage() {
 
   async function load() {
     setError('');
+    try {
     const res = await fetch('/api/admin/positions');
     if (res.ok) setPositions(await res.json());
     if (!res.ok) setError('加载角色失败，请刷新后重试。');
     setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载角色失败');
+    } finally {
+      setLoading(false);
+    }
   }
 
   // eslint-disable-next-line react-hooks/set-state-in-effect

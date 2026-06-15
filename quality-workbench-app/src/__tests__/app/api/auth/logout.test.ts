@@ -37,4 +37,19 @@ describe('POST /api/auth/logout', () => {
     expect(res.status).toBe(303);
     expect(res.url).toBe('http://localhost/login');
   });
+
+  it('redirects browser form logout to the browser host for LAN access', async () => {
+    const res = (await POST(
+      new Request('http://localhost/api/auth/logout', {
+        headers: {
+          accept: 'text/html,application/xhtml+xml',
+          host: '172.17.137.235:3000',
+        },
+      }),
+    )) as unknown as MockResponse;
+
+    expect(mockDestroySession).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(303);
+    expect(res.url).toBe('http://172.17.137.235:3000/login');
+  });
 });

@@ -27,6 +27,7 @@ export default function AdminUsersDashboardPage() {
     let cancelled = false;
     async function load() {
       setError('');
+      try {
       const [usersRes, positionsRes] = await Promise.all([
         fetch('/api/admin/users'),
         fetch('/api/admin/positions'),
@@ -36,6 +37,11 @@ export default function AdminUsersDashboardPage() {
       if (positionsRes.ok) setPositions(await positionsRes.json());
       if (!usersRes.ok || !positionsRes.ok) setError('加载用户或岗位数据失败，请刷新后重试。');
       setLoading(false);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : '加载用户或角色数据失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
     load();
     return () => { cancelled = true; };

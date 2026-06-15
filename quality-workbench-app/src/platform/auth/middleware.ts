@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { AUTH_CONFIG, getSecretKey } from './auth.jwt';
+import { getRequestUrl } from './request-url';
 
 // 无需认证即可访问的路径前缀
 const PUBLIC_PATHS = ['/login', '/register', '/api/auth'];
@@ -31,7 +32,7 @@ export async function authMiddleware(request: NextRequest) {
 
   if (!token) {
     if (isApi) return NextResponse.json({ error: '未登录' }, { status: 401 });
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(getRequestUrl(request, '/login'));
   }
 
   try {
@@ -45,7 +46,7 @@ export async function authMiddleware(request: NextRequest) {
     return res;
   } catch {
     if (isApi) return NextResponse.json({ error: '会话已过期' }, { status: 401 });
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(getRequestUrl(request, '/login'));
   }
 }
 

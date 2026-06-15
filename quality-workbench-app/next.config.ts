@@ -1,6 +1,12 @@
 import type { NextConfig } from 'next';
 
+const allowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? '172.17.137.235')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
+  allowedDevOrigins,
   // 🔧 M5: 安全响应头
   async headers() {
     return [

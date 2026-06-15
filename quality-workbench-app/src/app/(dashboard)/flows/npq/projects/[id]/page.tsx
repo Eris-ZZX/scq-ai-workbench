@@ -165,6 +165,7 @@ export default function ProjectWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showInProgressOnly, setShowInProgressOnly] = useState(true);
 
   const loadWorkspace = useCallback(async () => {
     setErrorMsg('');
@@ -214,9 +215,10 @@ export default function ProjectWorkspacePage() {
   useEffect(() => {
     if (!workspace) return;
     const timeoutId = window.setTimeout(() => {
-      const resolved = resolveInitialSelection(todoParam, workspace.parents, workspace.project.currentStage);
+      const visibleParents = filterInProgressParents(workspace.parents, true);
+      const resolved = resolveInitialSelection(todoParam, visibleParents, workspace.project.currentStage);
       setSelection(resolved);
-      setExpandedStages(new Set([selectionStage(resolved, workspace.parents) ?? workspace.project.currentStage]));
+      setExpandedStages(new Set([selectionStage(resolved, visibleParents) ?? workspace.project.currentStage]));
       const parentId = resolved.kind === 'parent' || resolved.kind === 'child' ? resolved.parentId : null;
       setExpandedParents(parentId ? new Set([parentId]) : new Set());
     }, 0);
@@ -234,7 +236,11 @@ export default function ProjectWorkspacePage() {
     return () => window.clearTimeout(timeoutId);
   }, [selection, expandedStages, expandedParents]);
 
-  const stageGroups = useMemo(() => groupParentsByStage(workspace?.parents ?? []), [workspace]);
+  const visibleParents = useMemo(
+    () => filterInProgressParents(workspace?.parents ?? [], showInProgressOnly),
+    [showInProgressOnly, workspace],
+  );
+  const stageGroups = useMemo(() => groupParentsByStage(visibleParents), [visibleParents]);
   const selectedParent = useMemo(() => {
     if (!workspace || !selection || selection.kind === 'stage') return null;
     return workspace.parents.find((parent) => parent.id === selection.parentId) ?? null;
@@ -416,14 +422,36 @@ export default function ProjectWorkspacePage() {
           </div>
         </header>
 
-        <div className="grid min-h-[680px] gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
-          <aside className="flex min-h-[680px] flex-col rounded-lg border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 px-4 py-3">
+        <div className="grid min-h-0 gap-4 xl:min-h-[680px] xl:grid-cols-[360px_minmax(0,1fr)]">
+          <aside className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white xl:min-h-[680px]">
+            <div className="relative border-b border-slate-100 px-4 py-3 pr-28">
+              <label className="absolute right-4 top-1/2 inline-flex -translate-y-1/2 items-center gap-2 text-xs font-medium text-slate-600">
+                <span>进行中</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showInProgressOnly}
+                  onClick={() => setShowInProgressOnly((current) => !current)}
+                  className={`relative h-5 w-9 rounded-full transition ${
+                    showInProgressOnly ? 'bg-blue-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                      showInProgressOnly ? 'left-4' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </label>
               <h2 className="text-base font-semibold">项目任务树</h2>
               <p className="mt-0.5 text-xs text-slate-500">按阶段、项目活动、子任务展开</p>
             </div>
-            <div className="max-h-[calc(100vh-180px)] flex-1 overflow-auto p-2">
-              {stageGroups.map((group) => {
+            <div className="max-h-[42vh] flex-1 overflow-auto p-2 xl:max-h-[calc(100vh-180px)]">
+              {stageGroups.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-500">
+                  当前没有进行中的项目活动或子任务
+                </div>
+              ) : stageGroups.map((group) => {
                 const expanded = expandedStages.has(group.stage);
                 const isCurrentStage = group.stage === project.currentStage && project.status !== 'completed' && project.stageGateStatus !== 'completed';
                 return (
@@ -522,13 +550,13 @@ export default function ProjectWorkspacePage() {
             </div>
           </aside>
 
-          <main className="rounded-lg border border-slate-200 bg-white">
+          <main className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div className="border-b border-slate-100 px-4 py-3">
               <h2 className="text-base font-semibold">任务详情</h2>
               <p className="mt-0.5 text-xs text-slate-500">上方是关键信息，中间是提交与动作，下方是留痕记录</p>
             </div>
 
-            <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid gap-4 p-3 sm:p-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="min-w-0">
                 {selection?.kind === 'stage' && (
                   <StageDetail
@@ -609,7 +637,7 @@ function StageDetail({
 }) {
   const needsCondition = (gate?.stats.open ?? 0) > 0 || (gate?.stats.blocked ?? 0) > 0;
   return (
-    <section className="space-y-4">
+    <section className="min-w-0 space-y-4">
       <DetailHeader
         title={`${stage} 过点评审`}
         subtitle={`未关闭 ${gate?.stats.open ?? 0} / 阻塞 ${gate?.stats.blocked ?? 0} / 项目活动 ${gate?.stats.total ?? 0}`}
@@ -655,7 +683,7 @@ function ParentDetail({
         subtitle={`${parent.stage} / ${completed}/${childCount} 子任务完成 / 计划 ${parent.plannedDueDate ? formatDate(parent.plannedDueDate) : '-'}`}
         status={parentStatusLabel(parent.status)}
       />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <InfoTile label="完成率" value={`${parent.progressPercent}%`} />
         <InfoTile label="阻塞" value={parent.hasBlocked ? '有阻塞' : '无阻塞'} />
         <InfoTile label="逾期" value={parent.hasOverdue ? '已逾期' : '未逾期'} />
@@ -711,26 +739,26 @@ function ChildDetail({
   onReturn: () => void;
 }) {
   return (
-    <section className="space-y-4">
+    <section className="min-w-0 space-y-4">
       <DetailHeader
         title={child.thirdLevelPlan}
         subtitle={`${parent.stage} / ${parent.projectTaskName} / 责任角色 ${child.ownerRole} / 计划 ${formatDate(child.plannedDueDateOverride ?? parent.plannedDueDate)}`}
         status={childStatusLabel(child.status)}
       />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <InfoTile label="提交标准" value={child.requiresDeliverable ? '需要交付件' : '完成说明'} />
         <InfoTile label="交付件" value={child.deliverableName ?? '-'} />
         <InfoTile label="附件" value={`${child.attachments?.length ?? 0} 个`} />
       </div>
 
-      <div className="grid gap-3 rounded-lg border border-slate-200 p-3">
+      <div className="grid min-w-0 gap-3 rounded-lg border border-slate-200 p-3">
         <label className="grid gap-1 text-sm">
           <span className="text-xs text-slate-500">交付件链接</span>
           <input
             value={draft.deliverableUrl}
             disabled={readonly}
             onChange={(event) => onDraftChange({ deliverableUrl: event.target.value })}
-            className="h-8 rounded-md border border-slate-200 px-2 outline-none focus:border-slate-400 disabled:bg-slate-50"
+            className="h-8 min-w-0 rounded-md border border-slate-200 px-2 outline-none focus:border-slate-400 disabled:bg-slate-50"
           />
         </label>
         <label className="grid gap-1 text-sm">
@@ -739,10 +767,10 @@ function ChildDetail({
             value={draft.completionNote}
             disabled={readonly}
             onChange={(event) => onDraftChange({ completionNote: event.target.value })}
-            className="min-h-20 rounded-md border border-slate-200 px-2 py-2 outline-none focus:border-slate-400 disabled:bg-slate-50"
+            className="min-h-20 min-w-0 rounded-md border border-slate-200 px-2 py-2 outline-none focus:border-slate-400 disabled:bg-slate-50"
           />
         </label>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2">
           <label className="grid gap-1 text-sm">
             <span className="text-xs text-slate-500">计划例外日期</span>
             <input
@@ -750,7 +778,7 @@ function ChildDetail({
               value={draft.plannedDueDateOverride}
               disabled={readonly}
               onChange={(event) => onDraftChange({ plannedDueDateOverride: event.target.value })}
-              className="h-8 rounded-md border border-slate-200 px-2 outline-none focus:border-slate-400 disabled:bg-slate-50"
+              className="h-8 min-w-0 rounded-md border border-slate-200 px-2 outline-none focus:border-slate-400 disabled:bg-slate-50"
             />
           </label>
           <label className="grid gap-1 text-sm">
@@ -759,7 +787,7 @@ function ChildDetail({
               value={draft.blockerNote}
               disabled={readonly}
               onChange={(event) => onDraftChange({ blockerNote: event.target.value })}
-              className="h-8 rounded-md border border-slate-200 px-2 outline-none focus:border-slate-400 disabled:bg-slate-50"
+              className="h-8 min-w-0 rounded-md border border-slate-200 px-2 outline-none focus:border-slate-400 disabled:bg-slate-50"
             />
           </label>
         </div>
@@ -778,12 +806,12 @@ function ChildDetail({
             disabled={readonly}
             onChange={(event) => onDraftChange({ notApplicableReason: event.target.value })}
             placeholder="不涉及原因"
-            className="h-8 rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+            className="h-8 min-w-0 rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
           />
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap [&>button]:justify-center">
         <Button variant="outline" disabled={readonly || saving} onClick={onSave}><Save /> 保存</Button>
         <Button variant="outline" disabled={readonly || saving || child.status === 'completed'} onClick={onStart}><Clock /> 转进行中</Button>
         <Button disabled={readonly || saving} onClick={onComplete}><CheckCircle2 /> 标记完成</Button>
@@ -826,7 +854,7 @@ function HistoryPanel({
   const currentEvents = events.filter((event) => childId ? event.childId === childId : event.parentId === parentId).slice(0, 8);
   const parentEvents = events.filter((event) => event.parentId === parentId && event.childId !== childId).slice(0, 8);
   return (
-    <aside className="space-y-4">
+    <aside className="grid min-w-0 gap-3 md:grid-cols-2 2xl:block 2xl:space-y-4">
       <section className="rounded-lg border border-slate-200 p-3">
         <div className="text-sm font-semibold">当前任务历史</div>
         <EventList events={currentEvents} />
@@ -836,7 +864,7 @@ function HistoryPanel({
         <EventList events={parentEvents} />
       </section>
       {projectTodos.length > 0 && (
-        <section className="rounded-lg border border-slate-200 p-3">
+        <section className="rounded-lg border border-slate-200 p-3 md:col-span-2 2xl:col-span-1">
           <div className="text-sm font-semibold">本项目待处理</div>
           <div className="mt-2 space-y-2">
             {projectTodos.slice(0, 6).map((todo) => (
@@ -897,13 +925,15 @@ function TreeButton({
 
 function DetailHeader({ title, subtitle, status }: { title: string; subtitle: string; status: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-3">
+    <div className="min-w-0 rounded-lg border border-slate-200 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold">{title}</h3>
-          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+        <div className="min-w-0 flex-1">
+          <h3 className="break-words text-base font-semibold leading-snug sm:text-lg">{title}</h3>
+          <p className="mt-1 break-words text-sm leading-5 text-slate-500">{subtitle}</p>
         </div>
-        <StatusPill label={status} tone="slate" />
+        <div className="shrink-0">
+          <StatusPill label={status} tone="slate" />
+        </div>
       </div>
     </div>
   );
@@ -911,9 +941,9 @@ function DetailHeader({ title, subtitle, status }: { title: string; subtitle: st
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 px-3 py-2">
+    <div className="min-w-0 rounded-lg border border-slate-200 px-3 py-2">
       <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 truncate text-sm font-semibold">{value}</div>
+      <div className="mt-1 break-words text-sm font-semibold">{value}</div>
     </div>
   );
 }
@@ -967,6 +997,16 @@ function selectionTreeTargetId(selection: Selection) {
   if (selection.kind === 'stage') return `tree-stage-${selection.stage}`;
   if (selection.kind === 'parent') return `tree-parent-${selection.parentId}`;
   return `tree-child-${selection.childId}`;
+}
+
+function filterInProgressParents(parents: ActivityParent[], enabled: boolean) {
+  if (!enabled) return parents;
+  return parents
+    .map((parent) => ({
+      ...parent,
+      children: parent.children.filter((child) => !child.isNotApplicable && child.status === 'in_progress'),
+    }))
+    .filter((parent) => parent.status === 'in_progress' || parent.children.length > 0);
 }
 
 function groupParentsByStage(parents: ActivityParent[]) {

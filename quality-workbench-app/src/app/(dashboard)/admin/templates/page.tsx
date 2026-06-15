@@ -85,6 +85,7 @@ export default function AdminTemplatesPage() {
   const [selectedVersionId, setSelectedVersionId] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [draft, setDraft] = useState<TemplateDraft | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -97,8 +98,11 @@ export default function AdminTemplatesPage() {
   });
 
   async function load(preferredSetId = selectedSetId, preferredVersionId = selectedVersionId) {
+    setError('');
+    try {
     const res = await fetch('/api/admin/templates');
     if (!res.ok) {
+      setError('模板加载失败，请刷新后重试');
       setLoading(false);
       return;
     }
@@ -112,6 +116,11 @@ export default function AdminTemplatesPage() {
       nextSet?.versions[0];
     setSelectedVersionId(nextVersion?.id ?? '');
     setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '模板加载失败');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -293,6 +302,8 @@ export default function AdminTemplatesPage() {
             </button>
           </div>
         </div>
+
+        {error && <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
         <div className="grid grid-cols-[300px_minmax(0,1fr)] gap-4">
           <aside className="rounded-lg border border-border bg-white">

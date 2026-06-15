@@ -57,6 +57,7 @@ export default function AdminUserAccountsPage() {
 
   async function load() {
     setError('');
+    try {
     const [usersRes, rolesRes] = await Promise.all([
       fetch('/api/admin/users'),
       fetch('/api/admin/positions'),
@@ -65,6 +66,11 @@ export default function AdminUserAccountsPage() {
     if (rolesRes.ok) setRoles(await rolesRes.json());
     if (!usersRes.ok || !rolesRes.ok) setError('加载用户或角色失败，请刷新后重试。');
     setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载用户或角色失败');
+    } finally {
+      setLoading(false);
+    }
   }
 
   // eslint-disable-next-line react-hooks/set-state-in-effect

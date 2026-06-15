@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { fetchJson } from '@/lib/client/fetch-json';
 
 type Stats = { totalRequests: number; todayRequests: number; todayErrors: number; avgDurationMs: number; p95DurationMs: number };
 type Event = { id: string; traceId: string; eventType: string; path: string | null; method: string | null; statusCode: number | null; durationMs: number | null; errorMessage: string | null; timestamp: string };
@@ -8,16 +9,23 @@ export default function AdminObservabilityPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
 
   async function load() {
-    const [sRes, eRes] = await Promise.all([
-      fetch('/api/admin/observability?type=stats'),
-      fetch('/api/admin/observability?limit=50'),
-    ]);
-    if (sRes.ok) setStats(await sRes.json());
-    if (eRes.ok) setEvents(await eRes.json());
-    setLoading(false);
+    setError('');
+    try {
+      const [nextStats, nextEvents] = await Promise.all([
+        fetchJson<Stats>('/api/admin/observability?type=stats'),
+        fetchJson<Event[]>('/api/admin/observability?limit=50'),
+      ]);
+      setStats(nextStats);
+      setEvents(nextEvents);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '运行日志加载失败');
+    } finally {
+      setLoading(false);
+    }
   }
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
@@ -30,6 +38,8 @@ export default function AdminObservabilityPage() {
     <div className="min-h-screen bg-ws-content-bg">
       <div className="mx-auto max-w-5xl px-6 py-8">
         <h1 className="mb-6 text-2xl font-bold text-foreground">运行日志</h1>
+
+        {error && <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
         {stats && (
           <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">

@@ -49,11 +49,11 @@ function jsonRequest(body?: unknown) {
   );
 }
 
-function formRequest(body: Record<string, string>) {
+function formRequest(body: Record<string, string>, headers?: HeadersInit) {
   return POST(
     new Request('http://localhost/api/auth/login', {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers },
       body: new URLSearchParams(body),
     }),
   );
@@ -142,5 +142,17 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(303);
     expect(res.url).toBe('http://localhost/login?error=1');
     expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('redirects form login success to the browser host for LAN access', async () => {
+    mockFindByUsername.mockResolvedValueOnce(activeUser);
+    mockVerifyPassword.mockResolvedValueOnce(true);
+    const res = (await formRequest(
+      { username: 'testuser', password: 'Correct1!' },
+      { host: '172.17.137.235:3000' },
+    )) as unknown as MockResponse;
+
+    expect(res.status).toBe(303);
+    expect(res.url).toBe('http://172.17.137.235:3000/workbench');
   });
 });

@@ -109,6 +109,7 @@ function ProjectActivityEditorView({ projectId }: { projectId: string }) {
     if (!projectId) return;
     setLoading(true);
     setError('');
+    try {
     const res = await fetch(`/api/admin/projects/${projectId}/activities`);
     const data = await res.json().catch(() => ({}));
     setLoading(false);
@@ -118,6 +119,11 @@ function ProjectActivityEditorView({ projectId }: { projectId: string }) {
     }
     setStages(toStructure(data.parents ?? []));
     setDirty(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '项目活动加载失败');
+    } finally {
+      setLoading(false);
+    }
   }, [projectId]);
 
   useEffect(() => {

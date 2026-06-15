@@ -127,6 +127,7 @@ export default function AdminProjectsPage() {
 
   async function load(preferredProjectId = selectedProjectId) {
     setError('');
+    try {
     const [projectsRes, usersRes, templatesRes, meRes] = await Promise.all([
       fetch('/api/admin/projects'),
       fetch('/api/npq/users'),
@@ -154,6 +155,11 @@ export default function AdminProjectsPage() {
     setSelectedProjectId(nextSelected?.id ?? '');
     syncBasicForm(nextSelected);
     setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '项目管理加载失败');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {

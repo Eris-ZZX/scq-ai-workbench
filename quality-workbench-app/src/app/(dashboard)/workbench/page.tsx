@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { fetchJson } from '@/lib/client/fetch-json';
 
 type WorkbenchRole = 'npq' | 'executor' | 'manager' | 'admin';
 type TodoType =
@@ -88,9 +89,7 @@ export default function WorkbenchPage() {
     setError(null);
     setRefreshing(true);
     try {
-      const response = await fetch('/api/npq/workbench', { cache: 'no-store' });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? '个人项目工作台加载失败');
+      const body = await fetchJson<WorkbenchData>('/api/npq/workbench', { cache: 'no-store' });
       setData(body);
     } catch (err) {
       setError(err instanceof Error ? err.message : '个人项目工作台加载失败');

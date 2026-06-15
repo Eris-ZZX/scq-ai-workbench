@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { findByUsername, verifyPassword } from '@/lib/db/auth';
 import { createSession } from '@/platform/auth/auth.config';
+import { getRequestUrl } from '@/platform/auth/request-url';
 
 const DUMMY_HASH = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -42,7 +43,7 @@ async function readLoginBody(request: Request): Promise<{ body: LoginBody | null
 
 function fail(formMode: boolean, request: Request, error: string, status: number) {
   if (formMode) {
-    const url = new URL('/login', request.url);
+    const url = getRequestUrl(request, '/login');
     url.searchParams.set('error', '1');
     return NextResponse.redirect(url, { status: 303 });
   }
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
   });
 
   if (formMode) {
-    return NextResponse.redirect(new URL('/workbench', request.url), { status: 303 });
+    return NextResponse.redirect(getRequestUrl(request, '/workbench'), { status: 303 });
   }
 
   return NextResponse.json({

@@ -35,6 +35,7 @@ export default function ActivityDashboardPage() {
   const loadDashboard = useCallback(async (id: string) => {
     if (!id) return;
     setError('');
+    try {
     const res = await fetch(`/api/npq/activity-dashboard?projectId=${id}`);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -42,10 +43,14 @@ export default function ActivityDashboardPage() {
       return;
     }
     setData(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '看板加载失败');
+    }
   }, []);
 
   useEffect(() => {
     (async () => {
+      try {
       const res = await fetch('/api/npq/projects');
       if (res.ok) {
         const list = await res.json();
@@ -54,7 +59,11 @@ export default function ActivityDashboardPage() {
         setProjectId(firstId);
         if (firstId) await loadDashboard(firstId);
       }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '项目列表加载失败');
+      } finally {
       setLoading(false);
+      }
     })();
   }, [loadDashboard]);
 
