@@ -94,7 +94,6 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
         },
         include: {
           children: {
-            where: { isNotApplicable: false },
             include: { attachments: { where: { deletedAt: null }, select: { id: true } } },
             orderBy: { updatedAt: 'desc' },
           },
@@ -135,7 +134,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
       const group = projectTodos.find((item) => item.projectId === project.id);
       const parentCount = project.activityParents.length;
       const progressPercent = parentCount > 0
-        ? Math.round(project.activityParents.reduce((sum, parent) => sum + parent.progressPercent, 0) / parentCount)
+        ? Math.round(project.activityParents.reduce((sum, parent) => sum + getParentProgressPercent(parent.children), 0) / parentCount)
         : 0;
       const riskFlags = group?.riskFlags ?? getProjectRiskFlagsFromParents(project.activityParents);
       const nextTodo = group?.todos[0] ?? null;
@@ -292,6 +291,7 @@ function buildProjectTodos({
         requiresAttachment: boolean;
         deliverableUrl: string | null;
         isBlocked: boolean;
+        isNotApplicable: boolean;
         plannedDueDateOverride: Date | null;
         updatedAt: Date;
         attachments: { id: string }[];
@@ -333,6 +333,7 @@ function buildProjectTodos({
     }
 
     for (const child of parent.children) {
+      if (child.isNotApplicable) continue;
       if (child.status !== 'in_progress') continue;
       if (!canSeeChildTodo({ child, session, workbenchRole, effectiveRoleIds, isProjectAssigned })) continue;
 
@@ -436,13 +437,14 @@ function getParentTodoType(
     plannedDueDate: Date | null;
     children: Array<{
       status: string;
+      isNotApplicable: boolean;
       isBlocked: boolean;
       plannedDueDateOverride: Date | null;
     }>;
   },
   now: Date,
 ): TodoType | null {
-  const openChildren = parent.children.filter((child) => child.status !== 'completed');
+  const openChildren = parent.children.filter((child) => child.status !== 'completed' && !child.isNotApplicable);
   const hasBlocked = parent.hasBlocked || openChildren.some((child) => child.isBlocked);
   if (hasBlocked) return 'blocked';
 
@@ -483,7 +485,6 @@ function getProjectRiskFlags(todos: { type: string }[]) {
   const flags = new Set<string>();
   if (todos.some((todo) => todo.type === 'overdue')) flags.add('逾期');
   if (todos.some((todo) => todo.type === 'blocked')) flags.add('阻塞');
-  if (todos.some((todo) => todo.type === 'pending_parent_close')) flags.add('待确认关闭');
   return Array.from(flags);
 }
 
@@ -491,8 +492,13 @@ function getProjectRiskFlagsFromParents(parents: { hasOverdue: boolean; hasBlock
   const flags = new Set<string>();
   if (parents.some((parent) => parent.hasOverdue)) flags.add('逾期');
   if (parents.some((parent) => parent.hasBlocked)) flags.add('阻塞');
-  if (parents.some((parent) => parent.status === 'pending_npq_close')) flags.add('待确认关闭');
   return Array.from(flags);
+}
+
+function getParentProgressPercent(children: { status: string; isNotApplicable: boolean }[]) {
+  if (children.length === 0) return 0;
+  const completed = children.filter((child) => child.status === 'completed' || child.isNotApplicable).length;
+  return Math.round((completed / children.length) * 100);
 }
 
 function getProjectSortScore(todos: { type: string }[], riskFlags: string[], updatedAt: Date) {
@@ -500,7 +506,7 @@ function getProjectSortScore(todos: { type: string }[], riskFlags: string[], upd
   if (todos.length > 0) score += 10_000;
   if (todos.some((todo) => todo.type === 'blocked') || riskFlags.includes('阻塞')) score += 10_000;
   if (todos.some((todo) => todo.type === 'overdue') || riskFlags.includes('逾期')) score += 8_000;
-  if (todos.some((todo) => todo.type === 'pending_parent_close') || riskFlags.includes('待确认关闭')) score += 6_000;
+  if (todos.some((todo) => todo.type === 'pending_parent_close')) score += 6_000;
   return score;
 }
 

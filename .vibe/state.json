@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
   "projectRoot": "D:\\Users\\vox1814\\Desktop\\AIspace\\5.Huge-App\\260608-QEworkspace",
-  "updatedAt": "2026-06-16T18:45:40+08:00",
-  "lastSessionId": "session-1781606740040",
+  "updatedAt": "2026-06-16T19:59:15+08:00",
+  "lastSessionId": "session-1781611054116",
   "source": "codex",
   "status": "in_progress",
-  "currentTask": "F5 项目任务树状态可读性优化",
+  "currentTask": "F5 项目任务树稳定编号优化",
   "features": [
     {
       "id": "F1",
@@ -163,6 +163,6 @@
   "inProgressSteps": [],
   "pendingSteps": [],
   "blocker": "",
-  "lastAction": "取消父级项目活动整体不涉及需求；该需求未落地应用代码，保留已完成的子任务徽章、延期和不涉及可见性调整。",
-  "nextStep": "用户实测项目工作区任务树中子任务状态、延期、阻塞和不涉及徽章，以及不涉及任务保留显示是否符合预期。"
+  "lastAction": "将任务树项目活动/子任务编号改为基于完整活动树的稳定编号，筛选后仍保持原编号。",
+  "nextStep": "用户实测任务树在切换待处理筛选、不同角色视图下，项目活动和子任务编号是否保持稳定。"
 }

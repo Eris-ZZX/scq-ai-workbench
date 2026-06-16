@@ -346,6 +346,11 @@ export async function getProjectActivityView(projectId: string) {
   if (project && project.status !== 'completed' && project.stageGateStatus !== 'completed') {
     await activateProjectStageActivities(projectId, project.currentStage);
   }
+  const parents = await prisma.projectActivityParent.findMany({
+    where: { projectId },
+    select: { id: true },
+  });
+  await Promise.all(parents.map((parent) => refreshParentSummary(prisma, parent.id)));
   return prisma.projectActivityParent.findMany({
     where: { projectId },
     include: {
@@ -397,7 +402,7 @@ export async function updateActivityParent(params: {
     }
 
     if (params.close) {
-      const allCompleted = parent.children.every((child) => child.status === CHILD_STATUS.COMPLETED);
+      const allCompleted = parent.children.length > 0 && parent.children.every(isChildEffectivelyCompleted);
       if (!allCompleted) throw new Error('PARENT_CHILDREN_NOT_COMPLETED');
       updateData.status = PARENT_STATUS.CLOSED;
       updateData.closedAt = new Date();
@@ -584,13 +589,12 @@ export async function refreshParentSummary(tx: ActivityTx, parentId: string) {
   if (!parent) return;
 
   const now = new Date();
-  const involvedChildren = parent.children.filter((child) => !child.isNotApplicable);
-  const total = involvedChildren.length;
-  const completed = involvedChildren.filter((child) => child.status === CHILD_STATUS.COMPLETED).length;
+  const total = parent.children.length;
+  const completed = parent.children.filter(isChildEffectivelyCompleted).length;
   const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const hasBlocked = involvedChildren.some((child) => child.isBlocked);
-  const hasOverdue = involvedChildren.some((child) => {
-    if (child.status === CHILD_STATUS.COMPLETED) return false;
+  const activeChildren = parent.children.filter((child) => !isChildEffectivelyCompleted(child));
+  const hasBlocked = activeChildren.some((child) => child.isBlocked);
+  const hasOverdue = activeChildren.some((child) => {
     const due = child.plannedDueDateOverride ?? parent.plannedDueDate;
     return Boolean(due && due < now);
   });
@@ -600,7 +604,7 @@ export async function refreshParentSummary(tx: ActivityTx, parentId: string) {
     status = PARENT_STATUS.CLOSED;
   } else if (total > 0 && completed === total) {
     status = PARENT_STATUS.PENDING_NPQ_CLOSE;
-  } else if (parent.status === PARENT_STATUS.IN_PROGRESS || involvedChildren.some((child) => child.status !== CHILD_STATUS.NOT_STARTED)) {
+  } else if (parent.status === PARENT_STATUS.IN_PROGRESS || parent.children.some((child) => child.status !== CHILD_STATUS.NOT_STARTED || child.isNotApplicable)) {
     status = PARENT_STATUS.IN_PROGRESS;
   }
 
@@ -608,6 +612,10 @@ export async function refreshParentSummary(tx: ActivityTx, parentId: string) {
     where: { id: parentId },
     data: { progressPercent, hasBlocked, hasOverdue, status },
   });
+}
+
+function isChildEffectivelyCompleted(child: { status: string; isNotApplicable: boolean }) {
+  return child.status === CHILD_STATUS.COMPLETED || child.isNotApplicable;
 }
 
 export async function getActivityDashboard(projectId?: string) {
@@ -637,7 +645,6 @@ export async function getActivityDashboard(projectId?: string) {
     stageMap.set(parent.stage, stage);
 
     for (const child of parent.children) {
-      if (child.isNotApplicable) continue;
       const group = child.roleGroup || getRoleGroup(child.ownerRole);
       const role = roleMap.get(group) ?? { roleGroup: group, due: 0, onTime: 0, details: new Map() };
       const detail = role.details.get(child.ownerRole) ?? { due: 0, onTime: 0 };
@@ -645,10 +652,12 @@ export async function getActivityDashboard(projectId?: string) {
       roleMap.set(group, role);
 
       const due = child.plannedDueDateOverride ?? parent.plannedDueDate;
-      const shouldCount = child.status === CHILD_STATUS.COMPLETED || Boolean(due && due <= now);
+      const isCompleted = isChildEffectivelyCompleted(child);
+      const shouldCount = isCompleted || Boolean(due && due <= now);
       if (!shouldCount) continue;
 
-      const onTime = child.status === CHILD_STATUS.COMPLETED && child.completedAt && due && child.completedAt <= due;
+      const completedAt = child.completedAt ?? (child.isNotApplicable ? child.updatedAt : null);
+      const onTime = isCompleted && completedAt && due && completedAt <= due;
       role.due += 1;
       detail.due += 1;
       if (onTime) {

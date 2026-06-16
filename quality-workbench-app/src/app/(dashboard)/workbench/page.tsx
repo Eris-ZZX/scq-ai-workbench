@@ -297,10 +297,11 @@ function ProjectCardView({ project }: { project: ProjectCard }) {
           <div className="flex min-w-0 items-center gap-2">
             <div className="truncate text-sm font-semibold text-slate-950">{project.projectName}</div>
             {project.riskFlags.length === 0 && (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                <ShieldCheck className="h-3.5 w-3.5" /> 平稳推进
-              </span>
+              <ProjectStatusBadge label="平稳推进" tone="green" />
             )}
+            {project.riskFlags.map((flag) => (
+              <ProjectStatusBadge key={flag} label={flag} tone={flag === '阻塞' ? 'red' : 'amber'} />
+            ))}
           </div>
           <div className="mt-1 text-xs text-slate-500">当前阶段：{project.currentStage}</div>
         </div>
@@ -317,16 +318,6 @@ function ProjectCardView({ project }: { project: ProjectCard }) {
         </div>
       </div>
 
-      {project.riskFlags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {project.riskFlags.map((flag) => (
-            <span key={flag} className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-700">
-              <AlertTriangle className="h-3.5 w-3.5" /> {flag}
-            </span>
-          ))}
-        </div>
-      )}
-
       <div className="mt-auto pt-3">
         {project.nextTodo ? (
           <div className="rounded-md bg-slate-50 px-3 py-2">
@@ -341,6 +332,20 @@ function ProjectCardView({ project }: { project: ProjectCard }) {
         )}
       </div>
     </Link>
+  );
+}
+
+function ProjectStatusBadge({ label, tone }: { label: string; tone: 'green' | 'amber' | 'red' }) {
+  const toneClass = {
+    green: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-700',
+    red: 'bg-red-50 text-red-700',
+  }[tone];
+  const Icon = tone === 'green' ? ShieldCheck : AlertTriangle;
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${toneClass}`}>
+      <Icon className="h-3.5 w-3.5" /> {label}
+    </span>
   );
 }
 

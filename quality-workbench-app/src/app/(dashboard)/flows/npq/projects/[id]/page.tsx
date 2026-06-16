@@ -73,6 +73,7 @@ type ActivityChild = {
   notApplicableReason: string | null;
   plannedDueDateOverride: string | null;
   completedAt: string | null;
+  sortOrder: number;
   updatedAt: string;
   attachments?: ActivityAttachment[];
 };
@@ -121,18 +122,11 @@ type WorkspaceData = {
 };
 
 type RoleContext = {
+  userId: string;
+  username: string;
+  appRole: string;
   workbenchRole: WorkbenchRole;
-  position: null | { code: string; name: string; roleName: string | null; roleGroup: string };
-};
-
-type WorkbenchTodo = {
-  id: string;
-  type: string;
-  stage: string;
-  title: string;
-  parentTitle: string;
-  ownerRole: string;
-  dueAt: string | null;
+  position: null | { id: string; code: string; name: string; roleName: string | null; roleGroup: string };
 };
 
 const STAGE_ORDER = ['TR1', 'TR2&3', 'TR4', 'TR4A', 'TR5', 'TR6'];
@@ -146,7 +140,6 @@ export default function ProjectWorkspacePage() {
   const [roleContext, setRoleContext] = useState<RoleContext | null>(null);
   const [stageGates, setStageGates] = useState<StageGate[]>([]);
   const [canPassStageGate, setCanPassStageGate] = useState(false);
-  const [projectTodos, setProjectTodos] = useState<WorkbenchTodo[]>([]);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
@@ -194,9 +187,6 @@ export default function ProjectWorkspacePage() {
       if (workbenchRes.ok) {
         const workbenchData = await workbenchRes.json();
         setRoleContext(workbenchData.roleContext ?? null);
-        const group = (workbenchData.projectTodos as Array<{ projectId: string; todos: WorkbenchTodo[] }> | undefined)
-          ?.find((item) => item.projectId === id);
-        setProjectTodos(group?.todos ?? []);
       }
     } catch {
       setErrorMsg('项目工作区加载失败');
@@ -215,7 +205,7 @@ export default function ProjectWorkspacePage() {
   useEffect(() => {
     if (!workspace) return;
     const timeoutId = window.setTimeout(() => {
-      const visibleParents = filterInProgressParents(workspace.parents, true);
+      const visibleParents = filterInProgressParents(workspace.parents, true, roleContext);
       const resolved = resolveInitialSelection(todoParam, visibleParents, workspace.project.currentStage);
       setSelection(resolved);
       setExpandedStages(new Set([selectionStage(resolved, visibleParents) ?? workspace.project.currentStage]));
@@ -223,7 +213,7 @@ export default function ProjectWorkspacePage() {
       setExpandedParents(parentId ? new Set([parentId]) : new Set());
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [todoParam, workspace]);
+  }, [roleContext, todoParam, workspace]);
 
   useEffect(() => {
     if (!selection) return;
@@ -237,10 +227,14 @@ export default function ProjectWorkspacePage() {
   }, [selection, expandedStages, expandedParents]);
 
   const visibleParents = useMemo(
-    () => filterInProgressParents(workspace?.parents ?? [], showInProgressOnly),
-    [showInProgressOnly, workspace],
+    () => filterInProgressParents(workspace?.parents ?? [], showInProgressOnly, roleContext),
+    [roleContext, showInProgressOnly, workspace],
   );
   const stageGroups = useMemo(() => groupParentsByStage(visibleParents), [visibleParents]);
+  const taskNumbers = useMemo(
+    () => buildTaskNumberMap(workspace?.parents ?? []),
+    [workspace],
+  );
   const selectedParent = useMemo(() => {
     if (!workspace || !selection || selection.kind === 'stage') return null;
     return workspace.parents.find((parent) => parent.id === selection.parentId) ?? null;
@@ -276,9 +270,9 @@ export default function ProjectWorkspacePage() {
   const readonly = role === 'manager' || role === 'admin';
   const allParents = workspace.parents;
   const closedParents = allParents.filter((parent) => parent.status === 'closed').length;
-  const totalChildren = allParents.reduce((sum, parent) => sum + parent.children.filter((child) => !child.isNotApplicable).length, 0);
+  const totalChildren = allParents.reduce((sum, parent) => sum + parent.children.length, 0);
   const completedChildren = allParents.reduce((sum, parent) => (
-    sum + parent.children.filter((child) => !child.isNotApplicable && child.status === 'completed').length
+    sum + parent.children.filter(isChildEffectivelyCompleted).length
   ), 0);
   const overallProgress = totalChildren > 0 ? Math.round((completedChildren / totalChildren) * 100) : 0;
 
@@ -402,7 +396,7 @@ export default function ProjectWorkspacePage() {
             </div>
             <div className="flex w-full max-w-lg flex-col gap-3">
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>涉及子任务完成率</span>
+                <span>子任务完成率</span>
                 <span>{completedChildren}/{totalChildren} / {overallProgress}%</span>
               </div>
               <div className="mt-1.5 h-2 rounded-full bg-slate-100">
@@ -426,7 +420,7 @@ export default function ProjectWorkspacePage() {
           <aside className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white xl:min-h-[680px]">
             <div className="relative border-b border-slate-100 px-4 py-3 pr-28">
               <label className="absolute right-4 top-1/2 inline-flex -translate-y-1/2 items-center gap-2 text-xs font-medium text-slate-600">
-                <span>进行中</span>
+                <span>待处理</span>
                 <button
                   type="button"
                   role="switch"
@@ -497,11 +491,12 @@ export default function ProjectWorkspacePage() {
 
                     {expanded && (
                       <div className="ml-3 border-l border-slate-100 pl-2">
-                        {group.parents.map((parent, parentIndex) => {
-                          const parentNumber = `${group.index}.${parentIndex + 1}`;
+                        {group.parents.map((parent) => {
+                          const parentNumber = taskNumbers.parents.get(parent.id) ?? `${group.index}.${parent.sortOrder + 1}`;
                           const parentExpanded = expandedParents.has(parent.id);
-                          const childCount = parent.children.filter((child) => !child.isNotApplicable).length;
-                          const completed = parent.children.filter((child) => !child.isNotApplicable && child.status === 'completed').length;
+                          const childCount = parent.children.length;
+                          const completed = parent.children.filter(isChildEffectivelyCompleted).length;
+                          const parentDisplayStatus = parentDisplayStatusLabel(parent);
                           return (
                             <div key={parent.id}>
                               <button
@@ -519,21 +514,22 @@ export default function ProjectWorkspacePage() {
                                 {parentExpanded ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0" /> : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0" />}
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate text-sm font-medium">{parentNumber} {parent.projectTaskName}</span>
-                                  <span className="mt-0.5 block truncate text-xs text-slate-500">
-                                    {parentStatusLabel(parent.status)} / {completed}/{childCount} 子任务
+                                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                                    <StatusBadge label={parentDisplayStatus} tone={parentStatusTone(parent)} />
+                                    <span className="text-xs text-slate-500">{completed}/{childCount} 子任务</span>
                                   </span>
                                 </span>
                               </button>
 
                               {parentExpanded && (
                                 <div className="ml-5 space-y-1 border-l border-slate-100 pl-2">
-                                  {parent.children.map((child, childIndex) => (
+                                  {parent.children.map((child) => (
                                     <TreeButton
                                       key={child.id}
                                       selected={selection?.kind === 'child' && selection.childId === child.id}
                                       onClick={() => selectItem({ kind: 'child', parentId: parent.id, childId: child.id })}
                                       targetId={selectionTreeTargetId({ kind: 'child', parentId: parent.id, childId: child.id })}
-                                      title={`${parentNumber}.${childIndex + 1} ${child.thirdLevelPlan}`}
+                                      title={`${taskNumbers.children.get(child.id) ?? `${parentNumber}.${child.sortOrder + 1}`} ${child.thirdLevelPlan}`}
                                       metaNode={<ChildTreeMeta child={child} parentDueDate={parent.plannedDueDate} />}
                                     />
                                   ))}
@@ -574,7 +570,7 @@ export default function ProjectWorkspacePage() {
                   <ParentDetail
                     parent={selectedParent}
                     readonly={readonly}
-                    canClose={role === 'npq' && selectedParent.status === 'pending_npq_close'}
+                    canClose={role === 'npq' && isParentReadyToClose(selectedParent)}
                     saving={saving}
                     onClose={() => closeParent(selectedParent)}
                   />
@@ -608,7 +604,6 @@ export default function ProjectWorkspacePage() {
                 events={workspace.events}
                 parentId={selectedParent?.id ?? null}
                 childId={selectedChild?.id ?? null}
-                projectTodos={projectTodos}
               />
             </div>
           </main>
@@ -674,23 +669,25 @@ function ParentDetail({
   saving: boolean;
   onClose: () => void;
 }) {
-  const childCount = parent.children.filter((child) => !child.isNotApplicable).length;
-  const completed = parent.children.filter((child) => !child.isNotApplicable && child.status === 'completed').length;
+  const childCount = parent.children.length;
+  const completed = parent.children.filter(isChildEffectivelyCompleted).length;
+  const progressPercent = childCount > 0 ? Math.round((completed / childCount) * 100) : 0;
   return (
     <section className="space-y-4">
       <DetailHeader
         title={parent.projectTaskName}
         subtitle={`${parent.stage} / ${completed}/${childCount} 子任务完成 / 计划 ${parent.plannedDueDate ? formatDate(parent.plannedDueDate) : '-'}`}
-        status={parentStatusLabel(parent.status)}
+        status={parentDisplayStatusLabel(parent)}
+        statusTone={parentStatusTone(parent)}
       />
       <div className="grid gap-3 md:grid-cols-3">
-        <InfoTile label="完成率" value={`${parent.progressPercent}%`} />
+        <InfoTile label="完成率" value={`${progressPercent}%`} />
         <InfoTile label="阻塞" value={parent.hasBlocked ? '有阻塞' : '无阻塞'} />
         <InfoTile label="逾期" value={parent.hasOverdue ? '已逾期' : '未逾期'} />
       </div>
       <div className="rounded-lg border border-slate-200 p-3">
         <div className="text-sm font-medium">关闭规则</div>
-        <p className="mt-1 text-sm text-slate-500">所有涉及子任务完成后，项目活动进入待确认关闭，由 NPQ 最终关闭。</p>
+        <p className="mt-1 text-sm text-slate-500">所有子任务完成或标记不涉及后，项目活动进入待确认关闭，由 NPQ 最终关闭。</p>
         <Button className="mt-3" disabled={readonly || !canClose || saving} onClick={onClose}>
           <ShieldCheck />
           NPQ 确认关闭
@@ -743,7 +740,7 @@ function ChildDetail({
       <DetailHeader
         title={child.thirdLevelPlan}
         subtitle={`${parent.stage} / ${parent.projectTaskName} / 责任角色 ${child.ownerRole} / 计划 ${formatDate(child.plannedDueDateOverride ?? parent.plannedDueDate)}`}
-        status={childStatusLabel(child.status)}
+        status={childDisplayStatusLabel(child)}
       />
       <div className="grid gap-3 md:grid-cols-3">
         <InfoTile label="提交标准" value={child.requiresDeliverable ? '需要交付件' : '完成说明'} />
@@ -844,36 +841,25 @@ function HistoryPanel({
   events,
   parentId,
   childId,
-  projectTodos,
 }: {
   events: ActivityEvent[];
   parentId: string | null;
   childId: string | null;
-  projectTodos: WorkbenchTodo[];
 }) {
-  const currentEvents = events.filter((event) => childId ? event.childId === childId : event.parentId === parentId).slice(0, 8);
-  const parentEvents = events.filter((event) => event.parentId === parentId && event.childId !== childId).slice(0, 8);
+  const childEvents = childId ? events.filter((event) => event.childId === childId).slice(0, 8) : [];
+  const parentEvents = parentId ? events.filter((event) => event.parentId === parentId && !event.childId).slice(0, 8) : [];
+  const primaryTitle = childId ? '子任务历史' : '项目活动历史';
+  const primaryEvents = childId ? childEvents : parentEvents;
   return (
     <aside className="grid min-w-0 gap-3 md:grid-cols-2 2xl:block 2xl:space-y-4">
       <section className="rounded-lg border border-slate-200 p-3">
-        <div className="text-sm font-semibold">当前任务历史</div>
-        <EventList events={currentEvents} />
+        <div className="text-sm font-semibold">{primaryTitle}</div>
+        <EventList events={primaryEvents} />
       </section>
-      <section className="rounded-lg border border-slate-200 p-3">
-        <div className="text-sm font-semibold">项目活动关键历史</div>
-        <EventList events={parentEvents} />
-      </section>
-      {projectTodos.length > 0 && (
-        <section className="rounded-lg border border-slate-200 p-3 md:col-span-2 2xl:col-span-1">
-          <div className="text-sm font-semibold">本项目待处理</div>
-          <div className="mt-2 space-y-2">
-            {projectTodos.slice(0, 6).map((todo) => (
-              <div key={todo.id} className="rounded-md bg-slate-50 px-2 py-1.5">
-                <div className="truncate text-xs font-medium">{todo.title}</div>
-                <div className="mt-0.5 truncate text-[11px] text-slate-500">{todo.stage} / {todo.parentTitle}</div>
-              </div>
-            ))}
-          </div>
+      {childId && parentId && (
+        <section className="rounded-lg border border-slate-200 p-3">
+          <div className="text-sm font-semibold">项目活动历史</div>
+          <EventList events={parentEvents} />
         </section>
       )}
     </aside>
@@ -929,16 +915,25 @@ function ChildTreeMeta({ child, parentDueDate }: { child: ActivityChild; parentD
   const overdue = isChildOverdue(child, parentDueDate);
   return (
     <span className="mt-1 flex flex-wrap items-center gap-1.5">
-      <StatusBadge label={childStatusLabel(child.status)} tone={childStatusTone(child.status)} />
+      <StatusBadge label={childDisplayStatusLabel(child)} tone={child.isNotApplicable ? 'slate' : childStatusTone(child.status)} />
       <span className="text-xs text-slate-500">{child.ownerRole}</span>
       {overdue && <StatusBadge label="延期" tone="red" />}
       {child.isBlocked && <StatusBadge label="阻塞" tone="red" />}
-      {child.isNotApplicable && <StatusBadge label="不涉及" tone="slate" />}
     </span>
   );
 }
 
-function DetailHeader({ title, subtitle, status }: { title: string; subtitle: string; status: string }) {
+function DetailHeader({
+  title,
+  subtitle,
+  status,
+  statusTone = 'slate',
+}: {
+  title: string;
+  subtitle: string;
+  status: string;
+  statusTone?: 'slate' | 'blue' | 'green' | 'amber' | 'red';
+}) {
   return (
     <div className="min-w-0 rounded-lg border border-slate-200 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -947,7 +942,7 @@ function DetailHeader({ title, subtitle, status }: { title: string; subtitle: st
           <p className="mt-1 break-words text-sm leading-5 text-slate-500">{subtitle}</p>
         </div>
         <div className="shrink-0">
-          <StatusPill label={status} tone="slate" />
+          <StatusBadge label={status} tone={statusTone} />
         </div>
       </div>
     </div>
@@ -972,6 +967,30 @@ function childStatusLabel(status: string) {
     completed: '已完成',
   };
   return labels[status] ?? status;
+}
+
+function isChildEffectivelyCompleted(child: Pick<ActivityChild, 'status' | 'isNotApplicable'>) {
+  return child.status === 'completed' || child.isNotApplicable;
+}
+
+function isParentReadyToClose(parent: ActivityParent) {
+  return parent.status !== 'closed' && parent.children.length > 0 && parent.children.every(isChildEffectivelyCompleted);
+}
+
+function parentDisplayStatusLabel(parent: ActivityParent) {
+  return isParentReadyToClose(parent) ? parentStatusLabel('pending_npq_close') : parentStatusLabel(parent.status);
+}
+
+function parentStatusTone(parent: ActivityParent): 'slate' | 'blue' | 'green' | 'amber' | 'red' {
+  if (isParentReadyToClose(parent)) return 'amber';
+  if (parent.status === 'closed') return 'green';
+  if (parent.status === 'in_progress') return 'blue';
+  if (parent.hasBlocked || parent.hasOverdue) return 'red';
+  return 'slate';
+}
+
+function childDisplayStatusLabel(child: Pick<ActivityChild, 'status' | 'isNotApplicable'>) {
+  return child.isNotApplicable ? '不涉及' : childStatusLabel(child.status);
 }
 
 function childStatusTone(status: string): 'slate' | 'blue' | 'green' | 'amber' | 'red' {
@@ -1062,14 +1081,53 @@ function selectionTreeTargetId(selection: Selection) {
   return `tree-child-${selection.childId}`;
 }
 
-function filterInProgressParents(parents: ActivityParent[], enabled: boolean) {
+function filterInProgressParents(parents: ActivityParent[], enabled: boolean, roleContext: RoleContext | null) {
   if (!enabled) return parents;
   return parents
-    .map((parent) => ({
-      ...parent,
-      children: parent.children.filter((child) => child.isNotApplicable || child.status === 'in_progress'),
-    }))
-    .filter((parent) => parent.status === 'in_progress' || parent.children.length > 0);
+    .map((parent) => {
+      const isNpqPendingCloseParent = roleContext?.workbenchRole === 'npq' && isParentInCloseReview(parent);
+      const children = isNpqPendingCloseParent
+        ? parent.children
+        : parent.children.filter((child) => isChildVisibleInAttentionFilter(child, parent.plannedDueDate, roleContext));
+      return {
+        parent: { ...parent, children },
+        visible: isParentVisibleInAttentionFilter(parent, children.length, roleContext),
+      };
+    })
+    .filter((item) => item.visible)
+    .map((item) => item.parent);
+}
+
+function isChildVisibleInAttentionFilter(child: ActivityChild, parentDueDate: string | null, roleContext: RoleContext | null) {
+  if (isChildEffectivelyCompleted(child)) return false;
+  if (!isChildOwnedByRoleContext(child, roleContext)) return false;
+  return child.status === 'in_progress'
+    || child.status === 'returned'
+    || child.isBlocked
+    || isChildOverdue(child, parentDueDate);
+}
+
+function isParentVisibleInAttentionFilter(parent: ActivityParent, visibleChildCount: number, roleContext: RoleContext | null) {
+  if (roleContext?.workbenchRole !== 'npq') return visibleChildCount > 0;
+  return isParentInCloseReview(parent)
+    || parent.hasBlocked
+    || parent.hasOverdue
+    || visibleChildCount > 0;
+}
+
+function isParentInCloseReview(parent: ActivityParent) {
+  return isParentReadyToClose(parent) || parent.status === 'pending_npq_close';
+}
+
+function isChildOwnedByRoleContext(child: ActivityChild, roleContext: RoleContext | null) {
+  if (!roleContext) return true;
+  if (child.assigneeUserId && child.assigneeUserId === roleContext.userId) return true;
+  const position = roleContext.position;
+  if (!position) return roleContext.workbenchRole === 'npq';
+  return child.responsibleRoleId === position.id
+    || child.ownerRole === position.roleName
+    || child.ownerRole === position.name
+    || child.ownerRole === position.code;
 }
 
 function groupParentsByStage(parents: ActivityParent[]) {
@@ -1086,6 +1144,25 @@ function groupParentsByStage(parents: ActivityParent[]) {
       index: stageIndex(stage) + 1,
       parents: group.sort((a, b) => a.sortOrder - b.sortOrder),
     }));
+}
+
+function buildTaskNumberMap(parents: ActivityParent[]) {
+  const parentNumbers = new Map<string, string>();
+  const childNumbers = new Map<string, string>();
+  const groups = groupParentsByStage(parents);
+  for (const group of groups) {
+    group.parents.forEach((parent, parentIndex) => {
+      const parentNumber = `${group.index}.${parentIndex + 1}`;
+      parentNumbers.set(parent.id, parentNumber);
+      parent.children
+        .slice()
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .forEach((child, childIndex) => {
+          childNumbers.set(child.id, `${parentNumber}.${childIndex + 1}`);
+        });
+    });
+  }
+  return { parents: parentNumbers, children: childNumbers };
 }
 
 function stageIndex(stage: string) {
