@@ -31,7 +31,7 @@ type ProjectMember = {
     username: string;
     positionBinding: null | {
       positionRoleId: string;
-      positionRole: { id: string; code: string; name: string; roleGroup: string };
+      positionRole: { id: string; code: string; name: string; roleName: string | null; roleGroup: string };
     };
   };
 };
@@ -122,7 +122,7 @@ type WorkspaceData = {
 
 type RoleContext = {
   workbenchRole: WorkbenchRole;
-  position: null | { code: string; name: string; roleGroup: string };
+  position: null | { code: string; name: string; roleName: string | null; roleGroup: string };
 };
 
 type WorkbenchTodo = {
@@ -939,6 +939,26 @@ function DetailHeader({ title, subtitle, status }: { title: string; subtitle: st
   );
 }
 
+function parentStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    not_started: '未开始',
+    in_progress: '进行中',
+    pending_npq_close: '待确认关闭',
+    closed: '已关闭',
+  };
+  return labels[status] ?? status;
+}
+
+function childStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    not_started: '未开始',
+    in_progress: '进行中',
+    returned: '已退回',
+    completed: '已完成',
+  };
+  return labels[status] ?? status;
+}
+
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-slate-200 px-3 py-2">
@@ -1035,26 +1055,6 @@ function toggleSet(current: Set<string>, value: string) {
   if (next.has(value)) next.delete(value);
   else next.add(value);
   return next;
-}
-
-function parentStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    not_started: '未开始',
-    in_progress: '进行中',
-    pending_npq_close: '待确认关闭',
-    closed: '已关闭',
-  };
-  return labels[status] ?? status;
-}
-
-function childStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    not_started: '未开始',
-    in_progress: '进行中',
-    returned: '已退回',
-    completed: '已完成',
-  };
-  return labels[status] ?? status;
 }
 
 function gateStatusLabel(status?: string) {

@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, UserCog, X } from 'lucide-react';
 type Role = {
   id: string;
   name: string;
+  roleName: string | null;
   isActive: boolean;
 };
 
@@ -18,7 +19,7 @@ type User = {
   email: string | null;
   positionBinding: null | {
     positionRoleId: string;
-    positionRole: { id: string; name: string };
+    positionRole: { id: string; name: string; roleName: string | null };
   };
 };
 
@@ -46,6 +47,25 @@ const emptyNewUser: NewUserForm = {
   positionRoleId: '',
 };
 
+function roleDisplayName(role: Pick<Role, 'name' | 'roleName'>) {
+  return role.roleName?.trim() || role.name;
+}
+
+function roleFullName(role: Pick<Role, 'name' | 'roleName'>) {
+  const roleName = roleDisplayName(role);
+  return roleName === role.name ? roleName : `${role.name} / ${roleName}`;
+}
+
+function groupedRoles(roles: Role[]) {
+  const groups = new Map<string, Role[]>();
+  for (const role of roles) {
+    const items = groups.get(role.name) ?? [];
+    items.push(role);
+    groups.set(role.name, items);
+  }
+  return Array.from(groups.entries()).map(([name, items]) => ({ name, roles: items }));
+}
+
 export default function AdminUserAccountsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -58,14 +78,13 @@ export default function AdminUserAccountsPage() {
   async function load() {
     setError('');
     try {
-    const [usersRes, rolesRes] = await Promise.all([
-      fetch('/api/admin/users'),
-      fetch('/api/admin/positions'),
-    ]);
-    if (usersRes.ok) setUsers(await usersRes.json());
-    if (rolesRes.ok) setRoles(await rolesRes.json());
-    if (!usersRes.ok || !rolesRes.ok) setError('加载用户或角色失败，请刷新后重试。');
-    setLoading(false);
+      const [usersRes, rolesRes] = await Promise.all([
+        fetch('/api/admin/users'),
+        fetch('/api/admin/positions'),
+      ]);
+      if (usersRes.ok) setUsers(await usersRes.json());
+      if (rolesRes.ok) setRoles(await rolesRes.json());
+      if (!usersRes.ok || !rolesRes.ok) setError('加载用户或角色失败，请刷新后重试。');
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载用户或角色失败');
     } finally {
@@ -211,13 +230,29 @@ function groupUsersByRole(users: User[], roles: Role[]): UserGroup[] {
   const groups = roles
     .map((role) => ({
       id: role.id,
-      name: role.name,
+      name: roleFullName(role),
       users: users.filter((user) => user.positionBinding?.positionRoleId === role.id),
     }))
     .filter((group) => group.users.length > 0);
   const unassigned = users.filter((user) => !user.positionBinding);
   if (unassigned.length > 0) groups.push({ id: 'unassigned', name: '未分配角色', users: unassigned });
   return groups;
+}
+
+function RoleOptions({ roles }: { roles: Role[] }) {
+  return (
+    <>
+      {groupedRoles(roles).map((group) => (
+        <optgroup key={group.name} label={group.name}>
+          {group.roles.map((role) => (
+            <option key={role.id} value={role.id} disabled={!role.isActive}>
+              {roleDisplayName(role)}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  );
 }
 
 function UserStatusList({
@@ -297,11 +332,7 @@ function UserStatusList({
                             className="h-8 w-full rounded border border-border px-2 text-xs"
                           >
                             <option value="">未分配角色</option>
-                            {roles.map((role) => (
-                              <option key={role.id} value={role.id} disabled={!role.isActive}>
-                                {role.name}
-                              </option>
-                            ))}
+                            <RoleOptions roles={roles} />
                           </select>
                         </td>
                         <td className="px-3 py-3">
@@ -412,11 +443,7 @@ function CreateUserModal({
               onChange={(event) => onChange({ ...value, positionRoleId: event.target.value })}
             >
               <option value="">未分配角色</option>
-              {roles.map((role) => (
-                <option key={role.id} value={role.id} disabled={!role.isActive}>
-                  {role.name}
-                </option>
-              ))}
+              <RoleOptions roles={roles} />
             </select>
           </label>
         </div>

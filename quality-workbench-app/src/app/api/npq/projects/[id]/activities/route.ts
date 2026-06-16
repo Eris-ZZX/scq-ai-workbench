@@ -30,7 +30,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
                   positionBinding: {
                     select: {
                       positionRoleId: true,
-                      positionRole: { select: { id: true, code: true, name: true, roleGroup: true } },
+                      positionRole: { select: { id: true, code: true, name: true, roleName: true, roleGroup: true } },
                     },
                   },
                 },

@@ -89,16 +89,17 @@ async function main() {
   // ── 预注册 MVP 功能组件 ──
   for (const [id, code, name, description, sortOrder] of positionRoleSeeds) {
     await executeWithRetry(
-      `INSERT INTO PositionRole (id, code, name, roleGroup, description, isActive, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
+      `INSERT INTO PositionRole (id, code, name, roleName, roleGroup, description, isActive, sortOrder, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
        ON CONFLICT(code) DO UPDATE SET
          name=excluded.name,
+         roleName=excluded.roleName,
          roleGroup=excluded.roleGroup,
          description=excluded.description,
          isActive=1,
          sortOrder=excluded.sortOrder,
          updatedAt=datetime('now')`,
-      [id, code, name, code, description, sortOrder],
+      [id, code, name, name, code, description, sortOrder],
     );
   }
   console.log(`  F3 position roles: ${positionRoleSeeds.length} seeded`);

@@ -26,7 +26,7 @@ export async function GET() {
       positionBinding: {
         select: {
           positionRoleId: true,
-          positionRole: { select: { id: true, name: true } },
+          positionRole: { select: { id: true, name: true, roleName: true } },
         },
       },
     },
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
           positionBinding: {
             select: {
               positionRoleId: true,
-              positionRole: { select: { id: true, name: true } },
+              positionRole: { select: { id: true, name: true, roleName: true } },
             },
           },
         },
@@ -189,7 +189,7 @@ export async function PATCH(request: Request) {
         positionBinding: {
           select: {
             positionRoleId: true,
-            positionRole: { select: { id: true, name: true } },
+            positionRole: { select: { id: true, name: true, roleName: true } },
           },
         },
       },

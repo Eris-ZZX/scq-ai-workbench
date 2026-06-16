@@ -6,7 +6,7 @@ import { ProjectActivityEditor } from './project-activity-editor';
 
 type PositionBinding = null | {
   positionRoleId: string;
-  positionRole: { id: string; code?: string; name: string };
+  positionRole: { id: string; code?: string; name: string; roleName?: string | null };
 };
 
 type ProjectMember = {
@@ -87,7 +87,7 @@ function displayUser(user?: { username: string }) {
 }
 
 function userRoleName(user: { positionBinding: PositionBinding }) {
-  return user.positionBinding?.positionRole.code ?? user.positionBinding?.positionRole.name ?? '';
+  return user.positionBinding?.positionRole.roleName ?? user.positionBinding?.positionRole.code ?? user.positionBinding?.positionRole.name ?? '';
 }
 
 function formatTemplateVersion(version: ActivityTemplate['version']) {

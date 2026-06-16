@@ -8,6 +8,7 @@ import { ArrowRight, BriefcaseBusiness, ShieldCheck, UserCog, UsersRound } from 
 type Position = {
   id: string;
   name: string;
+  roleName: string | null;
   isActive: boolean;
   _count?: { userPositions: number; projectAssignments: number; templateChildren: number };
 };
@@ -28,15 +29,14 @@ export default function AdminUsersDashboardPage() {
     async function load() {
       setError('');
       try {
-      const [usersRes, positionsRes] = await Promise.all([
-        fetch('/api/admin/users'),
-        fetch('/api/admin/positions'),
-      ]);
-      if (cancelled) return;
-      if (usersRes.ok) setUsers(await usersRes.json());
-      if (positionsRes.ok) setPositions(await positionsRes.json());
-      if (!usersRes.ok || !positionsRes.ok) setError('加载用户或岗位数据失败，请刷新后重试。');
-      setLoading(false);
+        const [usersRes, positionsRes] = await Promise.all([
+          fetch('/api/admin/users'),
+          fetch('/api/admin/positions'),
+        ]);
+        if (cancelled) return;
+        if (usersRes.ok) setUsers(await usersRes.json());
+        if (positionsRes.ok) setPositions(await positionsRes.json());
+        if (!usersRes.ok || !positionsRes.ok) setError('加载用户或角色数据失败，请刷新后重试。');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : '加载用户或角色数据失败');
       } finally {
@@ -80,7 +80,7 @@ export default function AdminUsersDashboardPage() {
             href="/admin/users/roles"
             icon={<BriefcaseBusiness className="h-5 w-5" />}
             title="角色管理"
-            desc="维护可分配给用户和项目的角色名称。"
+            desc="维护分组，以及分组下可分配给用户和项目的角色。"
             meta={`${positions.length} 个角色，${stats.assignedPositions} 个用户绑定`}
           />
           <EntryCard

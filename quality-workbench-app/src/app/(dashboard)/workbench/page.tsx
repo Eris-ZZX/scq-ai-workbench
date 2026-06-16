@@ -53,7 +53,7 @@ type WorkbenchData = {
     username: string;
     appRole: string;
     workbenchRole: WorkbenchRole;
-    position: null | { code: string; name: string; roleGroup: string };
+    position: null | { code: string; name: string; roleName: string | null; roleGroup: string };
   };
   actionMetrics: {
     totalTodo: number;
@@ -145,7 +145,7 @@ export default function WorkbenchPage() {
   if (loading) return <div className="p-8 text-sm text-muted-foreground">加载个人项目工作台...</div>;
   if (!data) return <div className="p-8 text-sm text-red-600">{error || '个人项目工作台不可用'}</div>;
 
-  const roleName = data.roleContext.position?.name ?? roleFallback(data.roleContext.workbenchRole);
+  const roleName = data.roleContext.position?.roleName ?? data.roleContext.position?.name ?? roleFallback(data.roleContext.workbenchRole);
 
   return (
     <div className="min-h-screen bg-slate-50/80 px-5 py-5 text-slate-900">

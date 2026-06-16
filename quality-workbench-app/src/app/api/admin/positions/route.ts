@@ -40,10 +40,11 @@ export async function GET() {
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
 
   const positions = await prisma.positionRole.findMany({
-    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { roleName: 'asc' }],
     select: {
       id: true,
       name: true,
+      roleName: true,
       isActive: true,
       sortOrder: true,
       _count: {
@@ -71,25 +72,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
   }
 
-  const name = clean(body.name);
-  if (!name) return NextResponse.json({ error: '请填写角色名称' }, { status: 400 });
+  const groupName = clean(body.groupName ?? body.name);
+  const roleName = clean(body.roleName);
+  if (!groupName) return NextResponse.json({ error: '请填写分组名称' }, { status: 400 });
+  if (!roleName) return NextResponse.json({ error: '请填写角色名称' }, { status: 400 });
 
   try {
-    const existing = await prisma.positionRole.findFirst({ where: { name }, select: { id: true } });
-    if (existing) return NextResponse.json({ error: '角色名称已存在' }, { status: 409 });
+    const existing = await prisma.positionRole.findFirst({ where: { name: groupName, roleName }, select: { id: true } });
+    if (existing) return NextResponse.json({ error: '该分组下角色名称已存在' }, { status: 409 });
 
-    const code = await uniqueInternalCode(name);
+    const code = await uniqueInternalCode(`${groupName}-${roleName}`);
     const count = await prisma.positionRole.count();
     const created = await prisma.positionRole.create({
       data: {
         code,
-        name,
-        roleGroup: code,
+        name: groupName,
+        roleName,
+        roleGroup: internalCodeFromName(groupName),
         sortOrder: count + 1,
       },
       select: {
         id: true,
         name: true,
+        roleName: true,
         isActive: true,
         sortOrder: true,
       },
@@ -116,28 +121,86 @@ export async function PATCH(request: Request) {
   }
 
   const id = clean(body.id);
+  const action = clean(body.action) || 'updateRole';
+
+  if (action === 'renameGroup') {
+    const oldGroupName = clean(body.oldGroupName);
+    const groupName = clean(body.groupName ?? body.name);
+    if (!oldGroupName) return NextResponse.json({ error: '缺少原分组名称' }, { status: 400 });
+    if (!groupName) return NextResponse.json({ error: '请填写分组名称' }, { status: 400 });
+    if (oldGroupName === groupName) return NextResponse.json({ ok: true });
+
+    try {
+      const groupRoles = await prisma.positionRole.findMany({
+        where: { name: oldGroupName },
+        select: { id: true, roleName: true, name: true },
+      });
+      if (groupRoles.length === 0) return NextResponse.json({ error: '分组不存在' }, { status: 404 });
+
+      const roleNames = groupRoles.map((role) => role.roleName ?? role.name);
+      const conflicts = await prisma.positionRole.findMany({
+        where: {
+          name: groupName,
+          roleName: { in: roleNames },
+          NOT: { id: { in: groupRoles.map((role) => role.id) } },
+        },
+        select: { id: true },
+      });
+      if (conflicts.length > 0) {
+        return NextResponse.json({ error: '目标分组下已有同名角色' }, { status: 409 });
+      }
+
+      await prisma.positionRole.updateMany({
+        where: { name: oldGroupName },
+        data: { name: groupName, roleGroup: internalCodeFromName(groupName) },
+      });
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      console.error('[positions:renameGroup]', error);
+      return NextResponse.json({ error: '更新分组失败' }, { status: 500 });
+    }
+  }
+
   if (!id) return NextResponse.json({ error: '缺少角色 ID' }, { status: 400 });
 
-  const name = clean(body.name);
-  if (name) {
+  const hasGroupName = 'groupName' in body || 'name' in body;
+  const hasRoleName = 'roleName' in body;
+  const groupName = clean(body.groupName ?? body.name);
+  const roleName = clean(body.roleName);
+
+  const current = await prisma.positionRole.findUnique({
+    where: { id },
+    select: { id: true, name: true, roleName: true },
+  });
+  if (!current) return NextResponse.json({ error: '角色不存在' }, { status: 404 });
+
+  if (hasGroupName && !groupName) return NextResponse.json({ error: '请填写分组名称' }, { status: 400 });
+  if (hasRoleName && !roleName) return NextResponse.json({ error: '请填写角色名称' }, { status: 400 });
+
+  const nextGroupName = hasGroupName ? groupName : current.name;
+  const nextRoleName = hasRoleName ? roleName : (current.roleName ?? current.name);
+  if (nextGroupName !== current.name || nextRoleName !== (current.roleName ?? current.name)) {
     const existing = await prisma.positionRole.findFirst({
-      where: { name, NOT: { id } },
+      where: { name: nextGroupName, roleName: nextRoleName, NOT: { id } },
       select: { id: true },
     });
-    if (existing) return NextResponse.json({ error: '角色名称已存在' }, { status: 409 });
+    if (existing) return NextResponse.json({ error: '该分组下角色名称已存在' }, { status: 409 });
   }
 
   try {
     const updated = await prisma.positionRole.update({
       where: { id },
       data: {
-        name: name || undefined,
+        name: hasGroupName ? groupName : undefined,
+        roleName: hasRoleName ? roleName : undefined,
+        roleGroup: hasGroupName ? internalCodeFromName(groupName) : undefined,
         isActive: typeof body.isActive === 'boolean' ? body.isActive : undefined,
         sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : undefined,
       },
       select: {
         id: true,
         name: true,
+        roleName: true,
         isActive: true,
         sortOrder: true,
       },

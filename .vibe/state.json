@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
   "projectRoot": "D:\\Users\\vox1814\\Desktop\\AIspace\\5.Huge-App\\260608-QEworkspace",
-  "updatedAt": "2026-06-15T15:38:48+08:00",
-  "lastSessionId": "session-1781508900222",
+  "updatedAt": "2026-06-15T16:40:22+08:00",
+  "lastSessionId": "session-1781512667753",
   "source": "codex",
   "status": "in_progress",
-  "currentTask": "F5 项目工作区详情响应式优化",
+  "currentTask": "F5 角色管理分组折叠展示",
   "features": [
     {
       "id": "F1",
@@ -163,6 +163,6 @@
   "inProgressSteps": [],
   "pendingSteps": [],
   "blocker": "",
-  "lastAction": "优化任务详情和历史区域响应式排版，避免侧边栏/窄屏下挤压；lint/build 和内网 URL 验证通过",
-  "nextStep": "用户实测项目工作区在窄屏和侧边栏打开时的详情可读性。"
+  "lastAction": "完成角色管理折叠列表改造，并新增分组批量重命名后端动作；lint、build、带登录态角色接口验证均通过。",
+  "nextStep": "用户实测角色管理页的分组折叠、分组重命名、组内新增角色和角色编辑/删除是否符合预期。"
 }

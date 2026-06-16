@@ -58,7 +58,7 @@ function projectSelect() {
             positionBinding: {
               select: {
                 positionRoleId: true,
-                positionRole: { select: { id: true, code: true, name: true } },
+                positionRole: { select: { id: true, code: true, name: true, roleName: true } },
               },
             },
           },
@@ -79,7 +79,7 @@ async function getProjects(access: ProjectAdminAccess) {
 
 async function getActivePositionRole(roleName: string) {
   return prisma.positionRole.findFirst({
-    where: { OR: [{ code: roleName }, { name: roleName }], isActive: true },
+    where: { OR: [{ roleName }, { code: roleName }, { name: roleName }], isActive: true },
     select: { id: true },
   });
 }
@@ -99,7 +99,7 @@ async function validateRoleUsers(roleName: string, userIds: string[]) {
       })
     : [];
   if (selectedUsers.length !== userIds.length) {
-    return { error: `请选择启用状态且岗位为 ${roleName} 的用户` as const };
+    return { error: `请选择启用状态且角色为 ${roleName} 的用户` as const };
   }
 
   return { positionRole };
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
   }
   const initialNpqRole = ownerId
     ? await prisma.positionRole.findFirst({
-        where: { OR: [{ code: 'NPQ' }, { name: 'NPQ' }], isActive: true },
+        where: { OR: [{ roleName: 'NPQ' }, { code: 'NPQ' }, { name: 'NPQ' }], isActive: true },
         select: { id: true },
       })
     : null;
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
       })
     : null;
   if (ownerId && (!initialNpqRole || !initialNpqUser)) {
-    return NextResponse.json({ error: '初始 NPQ 成员必须是启用状态且岗位为 NPQ 的用户' }, { status: 400 });
+    return NextResponse.json({ error: '初始 NPQ 成员必须是启用状态且角色为 NPQ 的用户' }, { status: 400 });
   }
 
   try {
@@ -227,7 +227,7 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: '项目成员只支持 NPQ、PQE、SQE、FAE、RAM、QCM 六类角色' }, { status: 400 });
       }
       const positionRole = await prisma.positionRole.findFirst({
-        where: { OR: [{ code: roleName }, { name: roleName }], isActive: true },
+        where: { OR: [{ roleName }, { code: roleName }, { name: roleName }], isActive: true },
         select: { id: true },
       });
       if (!positionRole) return NextResponse.json({ error: `角色 ${roleName} 未启用或不存在` }, { status: 400 });
@@ -243,7 +243,7 @@ export async function PATCH(request: Request) {
           })
         : [];
       if (selectedUsers.length !== userIds.length) {
-        return NextResponse.json({ error: `请选择启用状态且岗位为 ${roleName} 的用户` }, { status: 400 });
+        return NextResponse.json({ error: `请选择启用状态且角色为 ${roleName} 的用户` }, { status: 400 });
       }
 
       await prisma.$transaction(async (tx) => {

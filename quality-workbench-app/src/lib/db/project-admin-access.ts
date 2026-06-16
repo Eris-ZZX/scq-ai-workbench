@@ -16,10 +16,10 @@ export async function getProjectAdminAccess(session: SessionLike): Promise<Proje
   const userPosition = await prisma.userPosition.findUnique({
     where: { userId: session.sub },
     select: {
-      positionRole: { select: { code: true, name: true } },
+      positionRole: { select: { code: true, name: true, roleName: true } },
     },
   });
-  const roleCode = userPosition?.positionRole.code ?? userPosition?.positionRole.name ?? '';
+  const roleCode = userPosition?.positionRole.code ?? userPosition?.positionRole.roleName ?? userPosition?.positionRole.name ?? '';
   if (roleCode === 'NPQ') return { kind: 'npq', userId: session.sub };
 
   return { kind: 'none', userId: session.sub };
