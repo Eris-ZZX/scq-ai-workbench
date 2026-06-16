@@ -534,7 +534,7 @@ export default function ProjectWorkspacePage() {
                                       onClick={() => selectItem({ kind: 'child', parentId: parent.id, childId: child.id })}
                                       targetId={selectionTreeTargetId({ kind: 'child', parentId: parent.id, childId: child.id })}
                                       title={`${parentNumber}.${childIndex + 1} ${child.thirdLevelPlan}`}
-                                      meta={`${childStatusLabel(child.status)} / ${child.ownerRole}${child.isBlocked ? ' / 阻塞' : ''}${child.isNotApplicable ? ' / 不涉及' : ''}`}
+                                      metaNode={<ChildTreeMeta child={child} parentDueDate={parent.plannedDueDate} />}
                                     />
                                   ))}
                                 </div>
@@ -903,12 +903,14 @@ function TreeButton({
   targetId,
   title,
   meta,
+  metaNode,
 }: {
   selected: boolean;
   onClick: () => void;
   targetId?: string;
   title: string;
-  meta: string;
+  meta?: string;
+  metaNode?: React.ReactNode;
 }) {
   return (
     <button
@@ -918,8 +920,21 @@ function TreeButton({
       className={`mt-1 w-full rounded-md px-2 py-1.5 text-left outline-none hover:bg-slate-50 ${selected ? 'bg-slate-100 ring-2 ring-blue-200' : ''}`}
     >
       <span className="block truncate text-sm">{title}</span>
-      <span className="mt-0.5 block truncate text-xs text-slate-500">{meta}</span>
+      {metaNode ?? <span className="mt-0.5 block truncate text-xs text-slate-500">{meta}</span>}
     </button>
+  );
+}
+
+function ChildTreeMeta({ child, parentDueDate }: { child: ActivityChild; parentDueDate: string | null }) {
+  const overdue = isChildOverdue(child, parentDueDate);
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+      <StatusBadge label={childStatusLabel(child.status)} tone={childStatusTone(child.status)} />
+      <span className="text-xs text-slate-500">{child.ownerRole}</span>
+      {overdue && <StatusBadge label="延期" tone="red" />}
+      {child.isBlocked && <StatusBadge label="阻塞" tone="red" />}
+      {child.isNotApplicable && <StatusBadge label="不涉及" tone="slate" />}
+    </span>
   );
 }
 
@@ -957,6 +972,34 @@ function childStatusLabel(status: string) {
     completed: '已完成',
   };
   return labels[status] ?? status;
+}
+
+function childStatusTone(status: string): 'slate' | 'blue' | 'green' | 'amber' | 'red' {
+  if (status === 'in_progress') return 'blue';
+  if (status === 'completed') return 'green';
+  if (status === 'returned') return 'amber';
+  return 'slate';
+}
+
+function isChildOverdue(child: ActivityChild, parentDueDate: string | null) {
+  if (child.status === 'completed' || child.isNotApplicable) return false;
+  const due = child.plannedDueDateOverride ?? parentDueDate;
+  return Boolean(due && new Date(due).getTime() < Date.now());
+}
+
+function StatusBadge({ label, tone }: { label: string; tone: 'slate' | 'blue' | 'green' | 'amber' | 'red' }) {
+  const tones = {
+    slate: 'border-slate-200 bg-slate-50 text-slate-600',
+    blue: 'border-blue-200 bg-blue-50 text-blue-700',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    red: 'border-red-200 bg-red-50 text-red-700',
+  };
+  return (
+    <span className={`inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-semibold leading-none ${tones[tone]}`}>
+      {label}
+    </span>
+  );
 }
 
 function InfoTile({ label, value }: { label: string; value: string }) {
@@ -1024,7 +1067,7 @@ function filterInProgressParents(parents: ActivityParent[], enabled: boolean) {
   return parents
     .map((parent) => ({
       ...parent,
-      children: parent.children.filter((child) => !child.isNotApplicable && child.status === 'in_progress'),
+      children: parent.children.filter((child) => child.isNotApplicable || child.status === 'in_progress'),
     }))
     .filter((parent) => parent.status === 'in_progress' || parent.children.length > 0);
 }
