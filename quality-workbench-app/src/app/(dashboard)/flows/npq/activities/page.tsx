@@ -106,6 +106,7 @@ export default function ActivityTrackingPage() {
   const [stageGates, setStageGates] = useState<StageGate[]>([]);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(() => new Set(STAGES));
   const [selectedChild, setSelectedChild] = useState<ActivityChild | null>(null);
   const [selectedChildIds, setSelectedChildIds] = useState<Set<string>>(new Set());
   const [batchReason, setBatchReason] = useState('');
@@ -293,21 +294,6 @@ export default function ActivityTrackingPage() {
     void loadActivities(projectId);
   }
 
-  async function closeParent(parent: ActivityParent) {
-    setError('');
-    const res = await fetch(`/api/npq/activities/parents/${parent.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ close: true }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? '项目活动关闭失败');
-      return;
-    }
-    void loadActivities(projectId);
-  }
-
   async function batchUpdate(payload: { status?: string; isNotApplicable?: boolean }) {
     const childIds = Array.from(selectedChildIds);
     if (childIds.length === 0) return;
@@ -437,87 +423,96 @@ export default function ActivityTrackingPage() {
 
           {grouped.length === 0 ? (
             <div className="p-10 text-center text-sm text-muted-foreground">暂无匹配活动</div>
-          ) : grouped.map((group) => (
-            <section key={group.stage}>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-2">
-                <div className="text-sm font-semibold text-foreground">{group.stage}</div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>阶段计划</span>
-                  <input
-                    type="date"
-                    value={toDateInput(group.gate?.plannedStartDate ?? null)}
-                    onChange={(event) => updateStagePlan(group.stage, { plannedStartDate: event.target.value })}
-                    className="w-[7.5rem] rounded border bg-white px-2 py-1 text-xs"
-                    aria-label={`${group.stage} planned start`}
-                  />
-                  <span>-</span>
-                  <input
-                    type="date"
-                    value={toDateInput(group.gate?.plannedDueDate ?? null)}
-                    onChange={(event) => updateStagePlan(group.stage, { plannedDueDate: event.target.value })}
-                    className="w-[7.5rem] rounded border bg-white px-2 py-1 text-xs"
-                    aria-label={`${group.stage} planned finish`}
-                  />
-                </div>
-              </div>
-              {group.parents.map((parent) => {
-                const isOpen = expanded.has(parent.id);
-                return (
-                  <div key={parent.id} className="border-b last:border-b-0">
-                    <div className="grid grid-cols-[minmax(240px,1.5fr)_105px_105px_105px_118px_118px_105px] items-center px-4 py-3 text-sm">
-                      <button
-                        onClick={() => setExpanded((current) => toggleSet(current, parent.id))}
-                        className="flex min-w-0 items-center gap-2 text-left font-medium text-foreground hover:text-primary"
-                      >
-                        {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                        <span className="truncate">{parent.projectTaskName}</span>
-                      </button>
-                      <StatusBadge status={parent.status} labels={PARENT_STATUS_LABEL} />
-                      <div className="pr-4">
-                        <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${parent.progressPercent}%` }} />
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">{parent.progressPercent}%</div>
-                      </div>
-                      <div className="flex gap-1">
-                        {parent.hasBlocked && <RiskBadge label="阻塞" tone="red" />}
-                        {parent.hasOverdue && <RiskBadge label="逾期" tone="amber" />}
-                        {!parent.hasBlocked && !parent.hasOverdue && <span className="text-xs text-muted-foreground">无</span>}
-                      </div>
-                      <input
-                        type="date"
-                        value={toDateInput(parent.plannedStartDate)}
-                        onChange={(event) => updateParentPlan(parent, { plannedStartDate: event.target.value })}
-                        className="w-28 rounded border px-2 py-1 text-xs"
-                      />
-                      <input
-                        type="date"
-                        value={toDateInput(parent.plannedDueDate)}
-                        onChange={(event) => updateParentPlan(parent, { plannedDueDate: event.target.value })}
-                        className="w-28 rounded border px-2 py-1 text-xs"
-                      />
-                      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                        <span>{formatDate(parent.updatedAt)}</span>
-                        {parent.status === 'pending_npq_close' && (
-                          <button onClick={() => closeParent(parent)} className="rounded bg-green-600 px-2 py-1 text-white hover:bg-green-700">
-                            关闭
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {isOpen && (
-                      <ChildTable
-                        parent={parent}
-                        selectedIds={selectedChildIds}
-                        onSelect={setSelectedChildIds}
-                        onOpenChild={openChild}
-                      />
-                    )}
+          ) : grouped.map((group) => {
+            const isStageOpen = expandedStages.has(group.stage);
+            return (
+              <section key={group.stage}>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedStages((current) => toggleSet(current, group.stage))}
+                    className="flex min-w-0 items-center gap-2 text-left text-sm font-semibold text-foreground hover:text-primary"
+                    aria-expanded={isStageOpen}
+                  >
+                    {isStageOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                    <span>{group.stage}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground ring-1 ring-border">
+                      {group.parents.length} 项目活动
+                    </span>
+                  </button>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>阶段计划</span>
+                    <input
+                      type="date"
+                      value={toDateInput(group.gate?.plannedStartDate ?? null)}
+                      onChange={(event) => updateStagePlan(group.stage, { plannedStartDate: event.target.value })}
+                      className="w-[7.5rem] rounded border bg-white px-2 py-1 text-xs"
+                      aria-label={`${group.stage} planned start`}
+                    />
+                    <span>-</span>
+                    <input
+                      type="date"
+                      value={toDateInput(group.gate?.plannedDueDate ?? null)}
+                      onChange={(event) => updateStagePlan(group.stage, { plannedDueDate: event.target.value })}
+                      className="w-[7.5rem] rounded border bg-white px-2 py-1 text-xs"
+                      aria-label={`${group.stage} planned finish`}
+                    />
                   </div>
-                );
-              })}
-            </section>
-          ))}
+                </div>
+                {isStageOpen && group.parents.map((parent) => {
+                  const isOpen = expanded.has(parent.id);
+                  return (
+                    <div key={parent.id} className="border-b last:border-b-0">
+                      <div className="grid grid-cols-[minmax(240px,1.5fr)_105px_105px_105px_118px_118px_105px] items-center px-4 py-3 text-sm">
+                        <button
+                          onClick={() => setExpanded((current) => toggleSet(current, parent.id))}
+                          className="flex min-w-0 items-center gap-2 text-left font-medium text-foreground hover:text-primary"
+                        >
+                          {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                          <span className="truncate">{parent.projectTaskName}</span>
+                        </button>
+                        <StatusBadge status={parent.status} labels={PARENT_STATUS_LABEL} />
+                        <div className="pr-4">
+                          <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                            <div className="h-full rounded-full bg-primary" style={{ width: `${parent.progressPercent}%` }} />
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">{parent.progressPercent}%</div>
+                        </div>
+                        <div className="flex gap-1">
+                          {parent.hasBlocked && <RiskBadge label="阻塞" tone="red" />}
+                          {parent.hasOverdue && <RiskBadge label="逾期" tone="amber" />}
+                          {!parent.hasBlocked && !parent.hasOverdue && <span className="text-xs text-muted-foreground">无</span>}
+                        </div>
+                        <input
+                          type="date"
+                          value={toDateInput(parent.plannedStartDate)}
+                          onChange={(event) => updateParentPlan(parent, { plannedStartDate: event.target.value })}
+                          className="w-28 rounded border px-2 py-1 text-xs"
+                        />
+                        <input
+                          type="date"
+                          value={toDateInput(parent.plannedDueDate)}
+                          onChange={(event) => updateParentPlan(parent, { plannedDueDate: event.target.value })}
+                          className="w-28 rounded border px-2 py-1 text-xs"
+                        />
+                        <div className="text-xs text-muted-foreground">
+                          {formatDate(parent.updatedAt)}
+                        </div>
+                      </div>
+                      {isOpen && (
+                        <ChildTable
+                          parent={parent}
+                          selectedIds={selectedChildIds}
+                          onSelect={setSelectedChildIds}
+                          onOpenChild={openChild}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })}
         </div>
 
         <div className="mt-6 rounded-md border border-border bg-white p-4 shadow-sm">
