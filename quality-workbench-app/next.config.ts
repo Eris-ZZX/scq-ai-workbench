@@ -1,6 +1,20 @@
+import os from 'node:os';
 import type { NextConfig } from 'next';
 
-const allowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? '172.17.137.235')
+function localIpv4Addresses() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((item): item is os.NetworkInterfaceInfo => Boolean(item && item.family === 'IPv4' && !item.internal))
+    .map((item) => item.address);
+}
+
+const defaultDevOrigins = [
+  'localhost',
+  '127.0.0.1',
+  ...localIpv4Addresses(),
+];
+
+const allowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? defaultDevOrigins.join(','))
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);

@@ -114,6 +114,9 @@ export async function canMaintainActivityChild(params: {
     where: { userId: params.session.sub },
     include: { positionRole: { select: { code: true, roleGroup: true } } },
   });
+  if (child.responsibleRoleId) {
+    return { allowed: userPosition?.positionRoleId === child.responsibleRoleId, child };
+  }
   const userRole = userPosition?.positionRole;
   const roleMatches = userRole?.code === child.roleGroup || userRole?.roleGroup === child.roleGroup;
   return { allowed: Boolean(roleMatches), child };

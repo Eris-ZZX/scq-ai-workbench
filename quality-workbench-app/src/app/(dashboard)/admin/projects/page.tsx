@@ -6,7 +6,7 @@ import { ProjectActivityEditor } from './project-activity-editor';
 
 type PositionBinding = null | {
   positionRoleId: string;
-  positionRole: { id: string; code?: string; name: string; roleName?: string | null };
+  positionRole: { id: string; code?: string; name: string; roleName?: string | null; roleGroup?: string };
 };
 
 type ProjectMember = {
@@ -88,6 +88,15 @@ function displayUser(user?: { username: string }) {
 
 function userRoleName(user: { positionBinding: PositionBinding }) {
   return user.positionBinding?.positionRole.roleName ?? user.positionBinding?.positionRole.code ?? user.positionBinding?.positionRole.name ?? '';
+}
+
+function userRoleGroup(user: { positionBinding: PositionBinding }) {
+  const role = user.positionBinding?.positionRole;
+  return role?.roleGroup ?? role?.name ?? role?.code ?? userRoleName(user);
+}
+
+function userRoleLabel(user: { positionBinding: PositionBinding }) {
+  return userRoleName(user) || '未绑定角色';
 }
 
 function formatTemplateVersion(version: ActivityTemplate['version']) {
@@ -174,7 +183,7 @@ export default function AdminProjectsPage() {
   const rolePools = useMemo(
     () => projectRoleNames.map((roleName) => ({
       roleName,
-      users: activeUsers.filter((user) => userRoleName(user) === roleName),
+      users: activeUsers.filter((user) => userRoleGroup(user) === roleName || userRoleName(user) === roleName),
     })),
     [activeUsers],
   );
@@ -251,13 +260,13 @@ export default function AdminProjectsPage() {
   function selectedUserIdsForRole(roleName: ProjectRoleName) {
     return new Set(
       (selectedProject?.members ?? [])
-        .filter((member) => userRoleName(member.user) === roleName)
+        .filter((member) => userRoleGroup(member.user) === roleName || userRoleName(member.user) === roleName)
         .map((member) => member.userId),
     );
   }
 
   function selectedMembersForRole(roleName: ProjectRoleName) {
-    return (selectedProject?.members ?? []).filter((member) => userRoleName(member.user) === roleName);
+    return (selectedProject?.members ?? []).filter((member) => userRoleGroup(member.user) === roleName || userRoleName(member.user) === roleName);
   }
 
   async function syncRoleMembers(roleName: ProjectRoleName, userIds: string[]) {
@@ -422,7 +431,10 @@ export default function AdminProjectsPage() {
                       return (
                         <div key={pool.roleName} className="rounded border border-border bg-white">
                           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                            <div className="text-sm font-semibold">{pool.roleName}</div>
+                            <div>
+                              <div className="text-sm font-semibold">{pool.roleName} 分组</div>
+                              <div className="mt-0.5 text-xs text-muted-foreground">{selectedMembers.length} / {pool.users.length} 人</div>
+                            </div>
                             <div className="flex items-center gap-2">
                               <button
                                 className={actionButton()}
@@ -436,7 +448,10 @@ export default function AdminProjectsPage() {
                           <div className="max-h-48 overflow-auto p-2">
                             {selectedMembers.map((member) => (
                               <div key={member.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-ws-content-bg">
-                                <span className="min-w-0 flex-1 truncate">{displayUser(member.user)}</span>
+                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                  <span className="truncate">{displayUser(member.user)}</span>
+                                  <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-muted-foreground">{userRoleLabel(member.user)}</span>
+                                </div>
                                 <button
                                   className={dangerButton()}
                                   onClick={() => removeRoleMember(pool.roleName, member.userId)}
@@ -533,7 +548,7 @@ export default function AdminProjectsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-lg rounded-lg border border-border bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <div className="text-sm font-semibold">增加 {memberDialog.roleName} 成员</div>
+              <div className="text-sm font-semibold">增加 {memberDialog.roleName} 分组成员</div>
               <button className={actionButton()} onClick={() => setMemberDialog(null)} disabled={saving}>关闭</button>
             </div>
             <div className="space-y-4 p-4">
@@ -541,7 +556,7 @@ export default function AdminProjectsPage() {
                 className={fieldClass('h-9 w-full')}
                 value={memberDialog.search}
                 onChange={(event) => setMemberDialog((current) => current ? { ...current, search: event.target.value } : current)}
-                placeholder="搜索账号，不输入则显示全部可增加人员"
+                placeholder="搜索账号或角色，不输入则显示全部可增加人员"
                 disabled={saving}
               />
 
@@ -553,7 +568,8 @@ export default function AdminProjectsPage() {
                   .filter((user) => !selected.has(user.id))
                   .filter((user) => (
                     !keyword ||
-                    user.username.toLowerCase().includes(keyword)
+                    user.username.toLowerCase().includes(keyword) ||
+                    userRoleLabel(user).toLowerCase().includes(keyword)
                   ));
                 return (
                   <div className="max-h-72 overflow-auto rounded border border-border p-2">
@@ -566,7 +582,10 @@ export default function AdminProjectsPage() {
                           onChange={(event) => toggleDialogUser(user.id, event.target.checked)}
                           disabled={saving}
                         />
-                        <span className="min-w-0 flex-1 truncate">{displayUser(user)}</span>
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
+                          <span className="truncate">{displayUser(user)}</span>
+                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-muted-foreground">{userRoleLabel(user)}</span>
+                        </span>
                       </label>
                     ))}
                     {availableUsers.length === 0 && (

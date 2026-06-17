@@ -58,7 +58,7 @@ function projectSelect() {
             positionBinding: {
               select: {
                 positionRoleId: true,
-                positionRole: { select: { id: true, code: true, name: true, roleName: true } },
+                positionRole: { select: { id: true, code: true, name: true, roleName: true, roleGroup: true } },
               },
             },
           },
@@ -77,23 +77,24 @@ async function getProjects(access: ProjectAdminAccess) {
   });
 }
 
-async function getActivePositionRole(roleName: string) {
-  return prisma.positionRole.findFirst({
-    where: { OR: [{ roleName }, { code: roleName }, { name: roleName }], isActive: true },
+async function getActivePositionRoles(roleName: string) {
+  return prisma.positionRole.findMany({
+    where: { OR: [{ roleName }, { code: roleName }, { name: roleName }, { roleGroup: roleName }], isActive: true },
     select: { id: true },
   });
 }
 
 async function validateRoleUsers(roleName: string, userIds: string[]) {
-  const positionRole = await getActivePositionRole(roleName);
-  if (!positionRole) return { error: `角色 ${roleName} 未启用或不存在` as const };
+  const positionRoles = await getActivePositionRoles(roleName);
+  const positionRoleIds = positionRoles.map((role) => role.id);
+  if (positionRoleIds.length === 0) return { error: `角色 ${roleName} 未启用或不存在` as const };
 
   const selectedUsers = userIds.length > 0
     ? await prisma.user.findMany({
         where: {
           id: { in: userIds },
           status: 'active',
-          positionBinding: { positionRoleId: positionRole.id },
+          positionBinding: { positionRoleId: { in: positionRoleIds } },
         },
         select: { id: true },
       })
@@ -102,7 +103,7 @@ async function validateRoleUsers(roleName: string, userIds: string[]) {
     return { error: `请选择启用状态且角色为 ${roleName} 的用户` as const };
   }
 
-  return { positionRole };
+  return { positionRoleIds };
 }
 
 export async function GET() {
@@ -226,18 +227,16 @@ export async function PATCH(request: Request) {
       if (!isProjectRoleName(roleName)) {
         return NextResponse.json({ error: '项目成员只支持 NPQ、PQE、SQE、FAE、RAM、QCM 六类角色' }, { status: 400 });
       }
-      const positionRole = await prisma.positionRole.findFirst({
-        where: { OR: [{ roleName }, { code: roleName }, { name: roleName }], isActive: true },
-        select: { id: true },
-      });
-      if (!positionRole) return NextResponse.json({ error: `角色 ${roleName} 未启用或不存在` }, { status: 400 });
+      const positionRoles = await getActivePositionRoles(roleName);
+      const positionRoleIds = positionRoles.map((role) => role.id);
+      if (positionRoleIds.length === 0) return NextResponse.json({ error: `角色 ${roleName} 未启用或不存在` }, { status: 400 });
 
       const selectedUsers = userIds.length > 0
         ? await prisma.user.findMany({
             where: {
               id: { in: userIds },
               status: 'active',
-              positionBinding: { positionRoleId: positionRole.id },
+              positionBinding: { positionRoleId: { in: positionRoleIds } },
             },
             select: { id: true },
           })
@@ -250,7 +249,7 @@ export async function PATCH(request: Request) {
         const existingMembers = await tx.projectMember.findMany({
           where: {
             projectId,
-            user: { positionBinding: { positionRoleId: positionRole.id } },
+            user: { positionBinding: { positionRoleId: { in: positionRoleIds } } },
           },
           select: { userId: true },
         });
@@ -259,7 +258,7 @@ export async function PATCH(request: Request) {
         if (removedUserIds.length > 0) {
           await tx.projectMember.deleteMany({ where: { projectId, userId: { in: removedUserIds } } });
         }
-        await tx.projectPositionAssignment.deleteMany({ where: { projectId, positionRoleId: positionRole.id } });
+        await tx.projectPositionAssignment.deleteMany({ where: { projectId, positionRoleId: { in: positionRoleIds } } });
 
         for (const userId of userIds) {
           await tx.projectMember.upsert({

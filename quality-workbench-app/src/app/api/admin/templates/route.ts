@@ -141,6 +141,41 @@ function chunk<T>(items: T[], size: number) {
   return chunks;
 }
 
+function roleDisplayName(role: { code: string; name: string; roleName: string | null; roleGroup: string }) {
+  return role.roleName?.trim() || role.name || role.code || role.roleGroup;
+}
+
+async function getResponsibleRoleIdByOwnerRole(
+  client: TemplateWriteClient,
+  children: TemplateChildInput[],
+) {
+  const ownerRoleNames = Array.from(new Set(children.map((child) => child.ownerRoleName).filter(Boolean)));
+  const roleGroups = Array.from(new Set(children.map((child) => child.roleGroup).filter(Boolean)));
+  const roles = ownerRoleNames.length || roleGroups.length
+    ? await client.positionRole.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            { roleName: { in: ownerRoleNames } },
+            { code: { in: ownerRoleNames } },
+            { name: { in: ownerRoleNames } },
+            { roleGroup: { in: roleGroups } },
+          ],
+        },
+        select: { id: true, code: true, name: true, roleName: true, roleGroup: true },
+      })
+    : [];
+  const exact = new Map<string, string>();
+  const fallback = new Map<string, string>();
+  for (const role of roles) {
+    exact.set(roleDisplayName(role), role.id);
+    exact.set(role.code, role.id);
+    if (!fallback.has(role.roleGroup)) fallback.set(role.roleGroup, role.id);
+    if (!fallback.has(role.name)) fallback.set(role.name, role.id);
+  }
+  return (child: TemplateChildInput) => exact.get(child.ownerRoleName) ?? fallback.get(child.roleGroup) ?? null;
+}
+
 async function getTemplateCenterView() {
   const sets = await prisma.activityTemplateSet.findMany({
     include: {
@@ -263,13 +298,10 @@ async function copyVersionStructure(client: TemplateWriteClient, sourceVersionId
 }
 
 async function createVersionStructure(client: TemplateWriteClient, targetVersionId: string, stages: TemplateStageInput[]) {
-  const roleCodes = Array.from(new Set(stages.flatMap((stage) => (
-    stage.parents.flatMap((parent) => parent.children.map((child) => child.roleGroup))
-  ))));
-  const roles = roleCodes.length
-    ? await client.positionRole.findMany({ where: { code: { in: roleCodes } }, select: { id: true, code: true } })
-    : [];
-  const roleIdByCode = new Map(roles.map((role) => [role.code, role.id]));
+  const resolveRoleId = await getResponsibleRoleIdByOwnerRole(
+    client,
+    stages.flatMap((stage) => stage.parents.flatMap((parent) => parent.children)),
+  );
 
   for (const stage of stages) {
     const createdStage = await client.activityTemplateStage.create({
@@ -304,7 +336,7 @@ async function createVersionStructure(client: TemplateWriteClient, targetVersion
             title: child.title,
             ownerRoleName: child.ownerRoleName,
             roleGroup: child.roleGroup,
-            responsibleRoleId: roleIdByCode.get(child.roleGroup),
+            responsibleRoleId: resolveRoleId(child),
             deliverableName: child.deliverableName,
             requiresDeliverable: child.requiresDeliverable,
             requiresAttachment: child.requiresDeliverable,

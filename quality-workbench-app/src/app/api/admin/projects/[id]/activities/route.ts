@@ -48,6 +48,41 @@ function cleanOptional(value: unknown) {
   return text || null;
 }
 
+function roleDisplayName(role: { code: string; name: string; roleName: string | null; roleGroup: string }) {
+  return role.roleName?.trim() || role.name || role.code || role.roleGroup;
+}
+
+async function buildResponsibleRoleResolver(
+  tx: Prisma.TransactionClient,
+  children: NormalizedParent['children'],
+) {
+  const ownerRoles = Array.from(new Set(children.map((child) => child.ownerRole).filter(Boolean)));
+  const roleGroups = Array.from(new Set(children.map((child) => child.roleGroup).filter(Boolean)));
+  const positionRoles = ownerRoles.length || roleGroups.length
+    ? await tx.positionRole.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            { roleName: { in: ownerRoles } },
+            { code: { in: ownerRoles } },
+            { name: { in: ownerRoles } },
+            { roleGroup: { in: roleGroups } },
+          ],
+        },
+        select: { id: true, code: true, name: true, roleName: true, roleGroup: true },
+      })
+    : [];
+  const exact = new Map<string, string>();
+  const fallback = new Map<string, string>();
+  for (const role of positionRoles) {
+    exact.set(roleDisplayName(role), role.id);
+    exact.set(role.code, role.id);
+    if (!fallback.has(role.roleGroup)) fallback.set(role.roleGroup, role.id);
+    if (!fallback.has(role.name)) fallback.set(role.name, role.id);
+  }
+  return (child: NormalizedParent['children'][number]) => exact.get(child.ownerRole) ?? fallback.get(child.roleGroup) ?? null;
+}
+
 async function checkProjectManager(projectId: string) {
   const session = await getSession();
   if (!session) return { error: '未登录', status: 401 } as const;
@@ -168,18 +203,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       const invalidParentId = Array.from(incomingParentIds).find((parentId) => !existingParentIds.has(parentId));
       if (invalidParentId) throw new Error('INVALID_PARENT_ID');
 
-      const ownerRoles = Array.from(new Set(parents.flatMap((parent) => parent.children.map((child) => child.ownerRole))));
-      const positionRoles = ownerRoles.length > 0
-        ? await tx.positionRole.findMany({
-            where: { isActive: true, OR: [{ code: { in: ownerRoles } }, { name: { in: ownerRoles } }] },
-            select: { id: true, code: true, name: true },
-          })
-        : [];
-      const positionRoleByName = new Map<string, string>();
-      for (const role of positionRoles) {
-        positionRoleByName.set(role.code, role.id);
-        positionRoleByName.set(role.name, role.id);
-      }
+      const resolveRoleId = await buildResponsibleRoleResolver(
+        tx,
+        parents.flatMap((parent) => parent.children),
+      );
 
       await tx.projectActivityParent.deleteMany({
         where: { projectId, id: { notIn: Array.from(incomingParentIds) } },
@@ -221,7 +248,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             thirdLevelPlan: child.thirdLevelPlan,
             ownerRole: child.ownerRole,
             roleGroup: child.roleGroup,
-            responsibleRoleId: positionRoleByName.get(child.ownerRole) ?? null,
+            responsibleRoleId: resolveRoleId(child),
             requiresDeliverable: child.requiresDeliverable,
             requiresAttachment: child.requiresDeliverable,
             requiresNote: !child.requiresDeliverable,

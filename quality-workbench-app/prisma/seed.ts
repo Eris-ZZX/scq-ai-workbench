@@ -8,17 +8,34 @@ const templatePath = path.resolve(process.cwd(), 'prisma', 'quality-activity-tem
 const TEST_PASSWORD_HASH = '$2b$10$zvMa9qFDxYK1MsTOaKbR6e6Kl6rRhV7L1lY6Zz0zxbDL17yWzCZK6';
 
 const positionRoleSeeds = [
-  ['pos-npq', 'NPQ', 'NPQ', 'New Product Quality owner', 1],
-  ['pos-pqe', 'PQE', 'PQE', 'Process Quality Engineering', 2],
-  ['pos-sqe', 'SQE', 'SQE', 'Supplier Quality Engineering', 3],
-  ['pos-fae', 'FAE', 'FAE', 'Field Application Engineering', 4],
-  ['pos-ram', 'RAM', 'RAM', 'Reliability and Maintainability', 5],
-  ['pos-qcm', 'QCM', 'QCM', 'Quality Control Management', 6],
-  ['pos-manager', 'MANAGER', '管理者', 'Business read-only manager', 7],
+  ['pos-npq', 'NPQ', 'NPQ', 'NPQ', 'NPQ', 'New Product Quality owner', 1],
+  ['pos-pqe', 'PQE', 'PQE', 'PQE', 'PQE', 'Process Quality Engineering', 2],
+  ['pos-sqe', 'SQE', 'SQE', 'SQE-塑胶', 'SQE', 'Supplier Quality Engineering - plastic', 3],
+  ['pos-sqe-metal', 'SQE-METAL', 'SQE', 'SQE-五金', 'SQE', 'Supplier Quality Engineering - metal', 4],
+  ['pos-sqe-smt', 'SQE-SMT', 'SQE', 'SQE-SMT代表', 'SQE', 'Supplier Quality Engineering - SMT', 5],
+  ['pos-sqe-packaging', 'SQE-PACKAGING', 'SQE', 'SQE-包材', 'SQE', 'Supplier Quality Engineering - packaging', 6],
+  ['pos-sqe-custom-electronics', 'SQE-CUSTOM-ELECTRONICS', 'SQE', 'SQE-定制电子代表', 'SQE', 'Supplier Quality Engineering - custom electronics', 7],
+  ['pos-sqe-silicone', 'SQE-SILICONE', 'SQE', 'SQE-硅胶', 'SQE', 'Supplier Quality Engineering - silicone', 8],
+  ['pos-fae', 'FAE', 'FAE', 'FAE', 'FAE', 'Field Application Engineering', 9],
+  ['pos-ram', 'RAM', 'RAM', 'RAM', 'RAM', 'Reliability and Maintainability', 10],
+  ['pos-qcm', 'QCM', 'QCM', 'QCM', 'QCM', 'Quality Control Management', 11],
+  ['pos-manager', 'MANAGER', '管理者', '管理者', 'MANAGER', 'Business read-only manager', 12],
 ] as const;
 
 function positionRoleId(roleGroup: string) {
   return `pos-${roleGroup.trim().toLowerCase()}`;
+}
+
+function responsiblePositionRoleId(ownerRole: string, roleGroup: string) {
+  const exact: Record<string, string> = {
+    'SQE-塑胶': 'pos-sqe',
+    'SQE-五金': 'pos-sqe-metal',
+    'SQE-SMT代表': 'pos-sqe-smt',
+    'SQE-包材': 'pos-sqe-packaging',
+    'SQE-定制电子代表': 'pos-sqe-custom-electronics',
+    'SQE-硅胶': 'pos-sqe-silicone',
+  };
+  return exact[ownerRole.trim()] ?? positionRoleId(roleGroup);
 }
 
 type QualityActivityTemplateRow = {
@@ -87,7 +104,7 @@ async function main() {
   console.log('  ✓ Stage templates: TR1→TR6');
 
   // ── 预注册 MVP 功能组件 ──
-  for (const [id, code, name, description, sortOrder] of positionRoleSeeds) {
+  for (const [id, code, name, roleName, roleGroup, description, sortOrder] of positionRoleSeeds) {
     await executeWithRetry(
       `INSERT INTO PositionRole (id, code, name, roleName, roleGroup, description, isActive, sortOrder, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
@@ -99,7 +116,7 @@ async function main() {
          isActive=1,
          sortOrder=excluded.sortOrder,
          updatedAt=datetime('now')`,
-      [id, code, name, name, code, description, sortOrder],
+      [id, code, name, roleName, roleGroup, description, sortOrder],
     );
   }
   console.log(`  F3 position roles: ${positionRoleSeeds.length} seeded`);
@@ -411,7 +428,7 @@ async function seedStructuredActivityTemplate(templates: QualityActivityTemplate
       );
     }
 
-    const roleId = positionRoleId(row.roleGroup);
+    const roleId = responsiblePositionRoleId(row.ownerRole, row.roleGroup);
     await executeWithRetry(
       `INSERT INTO ActivityTemplateChild
          (id, parentId, title, ownerRoleName, roleGroup, responsibleRoleId,
@@ -486,9 +503,8 @@ async function seedNpqActionPermissions() {
     );
   }
 
-  for (const [, code] of positionRoleSeeds) {
+  for (const [roleId, code] of positionRoleSeeds) {
     if (code === 'NPQ' || code === 'MANAGER') continue;
-    const roleId = positionRoleId(code);
     for (const actionKey of executorActions) {
       await executeWithRetry(
         `INSERT INTO NpqActionPermission (id, actionKey, positionRoleId, canExecute, scope, description, createdAt, updatedAt)
@@ -556,7 +572,7 @@ async function seedProjectActivities(
         row.thirdLevelPlan,
         row.ownerRole,
         row.roleGroup,
-        positionRoleId(row.roleGroup),
+        responsiblePositionRoleId(row.ownerRole, row.roleGroup),
         row.requiresDeliverable ? 1 : 0,
         row.requiresDeliverable ? 1 : 0,
         row.requiresDeliverable ? 0 : 1,
