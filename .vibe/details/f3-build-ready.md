@@ -1,6 +1,6 @@
-# F3 Build-Ready SPEC
+# F3 Build-Ready 参考
 
-> 用途：F3 实现前按需读取。根 `plan.md` 只保留摘要和 checklist。
+> 用途：F3 阶段实现参考，保留当时的模块设计、边界和验收口径。它不是正式 PRD & SPEC；正式 PRD & SPEC 只看 `00-docs/strategy/scq-ai-strategy-technical-plan.md`。
 
 ## 1. 定位
 

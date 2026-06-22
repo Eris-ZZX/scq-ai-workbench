@@ -337,7 +337,7 @@ function offsetDate(days: number) {
   return date;
 }
 
-export async function getProjectActivityView(projectId: string) {
+export async function getProjectActivityView(projectId: string, options?: { attachmentMode?: 'summary' | 'detail' }) {
   await ensureProjectActivities(projectId);
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -346,16 +346,15 @@ export async function getProjectActivityView(projectId: string) {
   if (project && project.status !== 'completed' && project.stageGateStatus !== 'completed') {
     await activateProjectStageActivities(projectId, project.currentStage);
   }
-  const parents = await prisma.projectActivityParent.findMany({
-    where: { projectId },
-    select: { id: true },
-  });
-  await Promise.all(parents.map((parent) => refreshParentSummary(prisma, parent.id)));
   return prisma.projectActivityParent.findMany({
     where: { projectId },
     include: {
       children: {
-        include: { attachments: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } } },
+        include: {
+          attachments: options?.attachmentMode === 'summary'
+            ? { where: { deletedAt: null }, select: { id: true } }
+            : { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } },
+        },
         orderBy: [{ sortOrder: 'asc' }],
       },
     },

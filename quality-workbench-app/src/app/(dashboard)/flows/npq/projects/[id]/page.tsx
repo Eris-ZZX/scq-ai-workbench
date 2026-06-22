@@ -119,6 +119,7 @@ type WorkspaceData = {
   project: Project;
   parents: ActivityParent[];
   events: ActivityEvent[];
+  stageGates?: StageGate[];
 };
 
 type RoleContext = {
@@ -163,10 +164,9 @@ export default function ProjectWorkspacePage() {
   const loadWorkspace = useCallback(async () => {
     setErrorMsg('');
     try {
-      const [activityRes, permissionRes, gateRes, workbenchRes] = await Promise.all([
-        fetch(`/api/npq/projects/${id}/activities`, { cache: 'no-store' }),
+      const [activityRes, permissionRes, workbenchRes] = await Promise.all([
+        fetch(`/api/npq/projects/${id}/activities?view=workspace`, { cache: 'no-store' }),
         fetch(`/api/npq/permissions?projectId=${id}&actions=stage_gate.pass`),
-        fetch(`/api/npq/projects/${id}/stage-gates`, { cache: 'no-store' }),
         fetch(`/api/npq/workbench?projectId=${id}`, { cache: 'no-store' }),
       ]);
       if (!activityRes.ok) {
@@ -175,14 +175,11 @@ export default function ProjectWorkspacePage() {
       }
       const activityData = await activityRes.json();
       setWorkspace(activityData);
+      setStageGates(activityData.stageGates ?? []);
 
       if (permissionRes.ok) {
         const permissions = await permissionRes.json();
         setCanPassStageGate(Boolean(permissions['stage_gate.pass']));
-      }
-      if (gateRes.ok) {
-        const gateData = await gateRes.json();
-        setStageGates(gateData.gates ?? []);
       }
       if (workbenchRes.ok) {
         const workbenchData = await workbenchRes.json();

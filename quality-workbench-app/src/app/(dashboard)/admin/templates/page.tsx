@@ -79,6 +79,32 @@ function formatVersionTime(version?: TemplateVersion | null) {
   return formatDate(version.publishedAt ?? version.createdAt);
 }
 
+function toTemplatePayload(stages: TemplateStage[]) {
+  return stages.map((stage, stageIndex) => ({
+    name: stage.name,
+    plannedStartOffsetDays: stage.plannedStartOffsetDays ?? null,
+    plannedDueOffsetDays: stage.plannedDueOffsetDays ?? null,
+    sortOrder: stageIndex + 1,
+    parents: stage.parents.map((parent, parentIndex) => ({
+      name: parent.name,
+      description: parent.description ?? null,
+      closureStandard: parent.closureStandard ?? null,
+      plannedStartOffsetDays: parent.plannedStartOffsetDays ?? null,
+      plannedOffsetDays: parent.plannedOffsetDays ?? null,
+      sortOrder: parentIndex + 1,
+      children: parent.children.map((child, childIndex) => ({
+        title: child.title,
+        ownerRoleName: child.ownerRoleName || child.roleGroup,
+        roleGroup: child.roleGroup || child.ownerRoleName,
+        deliverableName: child.deliverableName ?? null,
+        requiresDeliverable: child.requiresDeliverable,
+        isRequired: child.isRequired,
+        sortOrder: childIndex + 1,
+      })),
+    })),
+  }));
+}
+
 export default function AdminTemplatesPage() {
   const [templates, setTemplates] = useState<TemplateSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState('');
@@ -227,7 +253,7 @@ export default function AdminTemplatesPage() {
       description: draft.description,
       isActive: draft.isActive,
       changeNotes,
-      stages: draft.stages,
+      stages: toTemplatePayload(draft.stages),
     });
     if (saved?.id) {
       setEditMode(false);

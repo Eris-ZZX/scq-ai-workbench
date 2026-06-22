@@ -17,6 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     status?: string;
     isNotApplicable?: boolean;
     notApplicableReason?: string | null;
+    plannedDueDateOverride?: string | null;
     assigneeUserId?: string | null;
   };
   try {
@@ -44,6 +45,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       data.completedAt = null;
       data.isBlocked = false;
     }
+  }
+  if ('plannedDueDateOverride' in body) {
+    data.plannedDueDateOverride = parseDate(body.plannedDueDateOverride);
   }
   if ('assigneeUserId' in body) data.assigneeUserId = body.assigneeUserId || null;
 
@@ -73,4 +77,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
 
   return NextResponse.json(result);
+}
+
+function parseDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }

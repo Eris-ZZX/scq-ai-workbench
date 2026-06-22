@@ -1,7 +1,7 @@
 # F2 完成摘要
 
 > 用途：按需查看 F2 已完成范围，避免根 `plan.md` 长期携带大段历史细节。
-> 完整旧版计划已归档：`.vibe/archive/plan-full-before-simplification-20260611.md`
+> 正式 PRD & SPEC 只看 `00-docs/strategy/scq-ai-strategy-technical-plan.md`。
 
 ## 目标
 

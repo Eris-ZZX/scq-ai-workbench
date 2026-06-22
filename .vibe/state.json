@@ -1,15 +1,15 @@
 {
   "schemaVersion": "1.0.0",
   "projectRoot": "D:\\Users\\vox1814\\Desktop\\AIspace\\5.Huge-App\\260608-QEworkspace",
-  "updatedAt": "2026-06-17T11:28:18+08:00",
-  "lastSessionId": "session-1781662024627",
+  "updatedAt": "2026-06-22T16:16:29+08:00",
+  "lastSessionId": "session-1782115265307",
   "source": "codex",
   "status": "in_progress",
-  "currentTask": "F5 项目成员分组池展示优化",
+  "currentTask": "质量工程师日常整合工作台文档体系维护",
   "features": [
     {
       "id": "F1",
-      "title": "MVP版本",
+      "title": "MVP 版本",
       "status": "done",
       "steps": [
         {
@@ -154,7 +154,7 @@
     }
   ],
   "completedSteps": [
-    "MVP版本",
+    "MVP 版本",
     "新产品导入活动跟踪",
     "NPQ 活动流真实运转",
     "工作台可用性重构",
@@ -163,6 +163,6 @@
   "inProgressSteps": [],
   "pendingSteps": [],
   "blocker": "",
-  "lastAction": "项目成员列表和增加成员弹窗已改为单行横排展示账号与具体角色。",
-  "nextStep": "用户实测项目管理成员池：分组池、增加弹窗候选人、账号和具体角色的单行展示是否符合预期。"
+  "lastAction": "完成 00-docs 与旧归档计划整合：唯一正式 PRD & SPEC 固定为 00-docs/strategy/scq-ai-strategy-technical-plan.md，plan 仅保留控制面板和引用。",
+  "nextStep": "后续如需更新产品需求或技术规格，只修改 00-docs/strategy/scq-ai-strategy-technical-plan.md；Vibe plan 只同步背景、状态、边界和参考入口。"
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Edit3, Layers3, Trash2, X } from 'lucide-react';
 
@@ -115,6 +115,42 @@ export function cloneActivityStructure(stages: ActivityStructureStage[]): Activi
   }));
 }
 
+export function normalizeActivityStructure(stages: ActivityStructureStage[]): ActivityStructureStage[] {
+  const mergedStages = new Map<string, ActivityStructureStage>();
+
+  for (const stage of stages) {
+    const stageKey = stage.id || `stage:${stage.name}`;
+    const existingStage = mergedStages.get(stageKey);
+    if (existingStage) {
+      existingStage.parents.push(...stage.parents.map((parent) => ({
+        ...parent,
+        children: parent.children.map((child) => ({ ...child })),
+      })));
+      continue;
+    }
+    mergedStages.set(stageKey, {
+      ...stage,
+      parents: stage.parents.map((parent) => ({
+        ...parent,
+        children: parent.children.map((child) => ({ ...child })),
+      })),
+    });
+  }
+
+  return Array.from(mergedStages.values()).map((stage, stageIndex) => ({
+    ...stage,
+    sortOrder: stageIndex + 1,
+    parents: stage.parents.map((parent, parentIndex) => ({
+      ...parent,
+      sortOrder: parentIndex + 1,
+      children: parent.children.map((child, childIndex) => ({
+        ...child,
+        sortOrder: childIndex + 1,
+      })),
+    })),
+  }));
+}
+
 export function ActivityStructureEditor({
   stages,
   editable,
@@ -136,6 +172,7 @@ export function ActivityStructureEditor({
 }) {
   const [itemDialog, setItemDialog] = useState<TemplateItemDialog | null>(null);
   const [positionRoles, setPositionRoles] = useState<PositionRoleOption[]>(fallbackRoleOptions);
+  const safeStages = useMemo(() => normalizeActivityStructure(stages), [stages]);
   const roleOptions = useMemo(
     () => positionRoles.map((role) => ({
       value: roleDisplayName(role),
@@ -159,7 +196,7 @@ export function ActivityStructureEditor({
   }, []);
 
   function updateStages(updater: (current: ActivityStructureStage[]) => ActivityStructureStage[]) {
-    onChange(updater(stages));
+    onChange(normalizeActivityStructure(updater(safeStages)));
   }
 
   function updateStage(stageId: string, fields: Partial<Pick<ActivityStructureStage, 'name' | 'plannedStartDate' | 'plannedDueDate'>>) {
@@ -285,8 +322,11 @@ export function ActivityStructureEditor({
       : stage));
   }
 
-  function submitItemDialog() {
-    if (!itemDialog) return;
+  function submitItemDialog(formData?: FormData) {
+    const currentDialog = itemDialog;
+    if (!currentDialog) return;
+    {
+      const itemDialog = formData ? dialogFromForm(currentDialog, formData, roleOptions) : currentDialog;
 
     if (itemDialog.kind === 'stage') {
       const name = itemDialog.name.trim();
@@ -393,6 +433,7 @@ export function ActivityStructureEditor({
         : stage));
     }
     setItemDialog(null);
+    }
   }
 
   return (
@@ -414,8 +455,8 @@ export function ActivityStructureEditor({
 
       <div className="max-h-[calc(100vh-170px)] overflow-auto p-4">
         <div className="space-y-3">
-          {stages.map((stage, stageIndex) => (
-            <details key={stage.id} className="rounded-lg border border-border bg-white">
+          {safeStages.map((stage, stageIndex) => (
+            <details key={`${stage.id}:${stageIndex}`} className="rounded-lg border border-border bg-white">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-3 [&::-webkit-details-marker]:hidden">
                 <div className="flex min-w-0 items-center gap-3">
                   <Layers3 className="h-4 w-4 shrink-0 text-ws-blue" />
@@ -447,7 +488,7 @@ export function ActivityStructureEditor({
                         event.stopPropagation();
                         moveStage(stage.id, 1);
                       }}
-                      disabled={saving || stageIndex === stages.length - 1}
+                      disabled={saving || stageIndex === safeStages.length - 1}
                       title="下移阶段"
                     >
                       <ArrowDown className="h-4 w-4" />
@@ -641,18 +682,24 @@ export function ActivityStructureEditor({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="space-y-4 p-4">
+            <form
+              className="space-y-4 p-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitItemDialog(new FormData(event.currentTarget));
+              }}
+            >
               {itemDialog.kind === 'stage' && (
                 <>
                   <label className="block text-xs font-medium text-muted-foreground">
                     阶段名称
                     <input
                       className={fieldClass('mt-1 h-9 w-full')}
-                      value={itemDialog.name}
-                      onChange={(event) => setItemDialog((current) => (current?.kind === 'stage' ? { ...current, name: event.target.value } : current))}
+                      name="name"
+                      defaultValue={itemDialog.name}
                     />
                   </label>
-                  {planMode === 'date' && <DateRangeFields dialog={itemDialog} onChange={setItemDialog} />}
+                  {planMode === 'date' && <DateRangeFields dialog={itemDialog} />}
                 </>
               )}
 
@@ -662,11 +709,11 @@ export function ActivityStructureEditor({
                     项目活动名称
                     <input
                       className={fieldClass('mt-1 h-9 w-full')}
-                      value={itemDialog.name}
-                      onChange={(event) => setItemDialog((current) => (current?.kind === 'parent' ? { ...current, name: event.target.value } : current))}
+                      name="name"
+                      defaultValue={itemDialog.name}
                     />
                   </label>
-                  {planMode === 'date' && <DateRangeFields dialog={itemDialog} onChange={setItemDialog} />}
+                  {planMode === 'date' && <DateRangeFields dialog={itemDialog} />}
                 </>
               )}
 
@@ -676,25 +723,16 @@ export function ActivityStructureEditor({
                     子任务名称
                     <input
                       className={fieldClass('mt-1 h-9 w-full')}
-                      value={itemDialog.title}
-                      onChange={(event) => setItemDialog((current) => (current?.kind === 'child' ? { ...current, title: event.target.value } : current))}
+                      name="title"
+                      defaultValue={itemDialog.title}
                     />
                   </label>
                   <label className="block text-xs font-medium text-muted-foreground">
                     责任角色
                     <select
                       className={fieldClass('mt-1 h-9 w-full')}
-                      value={itemDialog.ownerRoleName}
-                      onChange={(event) => {
-                        const selectedRole = roleOptions.find((role) => role.value === event.target.value);
-                        setItemDialog((current) => (current?.kind === 'child'
-                          ? {
-                            ...current,
-                            ownerRoleName: event.target.value,
-                            roleGroup: selectedRole?.roleGroup || current.roleGroup,
-                          }
-                          : current));
-                      }}
+                      name="ownerRoleName"
+                      defaultValue={itemDialog.ownerRoleName}
                     >
                       {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
                     </select>
@@ -703,25 +741,25 @@ export function ActivityStructureEditor({
                     交付件
                     <input
                       className={fieldClass('mt-1 h-9 w-full')}
-                      value={itemDialog.deliverableName}
-                      onChange={(event) => setItemDialog((current) => (current?.kind === 'child' ? { ...current, deliverableName: event.target.value } : current))}
+                      name="deliverableName"
+                      defaultValue={itemDialog.deliverableName}
                     />
                   </label>
                   <label className="inline-flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={itemDialog.requiresDeliverable}
-                      onChange={(event) => setItemDialog((current) => (current?.kind === 'child' ? { ...current, requiresDeliverable: event.target.checked } : current))}
+                      name="requiresDeliverable"
+                      defaultChecked={itemDialog.requiresDeliverable}
                     />
                     需要附件交付件
                   </label>
                 </>
               )}
-            </div>
-            <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-              <button className={iconButtonClass()} onClick={() => setItemDialog(null)} disabled={saving}>取消</button>
-              <button className={iconButtonClass(true)} onClick={submitItemDialog} disabled={saving}>保存</button>
-            </div>
+              <div className="-mx-4 -mb-4 flex justify-end gap-2 border-t border-border px-4 py-3">
+                <button type="button" className={iconButtonClass()} onClick={() => setItemDialog(null)} disabled={saving}>取消</button>
+                <button type="submit" className={iconButtonClass(true)} disabled={saving}>保存</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -733,12 +771,44 @@ function roleDisplayName(role: PositionRoleOption) {
   return role.roleName?.trim() || role.name || role.code;
 }
 
+function formText(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return typeof value === 'string' ? value : '';
+}
+
+function dialogFromForm(dialog: TemplateItemDialog, formData: FormData, roleOptions: Array<{ value: string; label: string; roleGroup: string }>): TemplateItemDialog {
+  if (dialog.kind === 'stage') {
+    return {
+      ...dialog,
+      name: formText(formData, 'name'),
+      plannedStartDate: formText(formData, 'plannedStartDate'),
+      plannedDueDate: formText(formData, 'plannedDueDate'),
+    };
+  }
+  if (dialog.kind === 'parent') {
+    return {
+      ...dialog,
+      name: formText(formData, 'name'),
+      plannedStartDate: formText(formData, 'plannedStartDate'),
+      plannedDueDate: formText(formData, 'plannedDueDate'),
+    };
+  }
+  const ownerRoleName = formText(formData, 'ownerRoleName');
+  const selectedRole = roleOptions.find((role) => role.value === ownerRoleName);
+  return {
+    ...dialog,
+    title: formText(formData, 'title'),
+    ownerRoleName,
+    roleGroup: selectedRole?.roleGroup || dialog.roleGroup,
+    deliverableName: formText(formData, 'deliverableName'),
+    requiresDeliverable: formData.has('requiresDeliverable'),
+  };
+}
+
 function DateRangeFields({
   dialog,
-  onChange,
 }: {
   dialog: Extract<TemplateItemDialog, { kind: 'stage' | 'parent' }>;
-  onChange: Dispatch<SetStateAction<TemplateItemDialog | null>>;
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -747,12 +817,8 @@ function DateRangeFields({
         <input
           type="date"
           className={fieldClass('mt-1 h-9 w-full')}
-          value={dialog.plannedStartDate}
-          onChange={(event) => onChange((current) => (
-            current?.kind === 'stage' || current?.kind === 'parent'
-              ? { ...current, plannedStartDate: event.target.value }
-              : current
-          ))}
+          name="plannedStartDate"
+          defaultValue={dialog.plannedStartDate}
         />
       </label>
       <label className="block text-xs font-medium text-muted-foreground">
@@ -760,12 +826,8 @@ function DateRangeFields({
         <input
           type="date"
           className={fieldClass('mt-1 h-9 w-full')}
-          value={dialog.plannedDueDate}
-          onChange={(event) => onChange((current) => (
-            current?.kind === 'stage' || current?.kind === 'parent'
-              ? { ...current, plannedDueDate: event.target.value }
-              : current
-          ))}
+          name="plannedDueDate"
+          defaultValue={dialog.plannedDueDate}
         />
       </label>
     </div>
