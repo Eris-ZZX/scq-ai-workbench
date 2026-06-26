@@ -4,9 +4,14 @@ import bcrypt from 'bcryptjs';
 
 const SALT_ROUNDS = 12;
 
+/** Dummy bcrypt hash for externally-authenticated users (DingTalk/LDAP).
+ *  Matches no real password — hash verification always gracefully fails. */
+export const DUMMY_HASH =
+  '$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
 /** 返回给客户端的安全 User 字段（不含 passwordHash） */
 const SAFE_USER_SELECT = {
-  id: true, username: true,
+  id: true, username: true, avatar: true,
   role: true, status: true, email: true,
   createdAt: true, updatedAt: true,
 } as const;

@@ -20,6 +20,7 @@ model User {
   username     String   @unique
   passwordHash String
   email        String?  @unique // 🔧 H8: 加唯一约束，防止重复邮箱
+  avatar       String?  // 头像 URL（钉钉扫码登录同步）
   role         String   @default("user") // "admin" | "user"
   status       String   @default("active") // 🔧 H10: "active" | "disabled"，支持软禁用
   createdAt    DateTime @default(now())

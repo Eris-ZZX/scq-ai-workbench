@@ -11,6 +11,14 @@ function hasParam(params: SearchParams, key: string, value: string) {
   return Array.isArray(current) ? current.includes(value) : current === value;
 }
 
+function dingtalkErrorMessage(params: SearchParams): string | null {
+  if (hasParam(params, 'error', 'dingtalk')) return '钉钉登录失败，请重试';
+  if (hasParam(params, 'error', 'dingtalk_csrf')) return '安全校验失败，请重新登录';
+  if (hasParam(params, 'error', 'dingtalk_token')) return '钉钉授权已过期，请重新扫码';
+  if (hasParam(params, 'error', 'dingtalk_disabled')) return '该钉钉账号已被禁用，请联系管理员';
+  return null;
+}
+
 export default async function LoginPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const session = await getSession();
   if (session) redirect('/workbench');
@@ -18,6 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
   const params = (await searchParams) ?? {};
   const registered = hasParam(params, 'registered', '1');
   const loginError = hasParam(params, 'error', '1');
+  const dtError = dingtalkErrorMessage(params);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ws-content-bg px-4">
@@ -31,6 +40,9 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
           )}
           {loginError && (
             <div className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">登录失败，请检查用户名和密码。</div>
+          )}
+          {dtError && (
+            <div className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{dtError}</div>
           )}
 
           <label className="mb-4 block">
@@ -62,6 +74,23 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
             登录
           </button>
         </form>
+
+        <div className="my-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">或</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        <a
+          href="/api/auth/dingtalk"
+          className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="12" fill="#0089FF" />
+            <path d="M18.5 7.5L10.5 15.5L5.5 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          钉钉扫码登录
+        </a>
 
         <div className="mt-5 rounded-md bg-muted/50 p-3">
           <div className="mb-2 text-xs font-medium text-muted-foreground">测试账号，点击直接登录</div>

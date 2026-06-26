@@ -1,10 +1,8 @@
 // POST /api/auth/login - user login (F2.S3)
 import { NextResponse } from 'next/server';
-import { findByUsername, verifyPassword } from '@/lib/db/auth';
+import { DUMMY_HASH, findByUsername, verifyPassword } from '@/lib/db/auth';
 import { createSession } from '@/platform/auth/auth.config';
 import { getRequestUrl } from '@/platform/auth/request-url';
-
-const DUMMY_HASH = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 type LoginBody = {
   username?: string;
