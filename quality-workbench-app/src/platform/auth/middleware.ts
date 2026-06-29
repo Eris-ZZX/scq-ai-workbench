@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
-import { AUTH_CONFIG, getSecretKey } from './auth.jwt';
+import { AUTH_CONFIG, COOKIE_NAME, getSecretKey } from './auth.jwt';
 import { getRequestUrl } from './request-url';
 
 // 无需认证即可访问的路径前缀
@@ -27,7 +27,7 @@ export async function authMiddleware(request: NextRequest) {
 
   const token = request.cookies.get(AUTH_CONFIG.cookieName)?.value;
 
-  // 🔧 CR1-2: API 路由返回 JSON 401 而非 HTML 重定向
+  // API 路由返回 JSON 401 而非 HTML 重定向
   const isApi = pathname.startsWith('/api/');
 
   if (!token) {
@@ -38,16 +38,15 @@ export async function authMiddleware(request: NextRequest) {
   try {
     const { payload } = await jwtVerify(token, getSecretKey());
 
-    // 🔧 将已验证的 payload 注入请求头，避免页面层重复验证
     const res = NextResponse.next();
-    res.headers.set('x-user-id', payload.sub as string);
-    res.headers.set('x-user-role', (payload.role as string) ?? 'user');
+    res.headers.set('x-user-id', encodeURIComponent(String(payload.sub ?? '')));
+    res.headers.set('x-user-role', encodeURIComponent(String(payload.role ?? 'user')));
 
     return res;
   } catch {
     if (isApi) return NextResponse.json({ error: '会话已过期' }, { status: 401 });
-    return NextResponse.redirect(getRequestUrl(request, '/login'));
+    const res = NextResponse.redirect(getRequestUrl(request, '/login'));
+    res.cookies.delete(COOKIE_NAME);
+    return res;
   }
 }
-
-// config re-exported from src/middleware.ts (Next.js requires inline config in same file)

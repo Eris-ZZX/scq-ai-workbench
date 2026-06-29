@@ -4,9 +4,21 @@ import { cookies, headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { AUTH_CONFIG, COOKIE_NAME, getSecretKey } from './auth.jwt';
 
-export { AUTH_CONFIG, getSecretKey } from './auth.jwt';
+export { AUTH_CONFIG, COOKIE_NAME, getSecretKey } from './auth.jwt';
 
 const revokedTokens = new Map<string, number>();
+
+type SessionCookie = {
+  name: string;
+  value: string;
+  options: {
+    httpOnly: true;
+    secure: boolean;
+    sameSite: 'lax';
+    maxAge: number;
+    path: '/';
+  };
+};
 
 async function isSecureRequest() {
   const hdrs = await headers();
@@ -29,7 +41,7 @@ export async function createSession(user: {
   id: string;
   username: string;
   role: string;
-}) {
+}): Promise<SessionCookie> {
   const authAt = Date.now();
   const token = await new SignJWT({
     sub: user.id,
@@ -44,13 +56,20 @@ export async function createSession(user: {
 
   const jar = await cookies();
   const secure = await isSecureRequest();
-  jar.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure,
-    sameSite: 'lax',
-    maxAge: AUTH_CONFIG.maxAge,
-    path: '/',
-  });
+  const sessionCookie = {
+    name: COOKIE_NAME,
+    value: token,
+    options: {
+      httpOnly: true,
+      secure,
+      sameSite: 'lax',
+      maxAge: AUTH_CONFIG.maxAge,
+      path: '/',
+    },
+  } satisfies SessionCookie;
+
+  jar.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
+  return sessionCookie;
 }
 
 export async function maybeRefreshSession(existing: {

@@ -73,19 +73,23 @@ export async function POST(request: Request) {
     return fail(formMode, request, '用户名或密码错误', 401);
   }
 
-  await createSession({
+  const sessionCookie = await createSession({
     id: user.id,
     username: user.username,
     role: user.role,
   });
 
   if (formMode) {
-    return NextResponse.redirect(getRequestUrl(request, '/workbench'), { status: 303 });
+    const response = NextResponse.redirect(getRequestUrl(request, '/workbench'), { status: 303 });
+    response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
+    return response;
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     id: user.id,
     username: user.username,
     role: user.role,
   });
+  response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
+  return response;
 }

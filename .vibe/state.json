@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
   "projectRoot": "D:\\Users\\vox1814\\Desktop\\AIspace\\5.Huge-App\\260608-QEworkspace",
-  "updatedAt": "2026-06-17T11:28:18+08:00",
-  "lastSessionId": "session-1781662024627",
+  "updatedAt": "2026-06-29T17:31:25+08:00",
+  "lastSessionId": "session-1782725071067",
   "source": "codex",
   "status": "in_progress",
-  "currentTask": "F5 项目成员分组池展示优化",
+  "currentTask": "F5 登录页测试账号快捷登录修复",
   "features": [
     {
       "id": "F1",
@@ -163,6 +163,6 @@
   "inProgressSteps": [],
   "pendingSteps": [],
   "blocker": "",
-  "lastAction": "项目成员列表和增加成员弹窗已改为单行横排展示账号与具体角色。",
-  "nextStep": "用户实测项目管理成员池：分组池、增加弹窗候选人、账号和具体角色的单行展示是否符合预期。"
+  "lastAction": "修复中文测试账号快捷登录停留登录页问题，并验证全部中文测试账号登录后可进入 /workbench。",
+  "nextStep": "用户在浏览器刷新登录页后实测所有测试账号快捷登录；如仍异常，优先清理浏览器旧 Cookie 后重试。"
 }
