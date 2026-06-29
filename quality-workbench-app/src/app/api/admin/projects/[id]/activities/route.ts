@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@/generated/prisma/client';
-import { getRoleGroup, refreshParentSummary } from '@/lib/db/activities';
+import { refreshParentSummary } from '@/lib/db/activities';
 import { canManageProject, getProjectAdminAccess } from '@/lib/db/project-admin-access';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
@@ -9,7 +9,6 @@ type ActivityChildInput = {
   id?: string;
   thirdLevelPlan?: string;
   ownerRole?: string;
-  roleGroup?: string;
   requiresDeliverable?: boolean;
   deliverableName?: string | null;
   sortOrder?: number;
@@ -32,7 +31,6 @@ type NormalizedParent = {
     id: string;
     thirdLevelPlan: string;
     ownerRole: string;
-    roleGroup: string;
     requiresDeliverable: boolean;
     deliverableName: string | null;
     sortOrder: number;
@@ -48,8 +46,8 @@ function cleanOptional(value: unknown) {
   return text || null;
 }
 
-function roleDisplayName(role: { code: string; name: string; roleName: string | null; roleGroup: string }) {
-  return role.roleName?.trim() || role.name || role.code || role.roleGroup;
+function roleDisplayName(role: { code: string; name: string; roleName: string | null }) {
+  return role.roleName?.trim() || role.name || role.code;
 }
 
 async function buildResponsibleRoleResolver(
@@ -57,8 +55,7 @@ async function buildResponsibleRoleResolver(
   children: NormalizedParent['children'],
 ) {
   const ownerRoles = Array.from(new Set(children.map((child) => child.ownerRole).filter(Boolean)));
-  const roleGroups = Array.from(new Set(children.map((child) => child.roleGroup).filter(Boolean)));
-  const positionRoles = ownerRoles.length || roleGroups.length
+  const positionRoles = ownerRoles.length
     ? await tx.positionRole.findMany({
         where: {
           isActive: true,
@@ -66,10 +63,9 @@ async function buildResponsibleRoleResolver(
             { roleName: { in: ownerRoles } },
             { code: { in: ownerRoles } },
             { name: { in: ownerRoles } },
-            { roleGroup: { in: roleGroups } },
           ],
         },
-        select: { id: true, code: true, name: true, roleName: true, roleGroup: true },
+        select: { id: true, code: true, name: true, roleName: true },
       })
     : [];
   const exact = new Map<string, string>();
@@ -77,10 +73,9 @@ async function buildResponsibleRoleResolver(
   for (const role of positionRoles) {
     exact.set(roleDisplayName(role), role.id);
     exact.set(role.code, role.id);
-    if (!fallback.has(role.roleGroup)) fallback.set(role.roleGroup, role.id);
     if (!fallback.has(role.name)) fallback.set(role.name, role.id);
   }
-  return (child: NormalizedParent['children'][number]) => exact.get(child.ownerRole) ?? fallback.get(child.roleGroup) ?? null;
+  return (child: NormalizedParent['children'][number]) => exact.get(child.ownerRole) ?? fallback.get(child.ownerRole) ?? null;
 }
 
 async function checkProjectManager(projectId: string) {
@@ -108,7 +103,6 @@ function projectActivitySelect() {
         id: true,
         thirdLevelPlan: true,
         ownerRole: true,
-        roleGroup: true,
         responsibleRoleId: true,
         status: true,
         requiresDeliverable: true,
@@ -174,7 +168,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             id: clean(child.id),
             thirdLevelPlan,
             ownerRole,
-            roleGroup: clean(child.roleGroup) || getRoleGroup(ownerRole),
             requiresDeliverable: Boolean(child.requiresDeliverable),
             deliverableName: cleanOptional(child.deliverableName),
             sortOrder: Number.isFinite(child.sortOrder) ? Number(child.sortOrder) : childIndex + 1,
@@ -247,7 +240,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           const childData = {
             thirdLevelPlan: child.thirdLevelPlan,
             ownerRole: child.ownerRole,
-            roleGroup: child.roleGroup,
             responsibleRoleId: resolveRoleId(child),
             requiresDeliverable: child.requiresDeliverable,
             requiresAttachment: child.requiresDeliverable,
@@ -278,7 +270,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         data: {
           projectId,
           actorUserId: r.session.sub,
-          actorRole: r.access.kind === 'admin' ? 'admin' : 'NPQ',
+          actorRole: r.access.kind === 'admin' ? 'admin' : 'member',
           actionType: 'admin_activity_structure_save',
           note: cleanOptional(body.changeNote) ?? '后台项目活动结构维护',
         },

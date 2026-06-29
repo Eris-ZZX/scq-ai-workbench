@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/platform/auth/auth.config';
 import { refreshParentSummary } from '@/lib/db/activities';
-import { canExecuteNpqAction } from '@/lib/db/npq-permissions';
+import { isProjectOwner } from '@/lib/db/npq-permissions';
 import { prisma } from '@/lib/prisma';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -9,7 +9,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
   const { id: projectId } = await params;
 
-  const allowed = await canExecuteNpqAction({ actionKey: 'activity.batch_update', session, projectId });
+  const allowed = await isProjectOwner(session.sub, projectId);
   if (!allowed) return NextResponse.json({ error: '无权批量维护活动' }, { status: 403 });
 
   let body: {

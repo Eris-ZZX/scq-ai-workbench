@@ -6,8 +6,6 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
 
 const validStatuses = new Set(['active', 'completed', 'paused']);
-const projectRoleNames = ['NPQ', 'PQE', 'SQE', 'FAE', 'RAM', 'QCM'] as const;
-type ProjectRoleName = (typeof projectRoleNames)[number];
 
 async function checkProjectManager() {
   const session = await getSession();
@@ -32,10 +30,6 @@ function cleanUserIds(value: unknown) {
     : [];
 }
 
-function isProjectRoleName(value: string): value is ProjectRoleName {
-  return projectRoleNames.includes(value as ProjectRoleName);
-}
-
 function projectSelect() {
   return {
     id: true,
@@ -51,6 +45,7 @@ function projectSelect() {
         id: true,
         userId: true,
         role: true,
+        assignedRole: true,
         user: {
           select: {
             id: true,
@@ -58,7 +53,7 @@ function projectSelect() {
             positionBinding: {
               select: {
                 positionRoleId: true,
-                positionRole: { select: { id: true, code: true, name: true, roleName: true, roleGroup: true } },
+                positionRole: { select: { id: true, code: true, name: true, roleName: true } },
               },
             },
           },
@@ -75,35 +70,6 @@ async function getProjects(access: ProjectAdminAccess) {
     orderBy: { updatedAt: 'desc' },
     select: projectSelect(),
   });
-}
-
-async function getActivePositionRoles(roleName: string) {
-  return prisma.positionRole.findMany({
-    where: { OR: [{ roleName }, { code: roleName }, { name: roleName }, { roleGroup: roleName }], isActive: true },
-    select: { id: true },
-  });
-}
-
-async function validateRoleUsers(roleName: string, userIds: string[]) {
-  const positionRoles = await getActivePositionRoles(roleName);
-  const positionRoleIds = positionRoles.map((role) => role.id);
-  if (positionRoleIds.length === 0) return { error: `角色 ${roleName} 未启用或不存在` as const };
-
-  const selectedUsers = userIds.length > 0
-    ? await prisma.user.findMany({
-        where: {
-          id: { in: userIds },
-          status: 'active',
-          positionBinding: { positionRoleId: { in: positionRoleIds } },
-        },
-        select: { id: true },
-      })
-    : [];
-  if (selectedUsers.length !== userIds.length) {
-    return { error: `请选择启用状态且角色为 ${roleName} 的用户` as const };
-  }
-
-  return { positionRoleIds };
 }
 
 export async function GET() {
@@ -140,21 +106,6 @@ export async function POST(request: Request) {
   if (activityTemplateSetId && !selectedTemplate) {
     return NextResponse.json({ error: '请选择启用且已有最新版本的活动模板' }, { status: 400 });
   }
-  const initialNpqRole = ownerId
-    ? await prisma.positionRole.findFirst({
-        where: { OR: [{ roleName: 'NPQ' }, { code: 'NPQ' }, { name: 'NPQ' }], isActive: true },
-        select: { id: true },
-      })
-    : null;
-  const initialNpqUser = ownerId && initialNpqRole
-    ? await prisma.user.findFirst({
-        where: { id: ownerId, status: 'active', positionBinding: { positionRoleId: initialNpqRole.id } },
-        select: { id: true },
-      })
-    : null;
-  if (ownerId && (!initialNpqRole || !initialNpqUser)) {
-    return NextResponse.json({ error: '初始 NPQ 成员必须是启用状态且角色为 NPQ 的用户' }, { status: 400 });
-  }
 
   try {
     const created = await prisma.$transaction(async (tx) => {
@@ -164,7 +115,7 @@ export async function POST(request: Request) {
       });
       if (ownerId) {
         await tx.projectMember.create({
-          data: { projectId: project.id, userId: ownerId, role: 'owner' },
+          data: { projectId: project.id, userId: ownerId, role: 'member' },
         });
       }
       return project;
@@ -221,87 +172,65 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (action === 'syncRoleMembers') {
-      const roleName = clean(body.roleName);
+    if (action === 'addMembers') {
       const userIds = cleanUserIds(body.userIds);
-      if (!isProjectRoleName(roleName)) {
-        return NextResponse.json({ error: '项目成员只支持 NPQ、PQE、SQE、FAE、RAM、QCM 六类角色' }, { status: 400 });
-      }
-      const positionRoles = await getActivePositionRoles(roleName);
-      const positionRoleIds = positionRoles.map((role) => role.id);
-      if (positionRoleIds.length === 0) return NextResponse.json({ error: `角色 ${roleName} 未启用或不存在` }, { status: 400 });
-
-      const selectedUsers = userIds.length > 0
-        ? await prisma.user.findMany({
-            where: {
-              id: { in: userIds },
-              status: 'active',
-              positionBinding: { positionRoleId: { in: positionRoleIds } },
-            },
-            select: { id: true },
-          })
-        : [];
-      if (selectedUsers.length !== userIds.length) {
-        return NextResponse.json({ error: `请选择启用状态且角色为 ${roleName} 的用户` }, { status: 400 });
-      }
-
-      await prisma.$transaction(async (tx) => {
-        const existingMembers = await tx.projectMember.findMany({
-          where: {
-            projectId,
-            user: { positionBinding: { positionRoleId: { in: positionRoleIds } } },
-          },
-          select: { userId: true },
-        });
-        const selectedSet = new Set(userIds);
-        const removedUserIds = existingMembers.map((item) => item.userId).filter((userId) => !selectedSet.has(userId));
-        if (removedUserIds.length > 0) {
-          await tx.projectMember.deleteMany({ where: { projectId, userId: { in: removedUserIds } } });
-        }
-        await tx.projectPositionAssignment.deleteMany({ where: { projectId, positionRoleId: { in: positionRoleIds } } });
-
-        for (const userId of userIds) {
-          await tx.projectMember.upsert({
-            where: { projectId_userId: { projectId, userId } },
-            create: { projectId, userId, role: roleName === 'NPQ' ? 'owner' : 'member' },
-            update: { role: roleName === 'NPQ' ? 'owner' : 'member' },
-          });
-        }
-      });
-    }
-
-    if (action === 'addRoleMembers') {
       const roleName = clean(body.roleName);
-      const userIds = cleanUserIds(body.userIds);
-      if (!isProjectRoleName(roleName)) {
-        return NextResponse.json({ error: '项目成员只支持 NPQ、PQE、SQE、FAE、RAM、QCM 六类角色' }, { status: 400 });
-      }
-      const validation = await validateRoleUsers(roleName, userIds);
-      if ('error' in validation) return NextResponse.json({ error: validation.error }, { status: 400 });
-
       if (userIds.length > 0) {
+        const activeUsers = userIds.length > 0
+          ? await prisma.user.findMany({
+              where: { id: { in: userIds }, status: 'active' },
+              select: { id: true },
+            })
+          : [];
+        if (activeUsers.length !== userIds.length) {
+          return NextResponse.json({ error: '请选择启用状态的用户' }, { status: 400 });
+        }
+
+        const isOwner = roleName === 'NPQ';
+
         await prisma.$transaction(async (tx) => {
-          const existingMembers = await tx.projectMember.findMany({
+          const existing = await tx.projectMember.findMany({
             where: { projectId, userId: { in: userIds } },
             select: { userId: true },
           });
-          const existingUserIds = new Set(existingMembers.map((member) => member.userId));
-          const missingUserIds = userIds.filter((userId) => !existingUserIds.has(userId));
-          if (missingUserIds.length > 0) {
-            await tx.projectMember.createMany({
-              data: missingUserIds.map((userId) => ({
+          const existingSet = new Set(existing.map((m) => m.userId));
+          const newUserIds = userIds.filter((uid) => !existingSet.has(uid));
+
+          for (const userId of newUserIds) {
+            await tx.projectMember.create({
+              data: {
                 projectId,
                 userId,
-                role: roleName === 'NPQ' ? 'owner' : 'member',
-              })),
+                role: isOwner ? 'owner' : 'member',
+                assignedRole: roleName || null,
+              },
             });
           }
-          await tx.projectMember.updateMany({
-            where: { projectId, userId: { in: userIds } },
-            data: { role: roleName === 'NPQ' ? 'owner' : 'member' },
-          });
         });
       }
+    }
+
+    if (action === 'removeMember') {
+      const userId = clean(body.userId);
+      if (!userId) return NextResponse.json({ error: '缺少用户 ID' }, { status: 400 });
+
+      const member = await prisma.projectMember.findFirst({
+        where: { projectId, userId },
+        select: { id: true, role: true },
+      });
+      if (!member) return NextResponse.json({ error: '成员不存在' }, { status: 404 });
+
+      // 防止移除最后一个 owner
+      if (member.role === 'owner') {
+        const ownerCount = await prisma.projectMember.count({
+          where: { projectId, role: 'owner' },
+        });
+        if (ownerCount <= 1) {
+          return NextResponse.json({ error: '不能移除最后一位项目负责人' }, { status: 400 });
+        }
+      }
+
+      await prisma.projectMember.delete({ where: { id: member.id } });
     }
 
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: projectSelect() });
@@ -311,7 +240,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-      return NextResponse.json({ error: '引用的用户或角色不存在' }, { status: 400 });
+      return NextResponse.json({ error: '引用的用户不存在' }, { status: 400 });
     }
     console.error('[admin/projects:PATCH]', error);
     return NextResponse.json({ error: '更新项目失败' }, { status: 500 });

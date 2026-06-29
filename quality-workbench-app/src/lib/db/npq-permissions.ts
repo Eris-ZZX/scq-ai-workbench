@@ -1,72 +1,26 @@
 import { prisma } from '@/lib/prisma';
 
-type SessionLike = {
-  sub: string;
-  role: string;
-};
+type SessionLike = { sub: string; role: string };
 
-type PermissionParams = {
-  actionKey: string;
-  session: SessionLike;
-  projectId?: string;
-};
-
-export async function getEffectivePositionRoleIds(session: SessionLike, projectId?: string) {
-  if (session.role === 'admin') return ['__admin__'];
-
-  const roleIds = new Set<string>();
-  if (projectId) {
-    const member = await prisma.projectMember.findFirst({
-      where: { projectId, userId: session.sub },
-      select: {
-        user: {
-          select: {
-            positionBinding: { select: { positionRoleId: true } },
-          },
-        },
-      },
-    });
-    if (member?.user.positionBinding?.positionRoleId) roleIds.add(member.user.positionBinding.positionRoleId);
-  }
-
-  const userPosition = await prisma.userPosition.findUnique({
-    where: { userId: session.sub },
-    select: { positionRoleId: true },
+/** 检查用户在某项目中是否为 owner */
+export async function isProjectOwner(userId: string, projectId: string) {
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+    select: { role: true },
   });
-  if (userPosition?.positionRoleId) roleIds.add(userPosition.positionRoleId);
-
-  return Array.from(roleIds);
+  return member?.role === 'owner';
 }
 
-export async function canExecuteNpqAction(params: PermissionParams) {
-  if (params.session.role === 'admin') return true;
-  if (params.projectId && !(await canAccessProjectScope(params.session.sub, params.projectId))) return false;
-
-  const roleIds = await getEffectivePositionRoleIds(params.session, params.projectId);
-  if (roleIds.length === 0) return false;
-
-  const permission = await prisma.npqActionPermission.findFirst({
-    where: {
-      actionKey: params.actionKey,
-      positionRoleId: { in: roleIds },
-      canExecute: true,
-    },
-    select: { id: true },
+/** 检查用户是否为项目成员（非 observer） */
+export async function isProjectMember(userId: string, projectId: string) {
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+    select: { role: true },
   });
-  return Boolean(permission);
+  return member != null && member.role !== 'observer';
 }
 
-async function canAccessProjectScope(userId: string, projectId: string) {
-  const project = await prisma.project.findFirst({
-    where: {
-      id: projectId,
-      members: { some: { userId } },
-    },
-    select: { id: true },
-  });
-  return Boolean(project);
-}
-
+/** 判断用户是否可以维护某个子活动 */
 export async function canMaintainActivityChild(params: {
   session: SessionLike;
   childId: string;
@@ -78,7 +32,6 @@ export async function canMaintainActivityChild(params: {
       id: true,
       projectId: true,
       ownerRole: true,
-      roleGroup: true,
       responsibleRoleId: true,
       assigneeUserId: true,
     },
@@ -86,38 +39,22 @@ export async function canMaintainActivityChild(params: {
   if (!child) return { allowed: false, child: null };
   if (params.session.role === 'admin') return { allowed: true, child };
 
-  if (params.returnAction) {
-    const allowed = await canExecuteNpqAction({
-      actionKey: 'activity.child_return',
-      session: params.session,
-      projectId: child.projectId,
-    });
-    return { allowed, child };
-  }
+  // Owner can do everything
+  const owner = await isProjectOwner(params.session.sub, child.projectId);
+  if (owner) return { allowed: true, child };
 
-  const canBatchMaintain = await canExecuteNpqAction({
-    actionKey: 'activity.batch_update',
-    session: params.session,
-    projectId: child.projectId,
+  // Observer can't do anything
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId: child.projectId, userId: params.session.sub } },
+    select: { role: true, assignedRole: true },
   });
-  if (canBatchMaintain) return { allowed: true, child };
+  if (!member || member.role === 'observer') return { allowed: false, child };
 
-  const canUpdateOwn = await canExecuteNpqAction({
-    actionKey: 'activity.child_update_own',
-    session: params.session,
-    projectId: child.projectId,
-  });
-  if (!canUpdateOwn) return { allowed: false, child };
+  // Member — can update own tasks
   if (child.assigneeUserId === params.session.sub) return { allowed: true, child };
 
-  const userPosition = await prisma.userPosition.findUnique({
-    where: { userId: params.session.sub },
-    include: { positionRole: { select: { code: true, roleGroup: true } } },
-  });
-  if (child.responsibleRoleId) {
-    return { allowed: userPosition?.positionRoleId === child.responsibleRoleId, child };
-  }
-  const userRole = userPosition?.positionRole;
-  const roleMatches = userRole?.code === child.roleGroup || userRole?.roleGroup === child.roleGroup;
-  return { allowed: Boolean(roleMatches), child };
+  // Member — assignedRole in project matches child's ownerRole
+  if (member.assignedRole && member.assignedRole === child.ownerRole) return { allowed: true, child };
+
+  return { allowed: false, child };
 }

@@ -8,7 +8,6 @@ export type ActivityStructureChild = {
   id: string;
   title: string;
   ownerRoleName: string;
-  roleGroup: string;
   deliverableName: string | null;
   requiresDeliverable: boolean;
   isRequired: boolean;
@@ -50,26 +49,21 @@ type TemplateItemDialog =
       childId?: string;
       title: string;
       ownerRoleName: string;
-      roleGroup: string;
       deliverableName: string;
       requiresDeliverable: boolean;
     };
 
-type PositionRoleOption = {
+type ProjectRoleOption = {
   id: string;
   code: string;
   name: string;
-  roleName: string | null;
-  roleGroup: string;
   sortOrder: number;
 };
 
-const fallbackRoleOptions: PositionRoleOption[] = ['NPQ', 'PQE', 'SQE', 'FAE', 'RAM', 'QCM'].map((role, index) => ({
+const fallbackRoleOptions: ProjectRoleOption[] = ['NPQ', 'PQE', 'SQE', 'FAE', 'RAM', 'QCM'].map((role, index) => ({
   id: role,
   code: role,
   name: role,
-  roleName: role,
-  roleGroup: role,
   sortOrder: index + 1,
 }));
 
@@ -135,22 +129,21 @@ export function ActivityStructureEditor({
   onChange: (stages: ActivityStructureStage[]) => void;
 }) {
   const [itemDialog, setItemDialog] = useState<TemplateItemDialog | null>(null);
-  const [positionRoles, setPositionRoles] = useState<PositionRoleOption[]>(fallbackRoleOptions);
+  const [projectRoles, setProjectRoles] = useState<ProjectRoleOption[]>(fallbackRoleOptions);
   const roleOptions = useMemo(
-    () => positionRoles.map((role) => ({
-      value: roleDisplayName(role),
-      label: roleDisplayName(role),
-      roleGroup: role.roleGroup || role.code || role.name,
+    () => projectRoles.map((role) => ({
+      value: role.code,
+      label: role.name,
     })),
-    [positionRoles],
+    [projectRoles],
   );
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/npq/positions')
+    fetch('/api/npq/project-roles')
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: PositionRoleOption[] | null) => {
-        if (!cancelled && Array.isArray(data) && data.length > 0) setPositionRoles(data);
+      .then((data: ProjectRoleOption[] | null) => {
+        if (!cancelled && Array.isArray(data) && data.length > 0) setProjectRoles(data);
       })
       .catch(() => {});
     return () => {
@@ -242,7 +235,6 @@ export function ActivityStructureEditor({
       parentId,
       title: '新子任务',
       ownerRoleName: 'NPQ',
-      roleGroup: 'NPQ',
       deliverableName: '',
       requiresDeliverable: false,
     });
@@ -256,8 +248,7 @@ export function ActivityStructureEditor({
       parentId,
       childId: child.id,
       title: child.title,
-      ownerRoleName: child.ownerRoleName || child.roleGroup,
-      roleGroup: child.roleGroup,
+      ownerRoleName: child.ownerRoleName,
       deliverableName: child.deliverableName ?? '',
       requiresDeliverable: child.requiresDeliverable,
     });
@@ -357,11 +348,9 @@ export function ActivityStructureEditor({
       window.alert('子任务名称不能为空');
       return;
     }
-    const selectedRole = roleOptions.find((role) => role.value === itemDialog.ownerRoleName);
     const fields = {
       title,
       ownerRoleName: itemDialog.ownerRoleName,
-      roleGroup: selectedRole?.roleGroup || itemDialog.roleGroup,
       deliverableName: itemDialog.deliverableName.trim() || null,
       requiresDeliverable: itemDialog.requiresDeliverable,
     };
@@ -380,7 +369,6 @@ export function ActivityStructureEditor({
                   id: newId('child'),
                   title: fields.title,
                   ownerRoleName: fields.ownerRoleName,
-                  roleGroup: fields.roleGroup,
                   deliverableName: fields.deliverableName,
                   requiresDeliverable: fields.requiresDeliverable,
                   isRequired: true,
@@ -573,7 +561,7 @@ export function ActivityStructureEditor({
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="shrink-0 rounded bg-white px-2 py-0.5 text-xs font-semibold text-muted-foreground">{stageIndex + 1}.{parentIndex + 1}.{childIndex + 1}</span>
                               <span className="truncate text-sm">{child.title}</span>
-                              <span className="shrink-0 text-xs text-muted-foreground">{child.ownerRoleName || child.roleGroup}</span>
+                              <span className="shrink-0 text-xs text-muted-foreground">{child.ownerRoleName}</span>
                               <span className="shrink-0 text-xs text-muted-foreground">{child.requiresDeliverable ? '附件' : '备注'}</span>
                               <span className="truncate text-xs text-muted-foreground">{child.deliverableName || '无交付件'}</span>
                             </div>
@@ -686,13 +674,8 @@ export function ActivityStructureEditor({
                       className={fieldClass('mt-1 h-9 w-full')}
                       value={itemDialog.ownerRoleName}
                       onChange={(event) => {
-                        const selectedRole = roleOptions.find((role) => role.value === event.target.value);
                         setItemDialog((current) => (current?.kind === 'child'
-                          ? {
-                            ...current,
-                            ownerRoleName: event.target.value,
-                            roleGroup: selectedRole?.roleGroup || current.roleGroup,
-                          }
+                          ? { ...current, ownerRoleName: event.target.value }
                           : current));
                       }}
                     >
@@ -728,11 +711,6 @@ export function ActivityStructureEditor({
     </main>
   );
 }
-
-function roleDisplayName(role: PositionRoleOption) {
-  return role.roleName?.trim() || role.name || role.code;
-}
-
 function DateRangeFields({
   dialog,
   onChange,

@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Edit3, FilePlus2, Save, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Edit3, FilePlus2, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   ActivityStructureEditor,
   cloneActivityStructure,
@@ -79,6 +79,14 @@ function formatVersionTime(version?: TemplateVersion | null) {
   return formatDate(version.publishedAt ?? version.createdAt);
 }
 
+type ProjectRoleItem = {
+  id: string;
+  code: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
 export default function AdminTemplatesPage() {
   const [templates, setTemplates] = useState<TemplateSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState('');
@@ -97,10 +105,28 @@ export default function AdminTemplatesPage() {
     sourceSetId: '',
   });
 
+  // 项目角色管理
+  const [projectRoles, setProjectRoles] = useState<ProjectRoleItem[]>([]);
+  const [rolesOpen, setRolesOpen] = useState(false);
+  const [editRoleId, setEditRoleId] = useState('');
+  const [editRoleName, setEditRoleName] = useState('');
+  const [addRoleOpen, setAddRoleOpen] = useState(false);
+  const [addRoleForm, setAddRoleForm] = useState({ code: '', name: '' });
+
+  async function loadRoles() {
+    try {
+      const res = await fetch('/api/admin/project-roles');
+      if (res.ok) setProjectRoles(await res.json());
+    } catch { /* non-blocking */ }
+  }
+
   async function load(preferredSetId = selectedSetId, preferredVersionId = selectedVersionId) {
     setError('');
     try {
-    const res = await fetch('/api/admin/templates');
+    const [res, rolesRes] = await Promise.all([
+      fetch('/api/admin/templates'),
+      fetch('/api/admin/project-roles'),
+    ]);
     if (!res.ok) {
       setError('模板加载失败，请刷新后重试');
       setLoading(false);
@@ -108,6 +134,7 @@ export default function AdminTemplatesPage() {
     }
     const data = (await res.json()) as TemplateSet[];
     setTemplates(data);
+    if (rolesRes.ok) setProjectRoles(await rolesRes.json());
     const nextSet = data.find((item) => item.id === preferredSetId) ?? data[0];
     setSelectedSetId(nextSet?.id ?? '');
     const nextVersion =
@@ -160,6 +187,35 @@ export default function AdminTemplatesPage() {
       return null;
     }
     return data;
+  }
+
+  async function saveRoleCode(role: ProjectRoleItem) {
+    if (!editRoleName.trim()) { setEditRoleId(''); setEditRoleName(''); return; }
+    await requestJson('PATCH', { id: role.id, name: editRoleName }, '/api/admin/project-roles');
+    setEditRoleId('');
+    setEditRoleName('');
+    await loadRoles();
+  }
+
+  async function addRole() {
+    if (!addRoleForm.code.trim()) { window.alert('请填写角色标识'); return; }
+    const created = await requestJson('POST', {
+      code: addRoleForm.code.trim().toUpperCase(),
+      name: addRoleForm.name.trim() || addRoleForm.code.trim(),
+    }, '/api/admin/project-roles');
+    if (created?.id) {
+      setAddRoleOpen(false);
+      setAddRoleForm({ code: '', name: '' });
+      await loadRoles();
+    }
+  }
+
+  async function deleteRole(role: ProjectRoleItem) {
+    if (!window.confirm(`删除角色"${role.name}"？`)) return;
+    const res = await fetch(`/api/admin/project-roles?id=${encodeURIComponent(role.id)}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) { window.alert(data?.error ?? '删除失败'); return; }
+    await loadRoles();
   }
 
   function guardEditSwitch() {
@@ -304,6 +360,101 @@ export default function AdminTemplatesPage() {
         </div>
 
         {error && <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+
+        {/* 项目角色管理 */}
+        <section className="mb-4 rounded-lg border border-border bg-white">
+          <button
+            className="flex w-full items-center gap-2 px-4 py-3 text-sm font-medium text-foreground hover:bg-ws-content-bg"
+            onClick={() => setRolesOpen(!rolesOpen)}
+          >
+            {rolesOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            项目角色管理
+            <span className="text-xs text-muted-foreground">({projectRoles.filter((r) => r.isActive).length} 个角色，项目内权限分组和模板责任角色来源)</span>
+          </button>
+          {rolesOpen && (
+            <div className="border-t border-border px-4 py-3">
+              <div className="flex flex-wrap gap-2">
+                {projectRoles
+                  .filter((r) => r.isActive)
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map((role) => (
+                    <div key={role.id} className="flex items-center gap-1 rounded border border-border bg-white px-2 py-1">
+                      {editRoleId === role.id ? (
+                        <>
+                          <input
+                            className="h-6 w-24 rounded border border-border px-1 text-xs"
+                            value={editRoleName}
+                            onChange={(e) => setEditRoleName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') saveRoleCode(role); if (e.key === 'Escape') { setEditRoleId(''); setEditRoleName(''); } }}
+                            autoFocus
+                          />
+                          <button className="inline-flex h-6 w-6 items-center justify-center rounded text-green-600 hover:bg-green-50" onClick={() => saveRoleCode(role)} title="保存">
+                            <Check className="h-3 w-3" />
+                          </button>
+                          <button className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-slate-50" onClick={() => { setEditRoleId(''); setEditRoleName(''); }} title="取消">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span
+                            className="cursor-pointer text-xs font-medium hover:text-ws-blue"
+                            title="点击编辑名称"
+                            onClick={() => { setEditRoleId(role.id); setEditRoleName(role.name); }}
+                          >
+                            {role.name}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">({role.code})</span>
+                          <button
+                            className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded text-red-400 hover:bg-red-50 hover:text-red-600"
+                            onClick={() => deleteRole(role)}
+                            title="删除角色"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                {addRoleOpen ? (
+                  <div className="flex items-center gap-1 rounded border border-ws-blue bg-blue-50 px-2 py-1">
+                    <input
+                      className="h-6 w-16 rounded border border-border px-1 text-xs"
+                      placeholder="标识"
+                      value={addRoleForm.code}
+                      onChange={(e) => setAddRoleForm((f) => ({ ...f, code: e.target.value }))}
+                      autoFocus
+                    />
+                    <input
+                      className="h-6 w-20 rounded border border-border px-1 text-xs"
+                      placeholder="显示名"
+                      value={addRoleForm.name}
+                      onChange={(e) => setAddRoleForm((f) => ({ ...f, name: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === 'Enter') addRole(); if (e.key === 'Escape') { setAddRoleOpen(false); setAddRoleForm({ code: '', name: '' }); } }}
+                    />
+                    <button className="inline-flex h-6 w-6 items-center justify-center rounded text-green-600 hover:bg-green-50" onClick={addRole} title="保存">
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <button className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-slate-50" onClick={() => { setAddRoleOpen(false); setAddRoleForm({ code: '', name: '' }); }} title="取消">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="flex h-7 w-7 items-center justify-center rounded border border-dashed border-border text-muted-foreground hover:border-ws-blue hover:text-ws-blue"
+                    onClick={() => setAddRoleOpen(true)}
+                    title="新增角色"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                角色用于项目成员分组和模板中子任务的责任角色匹配。标识（code）唯一且不可修改。
+              </div>
+            </div>
+          )}
+        </section>
 
         <div className="grid grid-cols-[300px_minmax(0,1fr)] gap-4">
           <aside className="rounded-lg border border-border bg-white">

@@ -1,18 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Search } from 'lucide-react';
 import { ProjectActivityEditor } from './project-activity-editor';
 
 type PositionBinding = null | {
   positionRoleId: string;
-  positionRole: { id: string; code?: string; name: string; roleName?: string | null; roleGroup?: string };
+  positionRole: { id: string; code: string; name: string; roleName?: string | null };
 };
 
 type ProjectMember = {
   id: string;
   userId: string;
   role: string;
+  assignedRole: string | null;
   user: { id: string; username: string; positionBinding: PositionBinding };
 };
 
@@ -47,10 +48,11 @@ type ActivityTemplate = {
   stats: { stageCount: number; parentCount: number; childCount: number };
 };
 
-const projectRoleNames = ['NPQ', 'PQE', 'SQE', 'FAE', 'RAM', 'QCM'] as const;
-type ProjectRoleName = (typeof projectRoleNames)[number];
+type ProjectRoleItem = { id: string; code: string; name: string; sortOrder: number; isActive: boolean };
+
 type AddMemberDialog = {
-  roleName: ProjectRoleName;
+  roleCode: string;
+  roleName: string;
   search: string;
   selectedUserIds: string[];
 };
@@ -86,19 +88,6 @@ function displayUser(user?: { username: string }) {
   return user.username;
 }
 
-function userRoleName(user: { positionBinding: PositionBinding }) {
-  return user.positionBinding?.positionRole.roleName ?? user.positionBinding?.positionRole.code ?? user.positionBinding?.positionRole.name ?? '';
-}
-
-function userRoleGroup(user: { positionBinding: PositionBinding }) {
-  const role = user.positionBinding?.positionRole;
-  return role?.roleGroup ?? role?.name ?? role?.code ?? userRoleName(user);
-}
-
-function userRoleLabel(user: { positionBinding: PositionBinding }) {
-  return userRoleName(user) || '未绑定角色';
-}
-
 function formatTemplateVersion(version: ActivityTemplate['version']) {
   if (!version) return 'latest';
   if (typeof version === 'number') return `V${version}`;
@@ -115,6 +104,8 @@ export default function AdminProjectsPage() {
   const [error, setError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [projectRoles, setProjectRoles] = useState<ProjectRoleItem[]>([]);
+  const projectRoleNames = useMemo(() => projectRoles.filter((r) => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder), [projectRoles]);
   const [memberDialog, setMemberDialog] = useState<AddMemberDialog | null>(null);
   const [createForm, setCreateForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: '' });
   const [basicForm, setBasicForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1' });
@@ -137,14 +128,15 @@ export default function AdminProjectsPage() {
   async function load(preferredProjectId = selectedProjectId) {
     setError('');
     try {
-    const [projectsRes, usersRes, templatesRes, meRes] = await Promise.all([
+    const [projectsRes, usersRes, templatesRes, meRes, rolesRes] = await Promise.all([
       fetch('/api/admin/projects'),
       fetch('/api/npq/users'),
       fetch('/api/npq/activity-templates'),
       fetch('/api/auth/me'),
+      fetch('/api/npq/project-roles'),
     ]);
     if (!projectsRes.ok || !usersRes.ok || !templatesRes.ok || !meRes.ok) {
-      setError('加载项目或用户失败，请刷新后重试。');
+      setError('加载数据失败，请刷新后重试。');
       setLoading(false);
       return;
     }
@@ -156,6 +148,7 @@ export default function AdminProjectsPage() {
     setProjects(nextProjects);
     setUsers(nextUsers);
     setTemplates(nextTemplates);
+    if (rolesRes.ok) setProjectRoles(await rolesRes.json());
     setCreateForm((current) => ({
       ...current,
       activityTemplateSetId: current.activityTemplateSetId || nextTemplates[0]?.id || '',
@@ -180,14 +173,6 @@ export default function AdminProjectsPage() {
   }, []);
 
   const activeUsers = useMemo(() => users.filter((user) => !user.status || user.status === 'active'), [users]);
-  const rolePools = useMemo(
-    () => projectRoleNames.map((roleName) => ({
-      roleName,
-      users: activeUsers.filter((user) => userRoleGroup(user) === roleName || userRoleName(user) === roleName),
-    })),
-    [activeUsers],
-  );
-  const npqUsers = useMemo(() => rolePools.find((pool) => pool.roleName === 'NPQ')?.users ?? [], [rolePools]);
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
     [projects, selectedProjectId],
@@ -252,49 +237,53 @@ export default function AdminProjectsPage() {
   }
 
   async function deleteProject(project: Project) {
-    if (!window.confirm(`删除项目“${project.name}”？项目活动、任务、人员关系会一并删除。`)) return;
+    if (!window.confirm(`删除项目"${project.name}"？项目活动、任务、人员关系会一并删除。`)) return;
     const deleted = await requestJson('DELETE', undefined, `/api/admin/projects?id=${encodeURIComponent(project.id)}`);
     if (deleted?.ok) await load('');
   }
 
-  function selectedUserIdsForRole(roleName: ProjectRoleName) {
+  function memberAssignedRole(member: ProjectMember): string {
+    if (member.assignedRole) return member.assignedRole;
+    // 回退：取用户全局岗位的 code（如 NPQ/PQE/SQE，不含后缀）
+    return member.user.positionBinding?.positionRole?.code ?? '';
+  }
+
+  function selectedUserIdsForRole(roleCode: string) {
     return new Set(
       (selectedProject?.members ?? [])
-        .filter((member) => userRoleGroup(member.user) === roleName || userRoleName(member.user) === roleName)
+        .filter((member) => memberAssignedRole(member) === roleCode)
         .map((member) => member.userId),
     );
   }
 
-  function selectedMembersForRole(roleName: ProjectRoleName) {
-    return (selectedProject?.members ?? []).filter((member) => userRoleGroup(member.user) === roleName || userRoleName(member.user) === roleName);
-  }
-
-  async function syncRoleMembers(roleName: ProjectRoleName, userIds: string[]) {
-    if (!selectedProject) return;
-    const updated = await requestJson('PATCH', {
-      action: 'syncRoleMembers',
-      projectId: selectedProject.id,
-      roleName,
-      userIds,
-    });
-    if (updated?.id) replaceProject(updated as Project);
+  function selectedMembersForRole(roleCode: string) {
+    return (selectedProject?.members ?? []).filter(
+      (member) => memberAssignedRole(member) === roleCode,
+    );
   }
 
   async function addRoleMembers() {
-    if (!memberDialog) return;
-    const pool = rolePools.find((item) => item.roleName === memberDialog.roleName);
-    if (!pool) return;
-    if (!selectedProject) return;
+    if (!memberDialog || !selectedProject) return;
     const updated = await requestJson('PATCH', {
-      action: 'addRoleMembers',
+      action: 'addMembers',
       projectId: selectedProject.id,
-      roleName: memberDialog.roleName,
+      roleName: memberDialog.roleCode,
       userIds: memberDialog.selectedUserIds,
     });
     if (updated?.id) {
       replaceProject(updated as Project);
       setMemberDialog(null);
     }
+  }
+
+  async function removeRoleMember(_roleCode: string, userId: string) {
+    if (!selectedProject) return;
+    const updated = await requestJson('PATCH', {
+      action: 'removeMember',
+      projectId: selectedProject.id,
+      userId,
+    });
+    if (updated?.id) replaceProject(updated as Project);
   }
 
   function toggleDialogUser(userId: string, checked: boolean) {
@@ -307,12 +296,6 @@ export default function AdminProjectsPage() {
     });
   }
 
-  function removeRoleMember(roleName: ProjectRoleName, userId: string) {
-    const selected = selectedUserIdsForRole(roleName);
-    selected.delete(userId);
-    void syncRoleMembers(roleName, Array.from(selected));
-  }
-
   if (loading) return <div className="p-8 text-sm text-muted-foreground">加载中...</div>;
 
   return (
@@ -323,7 +306,7 @@ export default function AdminProjectsPage() {
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Admin / Projects</div>
             <h1 className="mt-1 text-2xl font-semibold text-foreground">项目管理</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {isAdmin ? '后台维护项目清单、基础信息和六类固定项目成员。' : '维护你负责项目的基础信息、项目成员和项目活动结构。'}
+              {isAdmin ? '后台维护项目清单、基础信息和项目成员，NPQ 分组下自动为项目负责人。' : '维护你负责项目的基础信息、项目成员和项目活动结构。'}
             </p>
           </div>
           {isAdmin && (
@@ -421,25 +404,25 @@ export default function AdminProjectsPage() {
                   <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                     <div>
                       <div className="text-sm font-semibold">项目成员</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">固定 NPQ、PQE、SQE、FAE、RAM、QCM 六个角色，通过增加弹窗从对应角色池加入项目。</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">按 NPQ、PQE、SQE、FAE、RAM、QCM 六个分组管理，从全量活跃用户中选择加入，NPQ 分组自动为项目负责人。</div>
                     </div>
                     <div className="text-xs text-muted-foreground">{selectedProject.members.length} 人已加入</div>
                   </div>
                   <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
-                    {rolePools.map((pool) => {
-                      const selectedMembers = selectedMembersForRole(pool.roleName);
+                    {projectRoleNames.map((role) => {
+                      const selectedMembers = selectedMembersForRole(role.code);
                       return (
-                        <div key={pool.roleName} className="rounded border border-border bg-white">
+                        <div key={role.code} className="rounded border border-border bg-white">
                           <div className="flex items-center justify-between border-b border-border px-3 py-2">
                             <div>
-                              <div className="text-sm font-semibold">{pool.roleName} 分组</div>
-                              <div className="mt-0.5 text-xs text-muted-foreground">{selectedMembers.length} / {pool.users.length} 人</div>
+                              <div className="text-sm font-semibold">{role.name} 分组</div>
+                              <div className="mt-0.5 text-xs text-muted-foreground">{selectedMembers.length} 人</div>
                             </div>
                             <div className="flex items-center gap-2">
                               <button
                                 className={actionButton()}
-                                onClick={() => setMemberDialog({ roleName: pool.roleName, search: '', selectedUserIds: [] })}
-                                disabled={saving || pool.users.length === 0}
+                                onClick={() => setMemberDialog({ roleCode: role.code, roleName: role.name, search: '', selectedUserIds: [] })}
+                                disabled={saving}
                               >
                                 <Plus className="h-3.5 w-3.5" />增加
                               </button>
@@ -450,20 +433,17 @@ export default function AdminProjectsPage() {
                               <div key={member.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-ws-content-bg">
                                 <div className="flex min-w-0 flex-1 items-center gap-2">
                                   <span className="truncate">{displayUser(member.user)}</span>
-                                  <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-muted-foreground">{userRoleLabel(member.user)}</span>
                                 </div>
                                 <button
                                   className={dangerButton()}
-                                  onClick={() => removeRoleMember(pool.roleName, member.userId)}
+                                  onClick={() => removeRoleMember(role.code, member.userId)}
                                   disabled={saving}
                                 >
-                                  删除
+                                  移除
                                 </button>
                               </div>
                             ))}
-                            {pool.users.length === 0 ? (
-                              <div className="px-2 py-6 text-center text-xs text-muted-foreground">暂无该角色启用用户</div>
-                            ) : selectedMembers.length === 0 && (
+                            {selectedMembers.length === 0 && (
                               <div className="px-2 py-6 text-center text-xs text-muted-foreground">暂无已加入成员</div>
                             )}
                           </div>
@@ -529,16 +509,16 @@ export default function AdminProjectsPage() {
                 </span>
               </label>
               <label className="block text-xs font-medium text-muted-foreground">
-                初始 NPQ 成员
+                初始成员
                 <select className={fieldClass('mt-1 h-9 w-full')} value={createForm.ownerId} onChange={(event) => setCreateForm((current) => ({ ...current, ownerId: event.target.value }))}>
                   <option value="">暂不指定</option>
-                  {npqUsers.map((user) => <option key={user.id} value={user.id}>{displayUser(user)}</option>)}
+                  {activeUsers.map((user) => <option key={user.id} value={user.id}>{displayUser(user)}</option>)}
                 </select>
               </label>
             </div>
             <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
               <button className={actionButton()} onClick={() => setCreateOpen(false)} disabled={saving}>取消</button>
-              <button className={actionButton(true)} onClick={createProject} disabled={saving || !createForm.name.trim() || templates.length === 0}>保存</button>
+              <button className={actionButton(true)} onClick={createProject} disabled={saving || !createForm.name.trim()}>保存</button>
             </div>
           </div>
         </div>
@@ -552,44 +532,47 @@ export default function AdminProjectsPage() {
               <button className={actionButton()} onClick={() => setMemberDialog(null)} disabled={saving}>关闭</button>
             </div>
             <div className="space-y-4 p-4">
-              <input
-                className={fieldClass('h-9 w-full')}
-                value={memberDialog.search}
-                onChange={(event) => setMemberDialog((current) => current ? { ...current, search: event.target.value } : current)}
-                placeholder="搜索账号或角色，不输入则显示全部可增加人员"
-                disabled={saving}
-              />
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  className={fieldClass('h-9 w-full pl-8')}
+                  value={memberDialog.search}
+                  onChange={(event) => setMemberDialog((current) => current ? { ...current, search: event.target.value } : current)}
+                  placeholder="搜索用户名或角色..."
+                  disabled={saving}
+                />
+              </div>
 
               {(() => {
-                const pool = rolePools.find((item) => item.roleName === memberDialog.roleName);
-                const selected = selectedUserIdsForRole(memberDialog.roleName);
+                const selected = selectedUserIdsForRole(memberDialog.roleCode);
                 const keyword = memberDialog.search.trim().toLowerCase();
-                const availableUsers = (pool?.users ?? [])
+                const availableUsers = activeUsers
                   .filter((user) => !selected.has(user.id))
-                  .filter((user) => (
-                    !keyword ||
-                    user.username.toLowerCase().includes(keyword) ||
-                    userRoleLabel(user).toLowerCase().includes(keyword)
-                  ));
+                  .filter((user) => {
+                    if (!keyword) return true;
+                    return user.username.toLowerCase().includes(keyword);
+                  });
                 return (
                   <div className="max-h-72 overflow-auto rounded border border-border p-2">
-                    {availableUsers.map((user) => (
-                      <label key={user.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-ws-content-bg">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-border"
-                          checked={memberDialog.selectedUserIds.includes(user.id)}
-                          onChange={(event) => toggleDialogUser(user.id, event.target.checked)}
-                          disabled={saving}
-                        />
-                        <span className="flex min-w-0 flex-1 items-center gap-2">
-                          <span className="truncate">{displayUser(user)}</span>
-                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-muted-foreground">{userRoleLabel(user)}</span>
-                        </span>
-                      </label>
-                    ))}
-                    {availableUsers.length === 0 && (
-                      <div className="px-2 py-8 text-center text-sm text-muted-foreground">未找到可增加人员</div>
+                    {availableUsers.length === 0 ? (
+                      <div className="px-2 py-8 text-center text-sm text-muted-foreground">
+                        {keyword ? '未找到匹配用户' : '暂无可用人员'}
+                      </div>
+                    ) : (
+                      availableUsers.map((user) => (
+                        <label key={user.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-ws-content-bg">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border"
+                            checked={memberDialog.selectedUserIds.includes(user.id)}
+                            onChange={(event) => toggleDialogUser(user.id, event.target.checked)}
+                            disabled={saving}
+                          />
+                          <span className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="truncate">{displayUser(user)}</span>
+                          </span>
+                        </label>
+                      ))
                     )}
                   </div>
                 );

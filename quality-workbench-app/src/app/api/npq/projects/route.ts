@@ -1,24 +1,11 @@
-// GET/POST /api/npq/projects — 项目列表 + 创建 (F3.S1/S3)
+// GET/POST /api/npq/projects — 项目列表 + 创建
 import { NextResponse } from 'next/server';
 import { getSession } from '@/platform/auth/auth.config';
 import { getProjectsByUser, createProject } from '@/lib/db/projects';
-import { canExecuteNpqAction } from '@/lib/db/npq-permissions';
-import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
-  if (session.role === 'admin') {
-    const projects = await prisma.project.findMany({
-      include: {
-        members: { include: { user: { select: { id: true, username: true } } } },
-        stages: { orderBy: { order: 'asc' } },
-        _count: { select: { tasks: true } },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-    return NextResponse.json(projects);
-  }
   const projects = await getProjectsByUser(session.sub);
   return NextResponse.json(projects);
 }
@@ -26,9 +13,6 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
-
-  const allowed = await canExecuteNpqAction({ actionKey: 'project.create', session });
-  if (!allowed) return NextResponse.json({ error: '无权创建 NPQ 项目' }, { status: 403 });
 
   let body: {
     name?: string;

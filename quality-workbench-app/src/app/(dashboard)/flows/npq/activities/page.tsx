@@ -32,7 +32,6 @@ type ActivityChild = {
   parentId: string;
   thirdLevelPlan: string;
   ownerRole: string;
-  roleGroup: string;
   status: string;
   requiresDeliverable: boolean;
   deliverableName: string | null;
@@ -328,7 +327,7 @@ export default function ActivityTrackingPage() {
     if (filters.status && parent.status !== filters.status) return false;
     if (filters.risk === 'blocked' && !parent.hasBlocked) return false;
     if (filters.risk === 'overdue' && !parent.hasOverdue) return false;
-    if (filters.owner && !parent.children.some((child) => child.ownerRole === filters.owner || child.roleGroup === filters.owner)) return false;
+    if (filters.owner && !parent.children.some((child) => child.ownerRole === filters.owner)) return false;
     return true;
   });
 

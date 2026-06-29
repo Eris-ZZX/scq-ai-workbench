@@ -14,7 +14,7 @@ export async function GET() {
       positionBinding: {
         select: {
           positionRoleId: true,
-          positionRole: { select: { id: true, code: true, name: true, roleName: true, roleGroup: true } },
+          positionRole: { select: { id: true, code: true, name: true, roleName: true } },
         },
       },
     },

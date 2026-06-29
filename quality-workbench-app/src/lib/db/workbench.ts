@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { activateProjectStageActivities } from '@/lib/db/activities';
-import { getEffectivePositionRoleIds } from '@/lib/db/npq-permissions';
 
 type SessionLike = {
   sub: string;
@@ -8,7 +7,8 @@ type SessionLike = {
   role: string;
 };
 
-type WorkbenchRole = 'npq' | 'executor' | 'manager' | 'admin';
+type ProjectRole = 'owner' | 'member' | 'observer' | 'admin';
+
 type TodoType =
   | 'overdue'
   | 'blocked'
@@ -36,47 +36,37 @@ type WorkbenchTodoItem = {
 const BUSINESS_PROJECT_STATUSES = ['active', 'paused'];
 
 export async function getWorkbenchData(session: SessionLike, options: { projectId?: string } = {}) {
-  const user = await prisma.user.findUnique({
-    where: { id: session.sub },
-    select: {
-      id: true,
-      username: true,
-      role: true,
-      positionBinding: {
-        select: {
-          positionRoleId: true,
-          positionRole: { select: { id: true, code: true, name: true, roleName: true, roleGroup: true } },
-        },
-      },
-    },
-  });
-
-  const position = user?.positionBinding?.positionRole ?? null;
-  const workbenchRole = getWorkbenchRole(session.role, position?.code);
-  const roleIds = (await getEffectivePositionRoleIds(session)).filter((id) => id !== '__admin__');
+  // Get all member records for this user (includes per-project role and assignedRole)
   const memberProjects = await prisma.projectMember.findMany({
     where: { userId: session.sub },
-    select: { projectId: true },
+    select: { projectId: true, role: true, assignedRole: true },
   });
-  const assignedProjectIds = memberProjects.map((item) => item.projectId);
-  const effectiveRoleIds = Array.from(new Set(roleIds));
 
-  const baseProjectWhere = buildProjectWhere(session.sub, workbenchRole, effectiveRoleIds, assignedProjectIds);
+  // Per-project role map
+  const projectRoleMap = new Map<string, ProjectRole>();
+  for (const mp of memberProjects) {
+    projectRoleMap.set(mp.projectId, mp.role as ProjectRole);
+  }
+  if (session.role === 'admin') {
+    // admin overrides all per-project roles
+  }
+
+  // Build projectId → effectiveRoleIds (assignedRole → PositionRole.id)
+  const effectiveRoleIdsByProject = await buildProjectEffectiveRoleIds(memberProjects);
+
+  // For cross-project filtering: collect all role ids
+  const allEffectiveRoleIds = new Set<string>();
+  for (const ids of effectiveRoleIdsByProject.values()) {
+    for (const id of ids) allEffectiveRoleIds.add(id);
+  }
+
+  const baseProjectWhere = buildProjectWhere(session, memberProjects, allEffectiveRoleIds);
   const projectWhere = options.projectId ? { AND: [baseProjectWhere, { id: options.projectId }] } : baseProjectWhere;
   const projects = await prisma.project.findMany({
     where: projectWhere,
     include: {
       members: {
-        select: {
-          userId: true,
-          user: {
-            select: {
-              positionBinding: {
-                select: { positionRole: { select: { code: true } } },
-              },
-            },
-          },
-        },
+        select: { userId: true, role: true, assignedRole: true },
       },
       stageGateRecords: true,
     },
@@ -113,10 +103,12 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
   }));
 
   const now = new Date();
-  const projectTodos = workbenchRole === 'admin'
+  const projectTodos = session.role === 'admin'
     ? []
     : projectsWithParents.map((project) => {
-        const todos = buildProjectTodos({ project, session, workbenchRole, effectiveRoleIds, assignedProjectIds, now });
+        const projectRole = projectRoleMap.get(project.id) ?? 'observer' as ProjectRole;
+        const projectRoleIds = effectiveRoleIdsByProject.get(project.id) ?? [];
+        const todos = buildProjectTodos({ project, session, projectRole, projectRoleIds, now });
         return {
           projectId: project.id,
           projectName: project.name,
@@ -185,10 +177,9 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
   return {
     roleContext: {
       userId: session.sub,
-      username: user?.username ?? session.username,
+      username: session.username,
       appRole: session.role,
-      position,
-      workbenchRole,
+      workbenchRole: session.role === 'admin' ? 'admin' as const : 'executor' as const,
     },
     actionMetrics: {
       totalTodo: allTodos.length,
@@ -220,40 +211,59 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
   };
 }
 
-function getWorkbenchRole(appRole: string, positionCode?: string | null): WorkbenchRole {
-  if (appRole === 'admin') return 'admin';
-  if (positionCode === 'NPQ') return 'npq';
-  if (positionCode === 'MANAGER') return 'manager';
-  return 'executor';
+async function buildProjectEffectiveRoleIds(
+  memberProjects: Array<{ projectId: string; assignedRole: string | null }>,
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  const assignedRoles = new Set<string>();
+  for (const mp of memberProjects) {
+    if (mp.assignedRole) assignedRoles.add(mp.assignedRole);
+  }
+
+  const positionRoles = assignedRoles.size > 0
+    ? await prisma.positionRole.findMany({
+        where: { code: { in: Array.from(assignedRoles) }, isActive: true },
+        select: { id: true, code: true },
+      })
+    : [];
+
+  const codeToIds = new Map<string, string[]>();
+  for (const pr of positionRoles) {
+    const ids = codeToIds.get(pr.code) ?? [];
+    ids.push(pr.id);
+    codeToIds.set(pr.code, ids);
+  }
+
+  for (const mp of memberProjects) {
+    if (mp.assignedRole) {
+      const ids = codeToIds.get(mp.assignedRole);
+      map.set(mp.projectId, ids ?? []);
+    } else {
+      map.set(mp.projectId, []);
+    }
+  }
+
+  return map;
 }
 
 function buildProjectWhere(
-  userId: string,
-  role: WorkbenchRole,
-  effectiveRoleIds: string[],
-  assignedProjectIds: string[],
+  session: SessionLike,
+  memberProjects: Array<{ projectId: string }>,
+  allEffectiveRoleIds: Set<string>,
 ) {
   const status = { in: BUSINESS_PROJECT_STATUSES };
-  if (role === 'admin') return { status };
-  if (role === 'manager') {
-    return {
-      status,
-      members: { some: { userId } },
-    };
-  }
-  if (role === 'npq') {
-    return {
-      status,
-      members: { some: { userId } },
-    };
-  }
+  if (session.role === 'admin') return { status };
+
+  const assignedProjectIds = memberProjects.map((mp) => mp.projectId);
+  const roleIdList = Array.from(allEffectiveRoleIds);
+
   return {
     status,
     OR: [
-      { members: { some: { userId } } },
-      { activityChildren: { some: { assigneeUserId: userId, isNotApplicable: false } } },
-      assignedProjectIds.length > 0 && effectiveRoleIds.length > 0
-        ? { activityChildren: { some: { projectId: { in: assignedProjectIds }, responsibleRoleId: { in: effectiveRoleIds }, isNotApplicable: false } } }
+      { members: { some: { userId: session.sub } } },
+      { activityChildren: { some: { assigneeUserId: session.sub, isNotApplicable: false } } },
+      assignedProjectIds.length > 0 && roleIdList.length > 0
+        ? { activityChildren: { some: { projectId: { in: assignedProjectIds }, responsibleRoleId: { in: roleIdList }, isNotApplicable: false } } }
         : { id: '__never__' },
     ],
   };
@@ -262,13 +272,11 @@ function buildProjectWhere(
 function buildProjectTodos({
   project,
   session,
-  workbenchRole,
-  effectiveRoleIds,
-  assignedProjectIds,
+  projectRole,
+  projectRoleIds,
   now,
 }: {
-  project: Awaited<ReturnType<typeof prisma.project.findMany>>[number] & {
-    members: Array<{ userId: string; user: { positionBinding: { positionRole: { code: string } } | null } }>;
+  project: { id: string; name: string; currentStage: string; updatedAt: Date; members: Array<{ userId: string; role: string }> } & {
     activityParents: Array<{
       id: string;
       stage: string;
@@ -284,7 +292,6 @@ function buildProjectTodos({
         status: string;
         thirdLevelPlan: string;
         ownerRole: string;
-        roleGroup: string;
         responsibleRoleId: string | null;
         assigneeUserId: string | null;
         requiresDeliverable: boolean;
@@ -300,18 +307,18 @@ function buildProjectTodos({
     stageGateRecords: Array<{ stage: string; status: string }>;
   };
   session: SessionLike;
-  workbenchRole: WorkbenchRole;
-  effectiveRoleIds: string[];
-  assignedProjectIds: string[];
+  projectRole: ProjectRole;
+  projectRoleIds: string[];
   now: Date;
 }) {
   const todos: WorkbenchTodoItem[] = [];
-  const isProjectAssigned = assignedProjectIds.includes(project.id);
+  const roleIdSet = new Set(projectRoleIds);
+  const isOwner = projectRole === 'owner';
 
   for (const parent of project.activityParents) {
     if (parent.status === 'not_started') continue;
 
-    if (parent.status === 'in_progress' && canSeeNpqProjectTodo(workbenchRole, project, session.sub)) {
+    if (parent.status === 'in_progress' && isOwner) {
       const parentTodoType = getParentTodoType(parent, now);
       if (parentTodoType) {
         todos.push({
@@ -323,11 +330,11 @@ function buildProjectTodos({
           stage: parent.stage,
           title: parent.projectTaskName,
           parentTitle: parent.projectTaskName,
-          ownerRole: 'NPQ',
+          ownerRole: 'owner',
           status: parent.status,
           dueAt: parent.plannedDueDate?.toISOString() ?? null,
           priorityRank: getTodoPriority(parentTodoType, parent.plannedDueDate, now),
-          allowedActions: getAllowedActions(workbenchRole, 'parent'),
+          allowedActions: getProjectRoleActions(projectRole, 'parent'),
         });
       }
     }
@@ -335,7 +342,7 @@ function buildProjectTodos({
     for (const child of parent.children) {
       if (child.isNotApplicable) continue;
       if (child.status !== 'in_progress') continue;
-      if (!canSeeChildTodo({ child, session, workbenchRole, effectiveRoleIds, isProjectAssigned })) continue;
+      if (!canSeeChildTodo({ child, session, roleIdSet, projectRole })) continue;
 
       const dueAt = child.plannedDueDateOverride ?? parent.plannedDueDate;
       const type = getChildTodoType(child, dueAt, now);
@@ -352,11 +359,11 @@ function buildProjectTodos({
         status: child.status,
         dueAt: dueAt?.toISOString() ?? null,
         priorityRank: getTodoPriority(type, dueAt, now),
-        allowedActions: getAllowedActions(workbenchRole, 'child'),
+        allowedActions: getProjectRoleActions(projectRole, 'child'),
       });
     }
 
-    if (parent.status === 'pending_npq_close' && canSeeNpqProjectTodo(workbenchRole, project, session.sub)) {
+    if (parent.status === 'pending_npq_close' && isOwner) {
       todos.push({
         id: `parent:${parent.id}`,
         type: 'pending_parent_close' as TodoType,
@@ -366,11 +373,11 @@ function buildProjectTodos({
         stage: parent.stage,
         title: parent.projectTaskName,
         parentTitle: parent.projectTaskName,
-        ownerRole: 'NPQ',
+        ownerRole: 'owner',
         status: parent.status,
         dueAt: parent.plannedDueDate?.toISOString() ?? null,
         priorityRank: getTodoPriority('pending_parent_close', parent.plannedDueDate, now),
-        allowedActions: getAllowedActions(workbenchRole, 'parent'),
+        allowedActions: getProjectRoleActions(projectRole, 'parent'),
       });
     }
   }
@@ -381,32 +388,18 @@ function buildProjectTodos({
 function canSeeChildTodo({
   child,
   session,
-  workbenchRole,
-  effectiveRoleIds,
-  isProjectAssigned,
+  roleIdSet,
+  projectRole,
 }: {
-  child: {
-    responsibleRoleId: string | null;
-    assigneeUserId: string | null;
-  };
+  child: { responsibleRoleId: string | null; assigneeUserId: string | null };
   session: SessionLike;
-  workbenchRole: WorkbenchRole;
-  effectiveRoleIds: string[];
-  isProjectAssigned: boolean;
+  roleIdSet: Set<string>;
+  projectRole: ProjectRole;
 }) {
-  if (workbenchRole === 'admin' || workbenchRole === 'manager') return false;
+  if (projectRole === 'observer') return false;
   if (child.assigneeUserId === session.sub) return true;
-  if (isProjectAssigned && child.responsibleRoleId && effectiveRoleIds.includes(child.responsibleRoleId)) return true;
+  if (child.responsibleRoleId && roleIdSet.has(child.responsibleRoleId)) return true;
   return false;
-}
-
-function canSeeNpqProjectTodo(
-  workbenchRole: WorkbenchRole,
-  project: { members: { userId: string; user: { positionBinding: { positionRole: { code: string } } | null } }[] },
-  userId: string,
-) {
-  if (workbenchRole !== 'npq') return false;
-  return project.members.some((member) => member.userId === userId && member.user.positionBinding?.positionRole.code === 'NPQ');
 }
 
 function getChildTodoType(
@@ -470,13 +463,14 @@ function getTodoPriority(type: TodoType, dueAt: Date | null, now: Date) {
   return base[type] + Math.max(Math.min(days, 30), -30);
 }
 
-function getAllowedActions(role: WorkbenchRole, target: 'child' | 'parent') {
-  if (role === 'manager') return ['view'];
-  if (role === 'admin') return ['view', 'configure'];
-  if (role === 'npq') {
+function getProjectRoleActions(projectRole: ProjectRole, target: 'child' | 'parent') {
+  if (projectRole === 'observer') return ['view'];
+  if (projectRole === 'admin') return ['view', 'configure'];
+  if (projectRole === 'owner') {
     if (target === 'parent') return ['view', 'close_parent'];
     return ['view', 'update', 'complete', 'block', 'attachment', 'return', 'not_applicable', 'adjust'];
   }
+  // member
   if (target !== 'child') return ['view'];
   return ['view', 'update', 'complete', 'block', 'attachment'];
 }

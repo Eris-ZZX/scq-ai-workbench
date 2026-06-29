@@ -43,6 +43,7 @@ export async function GET() {
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { roleName: 'asc' }],
     select: {
       id: true,
+      code: true,
       name: true,
       roleName: true,
       isActive: true,
@@ -53,7 +54,6 @@ export async function GET() {
           projectAssignments: true,
           templateChildren: true,
           activityChildren: true,
-          permissions: true,
         },
       },
     },
@@ -74,21 +74,21 @@ export async function POST(request: Request) {
 
   const groupName = clean(body.groupName ?? body.name);
   const roleName = clean(body.roleName);
-  if (!groupName) return NextResponse.json({ error: '请填写分组名称' }, { status: 400 });
-  if (!roleName) return NextResponse.json({ error: '请填写角色名称' }, { status: 400 });
+  const providedCode = clean(body.code);
+  if (!groupName) return NextResponse.json({ error: '请填写角色名称' }, { status: 400 });
+  if (!roleName) return NextResponse.json({ error: '请填写显示名' }, { status: 400 });
 
   try {
     const existing = await prisma.positionRole.findFirst({ where: { name: groupName, roleName }, select: { id: true } });
-    if (existing) return NextResponse.json({ error: '该分组下角色名称已存在' }, { status: 409 });
+    if (existing) return NextResponse.json({ error: '该角色名称已存在' }, { status: 409 });
 
-    const code = await uniqueInternalCode(`${groupName}-${roleName}`);
+    const code = providedCode || (await uniqueInternalCode(`${groupName}-${roleName}`));
     const count = await prisma.positionRole.count();
     const created = await prisma.positionRole.create({
       data: {
         code,
         name: groupName,
         roleName,
-        roleGroup: internalCodeFromName(groupName),
         sortOrder: count + 1,
       },
       select: {
@@ -152,7 +152,7 @@ export async function PATCH(request: Request) {
 
       await prisma.positionRole.updateMany({
         where: { name: oldGroupName },
-        data: { name: groupName, roleGroup: internalCodeFromName(groupName) },
+        data: { name: groupName },
       });
       return NextResponse.json({ ok: true });
     } catch (error) {
@@ -193,7 +193,6 @@ export async function PATCH(request: Request) {
       data: {
         name: hasGroupName ? groupName : undefined,
         roleName: hasRoleName ? roleName : undefined,
-        roleGroup: hasGroupName ? internalCodeFromName(groupName) : undefined,
         isActive: typeof body.isActive === 'boolean' ? body.isActive : undefined,
         sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : undefined,
       },
@@ -229,7 +228,6 @@ export async function DELETE(request: Request) {
           projectAssignments: true,
           templateChildren: true,
           activityChildren: true,
-          permissions: true,
         },
       },
     },
@@ -240,8 +238,7 @@ export async function DELETE(request: Request) {
     role._count.userPositions +
     role._count.projectAssignments +
     role._count.templateChildren +
-    role._count.activityChildren +
-    role._count.permissions;
+    role._count.activityChildren;
   if (refCount > 0) {
     return NextResponse.json({ error: '角色已被用户、项目、模板或权限引用，不能直接删除' }, { status: 409 });
   }

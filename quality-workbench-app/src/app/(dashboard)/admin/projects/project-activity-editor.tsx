@@ -12,7 +12,6 @@ type ProjectActivityChild = {
   id: string;
   thirdLevelPlan: string;
   ownerRole: string;
-  roleGroup: string;
   requiresDeliverable: boolean;
   deliverableName: string | null;
   sortOrder: number;
@@ -70,7 +69,6 @@ function toStructure(parents: ProjectActivityParent[]): ActivityStructureStage[]
             id: child.id,
             title: child.thirdLevelPlan,
             ownerRoleName: child.ownerRole,
-            roleGroup: child.roleGroup,
             deliverableName: child.deliverableName,
             requiresDeliverable: child.requiresDeliverable,
             isRequired: true,
@@ -89,8 +87,7 @@ function toProjectPayload(stages: ActivityStructureStage[]) {
       children: parent.children.map((child) => ({
         id: isDraftId(child.id) ? '' : child.id,
         thirdLevelPlan: child.title,
-        ownerRole: child.ownerRoleName || child.roleGroup,
-        roleGroup: child.roleGroup,
+        ownerRole: child.ownerRoleName,
         requiresDeliverable: child.requiresDeliverable,
         deliverableName: child.deliverableName,
         sortOrder: child.sortOrder,

@@ -16,7 +16,6 @@ type TemplateWriteClient = Pick<
 type TemplateChildInput = {
   title: string;
   ownerRoleName: string;
-  roleGroup: string;
   deliverableName: string | null;
   requiresDeliverable: boolean;
   isRequired: boolean;
@@ -96,13 +95,11 @@ function parseTemplateStages(value: unknown): TemplateStageInput[] {
       for (const [childIndex, rawChild] of asArray(parentRecord.children).entries()) {
         const childRecord = asRecord(rawChild);
         const title = cleanText(childRecord.title);
-        const roleGroup = cleanText(childRecord.roleGroup) || 'NPQ';
         if (!title) continue;
 
         children.push({
           title,
-          ownerRoleName: cleanText(childRecord.ownerRoleName) || roleGroup,
-          roleGroup,
+          ownerRoleName: cleanText(childRecord.ownerRoleName) || 'NPQ',
           deliverableName: cleanOptionalText(childRecord.deliverableName),
           requiresDeliverable: Boolean(childRecord.requiresDeliverable),
           isRequired: typeof childRecord.isRequired === 'boolean' ? childRecord.isRequired : true,
@@ -141,8 +138,8 @@ function chunk<T>(items: T[], size: number) {
   return chunks;
 }
 
-function roleDisplayName(role: { code: string; name: string; roleName: string | null; roleGroup: string }) {
-  return role.roleName?.trim() || role.name || role.code || role.roleGroup;
+function roleDisplayName(role: { code: string; name: string; roleName: string | null }) {
+  return role.roleName?.trim() || role.name || role.code;
 }
 
 async function getResponsibleRoleIdByOwnerRole(
@@ -150,8 +147,7 @@ async function getResponsibleRoleIdByOwnerRole(
   children: TemplateChildInput[],
 ) {
   const ownerRoleNames = Array.from(new Set(children.map((child) => child.ownerRoleName).filter(Boolean)));
-  const roleGroups = Array.from(new Set(children.map((child) => child.roleGroup).filter(Boolean)));
-  const roles = ownerRoleNames.length || roleGroups.length
+  const roles = ownerRoleNames.length
     ? await client.positionRole.findMany({
         where: {
           isActive: true,
@@ -159,10 +155,9 @@ async function getResponsibleRoleIdByOwnerRole(
             { roleName: { in: ownerRoleNames } },
             { code: { in: ownerRoleNames } },
             { name: { in: ownerRoleNames } },
-            { roleGroup: { in: roleGroups } },
           ],
         },
-        select: { id: true, code: true, name: true, roleName: true, roleGroup: true },
+        select: { id: true, code: true, name: true, roleName: true },
       })
     : [];
   const exact = new Map<string, string>();
@@ -170,10 +165,9 @@ async function getResponsibleRoleIdByOwnerRole(
   for (const role of roles) {
     exact.set(roleDisplayName(role), role.id);
     exact.set(role.code, role.id);
-    if (!fallback.has(role.roleGroup)) fallback.set(role.roleGroup, role.id);
     if (!fallback.has(role.name)) fallback.set(role.name, role.id);
   }
-  return (child: TemplateChildInput) => exact.get(child.ownerRoleName) ?? fallback.get(child.roleGroup) ?? null;
+  return (child: TemplateChildInput) => exact.get(child.ownerRoleName) ?? fallback.get(child.ownerRoleName) ?? null;
 }
 
 async function getTemplateCenterView() {
@@ -285,7 +279,6 @@ async function copyVersionStructure(client: TemplateWriteClient, sourceVersionId
       children: parent.children.map((child) => ({
         title: child.title,
         ownerRoleName: child.ownerRoleName,
-        roleGroup: child.roleGroup,
         deliverableName: child.deliverableName,
         requiresDeliverable: child.requiresDeliverable,
         isRequired: child.isRequired,
@@ -335,7 +328,6 @@ async function createVersionStructure(client: TemplateWriteClient, targetVersion
             parentId: createdParent.id,
             title: child.title,
             ownerRoleName: child.ownerRoleName,
-            roleGroup: child.roleGroup,
             responsibleRoleId: resolveRoleId(child),
             deliverableName: child.deliverableName,
             requiresDeliverable: child.requiresDeliverable,

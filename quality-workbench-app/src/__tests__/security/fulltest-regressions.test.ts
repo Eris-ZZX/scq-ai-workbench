@@ -10,10 +10,9 @@ const { mockGetSession, mockJson, mockGetEvents, mockGetUsageStats, mockPrisma }
   mockGetUsageStats: vi.fn(),
   mockPrisma: {
     project: { findFirst: vi.fn() },
-    projectMember: { findFirst: vi.fn() },
+    projectMember: { findUnique: vi.fn(), findFirst: vi.fn() },
     projectPositionAssignment: { findMany: vi.fn() },
     userPosition: { findUnique: vi.fn() },
-    npqActionPermission: { findFirst: vi.fn() },
   },
 }));
 
@@ -24,45 +23,55 @@ vi.mock('@/platform/observability/metrics', () => ({ getUsageStats: mockGetUsage
 vi.mock('next/server', () => ({ NextResponse: { json: mockJson } }));
 
 import { GET as getObservability } from '@/app/api/admin/observability/route';
-import { canExecuteNpqAction } from '@/lib/db/npq-permissions';
+import { isProjectOwner, isProjectMember } from '@/lib/db/npq-permissions';
 
 describe('full-test security regressions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('requires project access before checking NPQ project-scoped permissions', async () => {
-    mockPrisma.project.findFirst.mockResolvedValueOnce(null);
+  it('requires project membership before checking owner permissions', async () => {
+    mockPrisma.projectMember.findUnique.mockResolvedValueOnce(null);
 
-    const allowed = await canExecuteNpqAction({
-      actionKey: 'stage_gate.pass',
-      session: { sub: 'user-1', role: 'user' },
-      projectId: 'project-1',
-    });
+    const allowed = await isProjectOwner('user-1', 'project-1');
 
     expect(allowed).toBe(false);
-    expect(mockPrisma.npqActionPermission.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.projectMember.findUnique).toHaveBeenCalledWith({
+      where: { projectId_userId: { projectId: 'project-1', userId: 'user-1' } },
+      select: { role: true },
+    });
   });
 
-  it('allows project-scoped permissions only after project access and action permission match', async () => {
-    mockPrisma.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
-    mockPrisma.projectMember.findFirst.mockResolvedValueOnce({
-      user: { positionBinding: { positionRoleId: 'pos-npq' } },
-    });
-    mockPrisma.projectPositionAssignment.findMany.mockResolvedValueOnce([{ positionRoleId: 'pos-npq' }]);
-    mockPrisma.userPosition.findUnique.mockResolvedValueOnce({ positionRoleId: 'pos-npq' });
-    mockPrisma.npqActionPermission.findFirst.mockResolvedValueOnce({ id: 'perm-1' });
+  it('allows owner permissions only when member role is owner', async () => {
+    mockPrisma.projectMember.findUnique.mockResolvedValueOnce({ role: 'owner' });
 
-    const allowed = await canExecuteNpqAction({
-      actionKey: 'stage_gate.pass',
-      session: { sub: 'user-1', role: 'user' },
-      projectId: 'project-1',
-    });
+    const allowed = await isProjectOwner('user-1', 'project-1');
 
     expect(allowed).toBe(true);
-    expect(mockPrisma.npqActionPermission.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ actionKey: 'stage_gate.pass' }),
-    }));
+  });
+
+  it('denies owner permissions for plain member', async () => {
+    mockPrisma.projectMember.findUnique.mockResolvedValueOnce({ role: 'member' });
+
+    const allowed = await isProjectOwner('user-1', 'project-1');
+
+    expect(allowed).toBe(false);
+  });
+
+  it('isProjectMember returns true for non-observer members', async () => {
+    mockPrisma.projectMember.findUnique.mockResolvedValueOnce({ role: 'member' });
+
+    const result = await isProjectMember('user-1', 'project-1');
+
+    expect(result).toBe(true);
+  });
+
+  it('isProjectMember returns false for observers', async () => {
+    mockPrisma.projectMember.findUnique.mockResolvedValueOnce({ role: 'observer' });
+
+    const result = await isProjectMember('user-1', 'project-1');
+
+    expect(result).toBe(false);
   });
 
   it('blocks non-admin users from observability events', async () => {

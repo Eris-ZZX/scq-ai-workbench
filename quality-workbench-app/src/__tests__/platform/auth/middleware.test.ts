@@ -66,9 +66,9 @@ describe('Auth Middleware — routing logic', () => {
 
   it('redirects page routes to the browser host for LAN access', async () => {
     const headers = new Headers({ host: '172.17.137.235:3000' });
-    const res = (await authMiddleware(mockReq('/dashboard', undefined, headers))) as { type: string; url: URL };
+    const res = (await authMiddleware(mockReq('/dashboard', undefined, headers))) as { type: string; url: string };
     expect(res.type).toBe('redirect');
-    expect(res.url.toString()).toBe('http://172.17.137.235:3000/login');
+    expect(new URL(res.url).toString()).toBe('http://172.17.137.235:3000/login');
   });
 
   it('returns JSON 401 for /api/ routes without cookie', async () => {

@@ -26,17 +26,10 @@ type ActivityTemplateLike = {
   projectTaskName: string;
   thirdLevelPlan: string;
   ownerRole: string;
-  roleGroup: string;
   deliverableName: string | null;
   requiresDeliverable: boolean;
   sortOrder: number;
 };
-
-export function getRoleGroup(ownerRole: string) {
-  const trimmed = ownerRole.trim();
-  const [prefix] = trimmed.split('-', 1);
-  return prefix || trimmed;
-}
 
 export async function canAccessProject(projectId: string, userId: string, appRole?: string) {
   if (appRole === 'admin') return true;
@@ -103,7 +96,6 @@ export async function ensureProjectActivities(projectId: string, actorUserId?: s
           parentId: parent.id,
           thirdLevelPlan: template.thirdLevelPlan,
           ownerRole: template.ownerRole,
-          roleGroup: template.roleGroup || getRoleGroup(template.ownerRole),
           requiresDeliverable: template.requiresDeliverable,
           requiresAttachment: template.requiresDeliverable,
           requiresNote: !template.requiresDeliverable,
@@ -210,7 +202,6 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
               templateChildId: child.id,
               thirdLevelPlan: child.title,
               ownerRole: child.ownerRoleName,
-              roleGroup: child.roleGroup,
               responsibleRoleId: child.responsibleRoleId,
               requiresDeliverable: child.requiresDeliverable,
               requiresAttachment: child.requiresAttachment,
@@ -635,7 +626,7 @@ export async function getActivityDashboard(projectId?: string) {
   const parentCompletionRate = totalParents > 0 ? Math.round((closedParents / totalParents) * 100) : 0;
 
   const stageMap = new Map<string, { total: number; closed: number }>();
-  const roleMap = new Map<string, { roleGroup: string; due: number; onTime: number; details: Map<string, { due: number; onTime: number }> }>();
+  const roleMap = new Map<string, { ownerRole: string; due: number; onTime: number }>();
   const now = new Date();
 
   for (const parent of parents) {
@@ -645,11 +636,9 @@ export async function getActivityDashboard(projectId?: string) {
     stageMap.set(parent.stage, stage);
 
     for (const child of parent.children) {
-      const group = child.roleGroup || getRoleGroup(child.ownerRole);
-      const role = roleMap.get(group) ?? { roleGroup: group, due: 0, onTime: 0, details: new Map() };
-      const detail = role.details.get(child.ownerRole) ?? { due: 0, onTime: 0 };
-      role.details.set(child.ownerRole, detail);
-      roleMap.set(group, role);
+      const key = child.ownerRole;
+      const role = roleMap.get(key) ?? { ownerRole: key, due: 0, onTime: 0 };
+      roleMap.set(key, role);
 
       const due = child.plannedDueDateOverride ?? parent.plannedDueDate;
       const isCompleted = isChildEffectivelyCompleted(child);
@@ -659,11 +648,7 @@ export async function getActivityDashboard(projectId?: string) {
       const completedAt = child.completedAt ?? (child.isNotApplicable ? child.updatedAt : null);
       const onTime = isCompleted && completedAt && due && completedAt <= due;
       role.due += 1;
-      detail.due += 1;
-      if (onTime) {
-        role.onTime += 1;
-        detail.onTime += 1;
-      }
+      if (onTime) role.onTime += 1;
     }
   }
 
@@ -680,17 +665,11 @@ export async function getActivityDashboard(projectId?: string) {
       closed: value.closed,
       rate: value.total > 0 ? Math.round((value.closed / value.total) * 100) : 0,
     })),
-    roleOnTime: Array.from(roleMap.values()).map((role) => ({
-      roleGroup: role.roleGroup,
+    roleOnTime: Array.from(roleMap.entries()).map(([ownerRole, role]) => ({
+      ownerRole,
       due: role.due,
       onTime: role.onTime,
       rate: role.due > 0 ? Math.round((role.onTime / role.due) * 100) : 0,
-      details: Array.from(role.details.entries()).map(([ownerRole, value]) => ({
-        ownerRole,
-        due: value.due,
-        onTime: value.onTime,
-        rate: value.due > 0 ? Math.round((value.onTime / value.due) * 100) : 0,
-      })),
     })),
   };
 }

@@ -8,7 +8,7 @@ export async function DynamicNav() {
   const components = await getEnabledComponents();
   const isAdmin = session?.role === 'admin';
   const projectAdminAccess = session ? await getProjectAdminAccess(session) : { kind: 'none' as const };
-  const canUseProjectManagement = projectAdminAccess.kind === 'admin' || projectAdminAccess.kind === 'npq';
+  const canUseProjectManagement = projectAdminAccess.kind === 'admin' || projectAdminAccess.kind === 'member';
   const businessLinks = components.filter((component) => (
     component.path.startsWith('/flows') &&
     component.enabled &&

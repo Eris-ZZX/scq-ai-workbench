@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/platform/auth/auth.config';
 import { prisma } from '@/lib/prisma';
 import { updateActivityParent } from '@/lib/db/activities';
-import { canExecuteNpqAction } from '@/lib/db/npq-permissions';
+import { isProjectOwner } from '@/lib/db/npq-permissions';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -21,8 +21,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
   }
 
-  const actionKey = body.close ? 'activity.parent_close' : 'activity.snapshot_adjust';
-  const allowed = await canExecuteNpqAction({ actionKey, session, projectId: parent.projectId });
+  const allowed = await isProjectOwner(session.sub, parent.projectId);
   if (!allowed) return NextResponse.json({ error: '无权维护项目活动' }, { status: 403 });
 
   try {

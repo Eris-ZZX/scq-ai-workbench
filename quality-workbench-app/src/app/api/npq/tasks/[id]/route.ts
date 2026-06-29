@@ -22,7 +22,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const history = await getTaskHistory(id).catch(() => []);
   return NextResponse.json({ ...r.task, history });
-  return NextResponse.json({ ...r.task, history });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -56,16 +56,6 @@ function roleFullName(role: Pick<Role, 'name' | 'roleName'>) {
   return roleName === role.name ? roleName : `${role.name} / ${roleName}`;
 }
 
-function groupedRoles(roles: Role[]) {
-  const groups = new Map<string, Role[]>();
-  for (const role of roles) {
-    const items = groups.get(role.name) ?? [];
-    items.push(role);
-    groups.set(role.name, items);
-  }
-  return Array.from(groups.entries()).map(([name, items]) => ({ name, roles: items }));
-}
-
 export default function AdminUserAccountsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -84,9 +74,9 @@ export default function AdminUserAccountsPage() {
       ]);
       if (usersRes.ok) setUsers(await usersRes.json());
       if (rolesRes.ok) setRoles(await rolesRes.json());
-      if (!usersRes.ok || !rolesRes.ok) setError('加载用户或角色失败，请刷新后重试。');
+      if (!usersRes.ok || !rolesRes.ok) setError('加载用户或岗位失败，请刷新后重试。');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载用户或角色失败');
+      setError(err instanceof Error ? err.message : '加载用户或岗位失败');
     } finally {
       setLoading(false);
     }
@@ -173,7 +163,7 @@ export default function AdminUserAccountsPage() {
               Admin / User Accounts
             </div>
             <h1 className="mt-1 text-2xl font-semibold text-foreground">用户管理</h1>
-            <p className="mt-1 text-sm text-muted-foreground">按启用状态分列表，并在列表内按角色分类维护用户。</p>
+            <p className="mt-1 text-sm text-muted-foreground">按启用状态分列表，并在列表内按岗位分类维护用户。</p>
           </div>
           <button
             className="inline-flex h-9 items-center gap-1 rounded border border-ws-blue bg-ws-blue px-3 text-sm font-medium text-white hover:bg-ws-blue/90"
@@ -235,21 +225,17 @@ function groupUsersByRole(users: User[], roles: Role[]): UserGroup[] {
     }))
     .filter((group) => group.users.length > 0);
   const unassigned = users.filter((user) => !user.positionBinding);
-  if (unassigned.length > 0) groups.push({ id: 'unassigned', name: '未分配角色', users: unassigned });
+  if (unassigned.length > 0) groups.push({ id: 'unassigned', name: '未分配岗位', users: unassigned });
   return groups;
 }
 
 function RoleOptions({ roles }: { roles: Role[] }) {
   return (
     <>
-      {groupedRoles(roles).map((group) => (
-        <optgroup key={group.name} label={group.name}>
-          {group.roles.map((role) => (
-            <option key={role.id} value={role.id} disabled={!role.isActive}>
-              {roleDisplayName(role)}
-            </option>
-          ))}
-        </optgroup>
+      {roles.map((role) => (
+        <option key={role.id} value={role.id} disabled={!role.isActive}>
+          {roleFullName(role)}
+        </option>
       ))}
     </>
   );
@@ -297,7 +283,7 @@ function UserStatusList({
                   <tr>
                     <th className="px-3 py-2">用户</th>
                     <th className="px-3 py-2">系统权限</th>
-                    <th className="px-3 py-2">角色</th>
+                    <th className="px-3 py-2">岗位</th>
                     <th className="px-3 py-2">账号状态</th>
                   </tr>
                 </thead>
@@ -331,7 +317,7 @@ function UserStatusList({
                             disabled={saving}
                             className="h-8 w-full rounded border border-border px-2 text-xs"
                           >
-                            <option value="">未分配角色</option>
+                            <option value="">未分配岗位</option>
                             <RoleOptions roles={roles} />
                           </select>
                         </td>
@@ -436,13 +422,13 @@ function CreateUserModal({
             </select>
           </label>
           <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs text-muted-foreground">角色</span>
+            <span className="mb-1 block text-xs text-muted-foreground">岗位</span>
             <select
               className="h-9 w-full rounded border border-border px-2 text-sm"
               value={value.positionRoleId}
               onChange={(event) => onChange({ ...value, positionRoleId: event.target.value })}
             >
-              <option value="">未分配角色</option>
+              <option value="">未分配岗位</option>
               <RoleOptions roles={roles} />
             </select>
           </label>

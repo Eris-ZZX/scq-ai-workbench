@@ -31,7 +31,7 @@ type ProjectMember = {
     username: string;
     positionBinding: null | {
       positionRoleId: string;
-      positionRole: { id: string; code: string; name: string; roleName: string | null; roleGroup: string };
+      positionRole: { id: string; code: string; name: string; roleName: string | null };
     };
   };
 };
@@ -57,7 +57,6 @@ type ActivityChild = {
   parentId: string;
   thirdLevelPlan: string;
   ownerRole: string;
-  roleGroup: string;
   responsibleRoleId: string | null;
   assigneeUserId: string | null;
   status: string;
@@ -126,7 +125,7 @@ type RoleContext = {
   username: string;
   appRole: string;
   workbenchRole: WorkbenchRole;
-  position: null | { id: string; code: string; name: string; roleName: string | null; roleGroup: string };
+  position: null | { id: string; code: string; name: string; roleName: string | null };
 };
 
 const STAGE_ORDER = ['TR1', 'TR2&3', 'TR4', 'TR4A', 'TR5', 'TR6'];
@@ -205,7 +204,7 @@ export default function ProjectWorkspacePage() {
   useEffect(() => {
     if (!workspace) return;
     const timeoutId = window.setTimeout(() => {
-      const visibleParents = filterInProgressParents(workspace.parents, true, roleContext);
+      const visibleParents = filterInProgressParents(workspace.parents, true, roleContext, projectRole, assignedRole);
       const resolved = resolveInitialSelection(todoParam, visibleParents, workspace.project.currentStage);
       setSelection(resolved);
       setExpandedStages(new Set([selectionStage(resolved, visibleParents) ?? workspace.project.currentStage]));
@@ -226,9 +225,19 @@ export default function ProjectWorkspacePage() {
     return () => window.clearTimeout(timeoutId);
   }, [selection, expandedStages, expandedParents]);
 
+  const projectRole = useMemo(() => {
+    const member = (workspace?.project.members as any)?.find((m: any) => m.userId === roleContext?.userId);
+    return member?.role ?? 'member';
+  }, [workspace, roleContext]);
+
+  const assignedRole = useMemo(() => {
+    const member = (workspace?.project.members as any)?.find((m: any) => m.userId === roleContext?.userId);
+    return member?.assignedRole ?? null;
+  }, [workspace, roleContext]);
+
   const visibleParents = useMemo(
-    () => filterInProgressParents(workspace?.parents ?? [], showInProgressOnly, roleContext),
-    [roleContext, showInProgressOnly, workspace],
+    () => filterInProgressParents(workspace?.parents ?? [], showInProgressOnly, roleContext, projectRole, assignedRole),
+    [roleContext, showInProgressOnly, workspace, projectRole, assignedRole],
   );
   const stageGroups = useMemo(() => groupParentsByStage(visibleParents), [visibleParents]);
   const taskNumbers = useMemo(
@@ -266,8 +275,7 @@ export default function ProjectWorkspacePage() {
   if (!workspace) return <div className="p-8 text-sm text-red-600">{errorMsg || '项目工作区不可用'}</div>;
 
   const project = workspace.project;
-  const role = roleContext?.workbenchRole ?? 'executor';
-  const readonly = role === 'manager' || role === 'admin';
+  const readonly = projectRole === 'observer';
   const allParents = workspace.parents;
   const closedParents = allParents.filter((parent) => parent.status === 'closed').length;
   const totalChildren = allParents.reduce((sum, parent) => sum + parent.children.length, 0);
@@ -402,7 +410,7 @@ export default function ProjectWorkspacePage() {
               <div className="mt-1.5 h-2 rounded-full bg-slate-100">
                 <div className="h-full rounded-full bg-slate-900" style={{ width: `${overallProgress}%` }} />
               </div>
-              {role === 'npq' && (
+              {projectRole === 'owner' && (
                 <div className="flex justify-end">
                   <Link
                     href={`/flows/npq/activities?projectId=${project.id}`}
@@ -558,7 +566,7 @@ export default function ProjectWorkspacePage() {
                   <StageDetail
                     stage={selection.stage}
                     gate={stageGates.find((item) => item.stage === selection.stage)}
-                    canPass={canPassStageGate && role !== 'admin' && role !== 'manager'}
+                    canPass={canPassStageGate && projectRole !== 'observer'}
                     note={gateNotes[selection.stage] ?? ''}
                     saving={saving}
                     onNoteChange={(value) => setGateNotes((current) => ({ ...current, [selection.stage]: value }))}
@@ -570,7 +578,7 @@ export default function ProjectWorkspacePage() {
                   <ParentDetail
                     parent={selectedParent}
                     readonly={readonly}
-                    canClose={role === 'npq' && isParentReadyToClose(selectedParent)}
+                    canClose={projectRole === 'owner' && isParentReadyToClose(selectedParent)}
                     saving={saving}
                     onClose={() => closeParent(selectedParent)}
                   />
@@ -582,7 +590,7 @@ export default function ProjectWorkspacePage() {
                     child={selectedChild}
                     draft={childDraft}
                     readonly={readonly}
-                    canReturn={role === 'npq'}
+                    canReturn={projectRole === 'owner'}
                     saving={saving}
                     onDraftChange={(patch) => setChildDraft((current) => ({ ...current, ...patch }))}
                     onSave={() => saveChild()}
@@ -1081,34 +1089,35 @@ function selectionTreeTargetId(selection: Selection) {
   return `tree-child-${selection.childId}`;
 }
 
-function filterInProgressParents(parents: ActivityParent[], enabled: boolean, roleContext: RoleContext | null) {
+function filterInProgressParents(parents: ActivityParent[], enabled: boolean, roleContext: RoleContext | null, projectRole: string, assignedRole: string | null) {
   if (!enabled) return parents;
+  const isOwner = projectRole === 'owner';
   return parents
     .map((parent) => {
-      const isNpqPendingCloseParent = roleContext?.workbenchRole === 'npq' && isParentInCloseReview(parent);
-      const children = isNpqPendingCloseParent
+      const includeAll = isOwner && isParentInCloseReview(parent);
+      const children = includeAll
         ? parent.children
-        : parent.children.filter((child) => isChildVisibleInAttentionFilter(child, parent.plannedDueDate, roleContext));
+        : parent.children.filter((child) => isChildVisibleInAttentionFilter(child, parent.plannedDueDate, roleContext, assignedRole));
       return {
         parent: { ...parent, children },
-        visible: isParentVisibleInAttentionFilter(parent, children.length, roleContext),
+        visible: isParentVisibleInAttentionFilter(parent, children.length, isOwner),
       };
     })
     .filter((item) => item.visible)
     .map((item) => item.parent);
 }
 
-function isChildVisibleInAttentionFilter(child: ActivityChild, parentDueDate: string | null, roleContext: RoleContext | null) {
+function isChildVisibleInAttentionFilter(child: ActivityChild, parentDueDate: string | null, roleContext: RoleContext | null, assignedRole: string | null) {
   if (isChildEffectivelyCompleted(child)) return false;
-  if (!isChildOwnedByRoleContext(child, roleContext)) return false;
+  if (!isChildOwnedByRoleContext(child, roleContext, assignedRole)) return false;
   return child.status === 'in_progress'
     || child.status === 'returned'
     || child.isBlocked
     || isChildOverdue(child, parentDueDate);
 }
 
-function isParentVisibleInAttentionFilter(parent: ActivityParent, visibleChildCount: number, roleContext: RoleContext | null) {
-  if (roleContext?.workbenchRole !== 'npq') return visibleChildCount > 0;
+function isParentVisibleInAttentionFilter(parent: ActivityParent, visibleChildCount: number, isOwner: boolean) {
+  if (!isOwner) return visibleChildCount > 0;
   return isParentInCloseReview(parent)
     || parent.hasBlocked
     || parent.hasOverdue
@@ -1119,15 +1128,12 @@ function isParentInCloseReview(parent: ActivityParent) {
   return isParentReadyToClose(parent) || parent.status === 'pending_npq_close';
 }
 
-function isChildOwnedByRoleContext(child: ActivityChild, roleContext: RoleContext | null) {
+function isChildOwnedByRoleContext(child: ActivityChild, roleContext: RoleContext | null, assignedRole: string | null) {
   if (!roleContext) return true;
   if (child.assigneeUserId && child.assigneeUserId === roleContext.userId) return true;
-  const position = roleContext.position;
-  if (!position) return roleContext.workbenchRole === 'npq';
-  return child.responsibleRoleId === position.id
-    || child.ownerRole === position.roleName
-    || child.ownerRole === position.name
-    || child.ownerRole === position.code;
+  // 项目内分配的角色匹配子活动的 ownerRole
+  if (assignedRole && assignedRole === child.ownerRole) return true;
+  return false;
 }
 
 function groupParentsByStage(parents: ActivityParent[]) {

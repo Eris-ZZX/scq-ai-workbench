@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { activateProjectStageActivities, canAccessProject, ensureProjectActivities } from '@/lib/db/activities';
-import { canExecuteNpqAction } from '@/lib/db/npq-permissions';
+import { isProjectOwner } from '@/lib/db/npq-permissions';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
 
@@ -69,7 +69,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!stage || !STAGES.includes(stage)) return NextResponse.json({ error: '无效阶段' }, { status: 400 });
 
   if (body.action === 'updatePlan') {
-    const allowed = await canExecuteNpqAction({ actionKey: 'activity.snapshot_adjust', session, projectId });
+    const allowed = await isProjectOwner(session.sub, projectId);
     if (!allowed) return NextResponse.json({ error: '无权维护阶段计划' }, { status: 403 });
 
     const updated = await prisma.stageGateRecord.upsert({
@@ -88,7 +88,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json(updated);
   }
 
-  const allowed = await canExecuteNpqAction({ actionKey: 'stage_gate.pass', session, projectId });
+  const allowed = await isProjectOwner(session.sub, projectId);
   if (!allowed) return NextResponse.json({ error: '无权执行过点' }, { status: 403 });
 
   const project = await prisma.project.findUnique({

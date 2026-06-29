@@ -7,33 +7,31 @@ type SessionLike = {
 
 export type ProjectAdminAccess =
   | { kind: 'admin'; userId: string }
-  | { kind: 'npq'; userId: string }
+  | { kind: 'member'; userId: string }
   | { kind: 'none'; userId: string };
 
 export async function getProjectAdminAccess(session: SessionLike): Promise<ProjectAdminAccess> {
   if (session.role === 'admin') return { kind: 'admin', userId: session.sub };
 
-  const userPosition = await prisma.userPosition.findUnique({
+  // 有任何项目成员身份即可进入项目管理页面
+  const member = await prisma.projectMember.findFirst({
     where: { userId: session.sub },
-    select: {
-      positionRole: { select: { code: true, name: true, roleName: true } },
-    },
+    select: { id: true },
   });
-  const roleCode = userPosition?.positionRole.code ?? userPosition?.positionRole.roleName ?? userPosition?.positionRole.name ?? '';
-  if (roleCode === 'NPQ') return { kind: 'npq', userId: session.sub };
+  if (member) return { kind: 'member', userId: session.sub };
 
   return { kind: 'none', userId: session.sub };
 }
 
 export function projectScopeWhere(access: ProjectAdminAccess) {
   if (access.kind === 'admin') return {};
-  if (access.kind === 'npq') return { members: { some: { userId: access.userId } } };
+  if (access.kind === 'member') return { members: { some: { userId: access.userId } } };
   return { id: '__never__' };
 }
 
 export async function canManageProject(access: ProjectAdminAccess, projectId: string) {
   if (access.kind === 'admin') return true;
-  if (access.kind !== 'npq') return false;
+  if (access.kind !== 'member') return false;
   const project = await prisma.project.findFirst({
     where: { id: projectId, members: { some: { userId: access.userId } } },
     select: { id: true },

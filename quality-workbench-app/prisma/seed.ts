@@ -8,25 +8,21 @@ const templatePath = path.resolve(process.cwd(), 'prisma', 'quality-activity-tem
 const TEST_PASSWORD_HASH = '$2b$10$zvMa9qFDxYK1MsTOaKbR6e6Kl6rRhV7L1lY6Zz0zxbDL17yWzCZK6';
 
 const positionRoleSeeds = [
-  ['pos-npq', 'NPQ', 'NPQ', 'NPQ', 'NPQ', 'New Product Quality owner', 1],
-  ['pos-pqe', 'PQE', 'PQE', 'PQE', 'PQE', 'Process Quality Engineering', 2],
-  ['pos-sqe', 'SQE', 'SQE', 'SQE-塑胶', 'SQE', 'Supplier Quality Engineering - plastic', 3],
-  ['pos-sqe-metal', 'SQE-METAL', 'SQE', 'SQE-五金', 'SQE', 'Supplier Quality Engineering - metal', 4],
-  ['pos-sqe-smt', 'SQE-SMT', 'SQE', 'SQE-SMT代表', 'SQE', 'Supplier Quality Engineering - SMT', 5],
-  ['pos-sqe-packaging', 'SQE-PACKAGING', 'SQE', 'SQE-包材', 'SQE', 'Supplier Quality Engineering - packaging', 6],
-  ['pos-sqe-custom-electronics', 'SQE-CUSTOM-ELECTRONICS', 'SQE', 'SQE-定制电子代表', 'SQE', 'Supplier Quality Engineering - custom electronics', 7],
-  ['pos-sqe-silicone', 'SQE-SILICONE', 'SQE', 'SQE-硅胶', 'SQE', 'Supplier Quality Engineering - silicone', 8],
-  ['pos-fae', 'FAE', 'FAE', 'FAE', 'FAE', 'Field Application Engineering', 9],
-  ['pos-ram', 'RAM', 'RAM', 'RAM', 'RAM', 'Reliability and Maintainability', 10],
-  ['pos-qcm', 'QCM', 'QCM', 'QCM', 'QCM', 'Quality Control Management', 11],
-  ['pos-manager', 'MANAGER', '管理者', '管理者', 'MANAGER', 'Business read-only manager', 12],
+  ['pos-npq', 'NPQ', 'NPQ', 'NPQ', 'New Product Quality owner', 1],
+  ['pos-pqe', 'PQE', 'PQE', 'PQE', 'Process Quality Engineering', 2],
+  ['pos-sqe', 'SQE', 'SQE', 'SQE-塑胶', 'Supplier Quality Engineering - plastic', 3],
+  ['pos-sqe-metal', 'SQE-METAL', 'SQE', 'SQE-五金', 'Supplier Quality Engineering - metal', 4],
+  ['pos-sqe-smt', 'SQE-SMT', 'SQE', 'SQE-SMT代表', 'Supplier Quality Engineering - SMT', 5],
+  ['pos-sqe-packaging', 'SQE-PACKAGING', 'SQE', 'SQE-包材', 'Supplier Quality Engineering - packaging', 6],
+  ['pos-sqe-custom-electronics', 'SQE-CUSTOM-ELECTRONICS', 'SQE', 'SQE-定制电子代表', 'Supplier Quality Engineering - custom electronics', 7],
+  ['pos-sqe-silicone', 'SQE-SILICONE', 'SQE', 'SQE-硅胶', 'Supplier Quality Engineering - silicone', 8],
+  ['pos-fae', 'FAE', 'FAE', 'FAE', 'Field Application Engineering', 9],
+  ['pos-ram', 'RAM', 'RAM', 'RAM', 'Reliability and Maintainability', 10],
+  ['pos-qcm', 'QCM', 'QCM', 'QCM', 'Quality Control Management', 11],
+  ['pos-manager', 'MANAGER', '管理者', '管理者', 'Business read-only manager', 12],
 ] as const;
 
-function positionRoleId(roleGroup: string) {
-  return `pos-${roleGroup.trim().toLowerCase()}`;
-}
-
-function responsiblePositionRoleId(ownerRole: string, roleGroup: string) {
+function responsiblePositionRoleId(ownerRole: string) {
   const exact: Record<string, string> = {
     'SQE-塑胶': 'pos-sqe',
     'SQE-五金': 'pos-sqe-metal',
@@ -35,7 +31,7 @@ function responsiblePositionRoleId(ownerRole: string, roleGroup: string) {
     'SQE-定制电子代表': 'pos-sqe-custom-electronics',
     'SQE-硅胶': 'pos-sqe-silicone',
   };
-  return exact[ownerRole.trim()] ?? positionRoleId(roleGroup);
+  return exact[ownerRole.trim()];
 }
 
 type QualityActivityTemplateRow = {
@@ -43,7 +39,6 @@ type QualityActivityTemplateRow = {
   projectTaskName: string;
   thirdLevelPlan: string;
   ownerRole: string;
-  roleGroup: string;
   deliverableName: string | null;
   requiresDeliverable: boolean;
   sortOrder: number;
@@ -104,19 +99,18 @@ async function main() {
   console.log('  ✓ Stage templates: TR1→TR6');
 
   // ── 预注册 MVP 功能组件 ──
-  for (const [id, code, name, roleName, roleGroup, description, sortOrder] of positionRoleSeeds) {
+  for (const [id, code, name, roleName, description, sortOrder] of positionRoleSeeds) {
     await executeWithRetry(
-      `INSERT INTO PositionRole (id, code, name, roleName, roleGroup, description, isActive, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
+      `INSERT INTO PositionRole (id, code, name, roleName, description, isActive, sortOrder, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
        ON CONFLICT(code) DO UPDATE SET
          name=excluded.name,
          roleName=excluded.roleName,
-         roleGroup=excluded.roleGroup,
          description=excluded.description,
          isActive=1,
          sortOrder=excluded.sortOrder,
          updatedAt=datetime('now')`,
-      [id, code, name, roleName, roleGroup, description, sortOrder],
+      [id, code, name, roleName, description, sortOrder],
     );
   }
   console.log(`  F3 position roles: ${positionRoleSeeds.length} seeded`);
@@ -187,13 +181,12 @@ async function main() {
   for (const row of activityTemplates) {
     await executeWithRetry(
       `INSERT INTO ActivityTemplate
-         (id, stage, projectTaskName, thirdLevelPlan, ownerRole, roleGroup,
+         (id, stage, projectTaskName, thirdLevelPlan, ownerRole,
           deliverableName, requiresDeliverable, sourceBatchId, sortOrder,
           isActive, createdAt, updatedAt)
        VALUES
-         (?, ?, ?, ?, ?, ?, ?, ?, 'quality-activity-template-20260611', ?, 1, datetime('now'), datetime('now'))
+         (?, ?, ?, ?, ?, ?, ?, 'quality-activity-template-20260611', ?, 1, datetime('now'), datetime('now'))
        ON CONFLICT(stage, projectTaskName, thirdLevelPlan, ownerRole, sourceBatchId) DO UPDATE SET
-         roleGroup=excluded.roleGroup,
          deliverableName=excluded.deliverableName,
          requiresDeliverable=excluded.requiresDeliverable,
          sortOrder=excluded.sortOrder,
@@ -205,7 +198,6 @@ async function main() {
         row.projectTaskName,
         row.thirdLevelPlan,
         row.ownerRole,
-        row.roleGroup,
         row.deliverableName,
         row.requiresDeliverable ? 1 : 0,
         row.sortOrder,
@@ -344,7 +336,6 @@ async function main() {
   );
   await seedProjectActivities('seed-f2-project', activityTemplates);
   await seedStageGateRecords('seed-f2-project', activityTemplates);
-  await seedNpqActionPermissions();
   console.log('  ✓ F2 sample project activity instance: seed-f2-project');
 
   console.log('\n✅ Seed complete.');
@@ -428,15 +419,14 @@ async function seedStructuredActivityTemplate(templates: QualityActivityTemplate
       );
     }
 
-    const roleId = responsiblePositionRoleId(row.ownerRole, row.roleGroup);
+    const roleId = responsiblePositionRoleId(row.ownerRole);
     await executeWithRetry(
       `INSERT INTO ActivityTemplateChild
-         (id, parentId, title, ownerRoleName, roleGroup, responsibleRoleId,
+         (id, parentId, title, ownerRoleName, responsibleRoleId,
           deliverableName, requiresDeliverable, requiresAttachment, requiresNote,
           isRequired, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
        ON CONFLICT(parentId, title, ownerRoleName) DO UPDATE SET
-         roleGroup=excluded.roleGroup,
          responsibleRoleId=excluded.responsibleRoleId,
          deliverableName=excluded.deliverableName,
          requiresDeliverable=excluded.requiresDeliverable,
@@ -450,7 +440,6 @@ async function seedStructuredActivityTemplate(templates: QualityActivityTemplate
         parentId,
         row.thirdLevelPlan,
         row.ownerRole,
-        row.roleGroup,
         roleId,
         row.deliverableName,
         row.requiresDeliverable ? 1 : 0,
@@ -471,52 +460,6 @@ async function seedStageGateRecords(projectId: string, templates: QualityActivit
        ON CONFLICT(projectId, stage) DO UPDATE SET updatedAt=datetime('now')`,
       [`sgr-${projectId}-${slug(stage)}`, projectId, stage],
     );
-  }
-}
-
-async function seedNpqActionPermissions() {
-  const npqActions = [
-    'template.manage',
-    'project.create',
-    'project.assign_positions',
-    'activity.snapshot_adjust',
-    'activity.parent_close',
-    'activity.child_return',
-    'activity.batch_update',
-    'stage_gate.pass',
-  ];
-  const executorActions = [
-    'activity.child_update_own',
-    'activity.attachment_upload_own',
-  ];
-
-  for (const actionKey of npqActions) {
-    await executeWithRetry(
-      `INSERT INTO NpqActionPermission (id, actionKey, positionRoleId, canExecute, scope, description, createdAt, updatedAt)
-       VALUES (?, ?, 'pos-npq', 1, 'project', 'Seed NPQ full activity-flow permission', datetime('now'), datetime('now'))
-       ON CONFLICT(actionKey, positionRoleId) DO UPDATE SET
-         canExecute=1,
-         scope=excluded.scope,
-         description=excluded.description,
-         updatedAt=datetime('now')`,
-      [`perm-npq-${slug(actionKey)}`, actionKey],
-    );
-  }
-
-  for (const [roleId, code] of positionRoleSeeds) {
-    if (code === 'NPQ' || code === 'MANAGER') continue;
-    for (const actionKey of executorActions) {
-      await executeWithRetry(
-        `INSERT INTO NpqActionPermission (id, actionKey, positionRoleId, canExecute, scope, description, createdAt, updatedAt)
-         VALUES (?, ?, ?, 1, 'own_task', 'Seed executor own-task permission', datetime('now'), datetime('now'))
-         ON CONFLICT(actionKey, positionRoleId) DO UPDATE SET
-           canExecute=1,
-           scope=excluded.scope,
-           description=excluded.description,
-           updatedAt=datetime('now')`,
-        [`perm-${code.toLowerCase()}-${slug(actionKey)}`, actionKey, roleId],
-      );
-    }
   }
 }
 
@@ -550,13 +493,12 @@ async function seedProjectActivities(
     const childId = `pac-${row.sortOrder}`;
     await executeWithRetry(
       `INSERT INTO ProjectActivityChild
-         (id, projectId, parentId, templateChildId, thirdLevelPlan, ownerRole, roleGroup,
+         (id, projectId, parentId, templateChildId, thirdLevelPlan, ownerRole,
           responsibleRoleId, assigneeUserId, status, requiresDeliverable, requiresAttachment,
           requiresNote, deliverableName, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'not_started', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+       VALUES (?, ?, ?, ?, ?, ?, NULL, 'not_started', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
        ON CONFLICT(parentId, thirdLevelPlan, ownerRole) DO UPDATE SET
          templateChildId=excluded.templateChildId,
-         roleGroup=excluded.roleGroup,
          responsibleRoleId=excluded.responsibleRoleId,
          requiresDeliverable=excluded.requiresDeliverable,
          requiresAttachment=excluded.requiresAttachment,
@@ -571,8 +513,7 @@ async function seedProjectActivities(
         `atc-${row.sortOrder}`,
         row.thirdLevelPlan,
         row.ownerRole,
-        row.roleGroup,
-        responsiblePositionRoleId(row.ownerRole, row.roleGroup),
+        responsiblePositionRoleId(row.ownerRole),
         row.requiresDeliverable ? 1 : 0,
         row.requiresDeliverable ? 1 : 0,
         row.requiresDeliverable ? 0 : 1,

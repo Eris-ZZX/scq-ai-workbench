@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 type Project = { id: string; name: string };
 type StageMetric = { stage: string; total: number; closed: number; rate: number };
 type RoleMetric = {
-  roleGroup: string;
+  ownerRole: string;
   due: number;
   onTime: number;
   rate: number;
@@ -136,14 +136,14 @@ export default function ActivityDashboardPage() {
                   {data.roleOnTime.length === 0 ? (
                     <div className="p-8 text-center text-sm text-muted-foreground">当前没有截至今日应完成的子任务</div>
                   ) : data.roleOnTime.map((role) => {
-                    const isOpen = expanded.has(role.roleGroup);
+                    const isOpen = expanded.has(role.ownerRole);
                     return (
-                      <div key={role.roleGroup} className="border-b last:border-b-0">
-                        <button onClick={() => setExpanded((current) => toggleSet(current, role.roleGroup))}
+                      <div key={role.ownerRole} className="border-b last:border-b-0">
+                        <button onClick={() => setExpanded((current) => toggleSet(current, role.ownerRole))}
                           className="grid w-full grid-cols-[minmax(160px,1fr)_100px_100px_100px] items-center px-3 py-2 text-left text-sm hover:bg-muted/30">
                           <span className="flex items-center gap-2 font-medium">
                             {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            {role.roleGroup}
+                            {role.ownerRole}
                           </span>
                           <span>{role.due}</span>
                           <span>{role.onTime}</span>

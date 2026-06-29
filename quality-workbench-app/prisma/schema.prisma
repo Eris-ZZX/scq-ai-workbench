@@ -89,19 +89,33 @@ model Project {
 }
 
 model ProjectMember {
-  id        String   @id @default(cuid())
-  projectId  String
-  userId    String
-  role      String   @default("member") // "owner" | "member" | "observer"
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  projectId    String
+  userId       String
+  role         String   @default("member") // "owner" | "member" | "observer"
+  assignedRole String?  // 项目内角色分组: "NPQ" | "PQE" | "SQE" | "FAE" | "RAM" | "QCM"
+  createdAt    DateTime @default(now())
 
   project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignedTasks  Task[]         @relation("TaskAssignee") // 🔧 H5: Task 通过此 relation 确保 assignee 必须是项目成员
 
   @@unique([projectId, userId])
-  @@index([projectId]) // 保留——需要独立按 projectId 查成员列表
+  @@index([projectId])
   @@index([userId])
+}
+
+model ProjectRole {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder])
+  @@index([isActive])
 }
 
 model PositionRole {
@@ -109,7 +123,6 @@ model PositionRole {
   code        String   @unique
   name        String
   roleName    String?
-  roleGroup   String
   description String?
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
@@ -120,9 +133,7 @@ model PositionRole {
   projectAssignments ProjectPositionAssignment[]
   templateChildren ActivityTemplateChild[]
   activityChildren ProjectActivityChild[]
-  permissions NpqActionPermission[]
 
-  @@index([roleGroup])
   @@index([name, roleName])
   @@index([isActive, sortOrder])
 }
@@ -281,7 +292,6 @@ model ActivityTemplateChild {
   parentId            String
   title               String
   ownerRoleName       String
-  roleGroup           String
   responsibleRoleId   String?
   deliverableName     String?
   requiresDeliverable Boolean  @default(false)
@@ -299,7 +309,6 @@ model ActivityTemplateChild {
   @@unique([parentId, title, ownerRoleName])
   @@index([parentId, sortOrder])
   @@index([responsibleRoleId])
-  @@index([roleGroup])
 }
 
 model ProjectActivitySnapshotMeta {
@@ -328,7 +337,6 @@ model ActivityTemplate {
   projectTaskName String
   thirdLevelPlan  String
   ownerRole       String
-  roleGroup       String
   deliverableName String?
   requiresDeliverable Boolean @default(false)
   sourceBatchId   String   @default("quality-activity-template-20260611")
@@ -340,7 +348,6 @@ model ActivityTemplate {
   @@unique([stage, projectTaskName, thirdLevelPlan, ownerRole, sourceBatchId])
   @@index([stage, sortOrder])
   @@index([ownerRole])
-  @@index([roleGroup])
   @@index([isActive])
 }
 
@@ -383,7 +390,6 @@ model ProjectActivityChild {
   templateChildId String?
   thirdLevelPlan  String
   ownerRole       String
-  roleGroup       String
   responsibleRoleId String?
   assigneeUserId  String?
   status          String   @default("not_started") // "not_started" | "in_progress" | "returned" | "completed"
@@ -419,7 +425,7 @@ model ProjectActivityChild {
 
   @@unique([parentId, thirdLevelPlan, ownerRole])
   @@index([projectId, ownerRole])
-  @@index([projectId, roleGroup])
+  @@index([projectId])
   @@index([projectId, status])
   @@index([projectId, assigneeUserId])
   @@index([responsibleRoleId])
@@ -507,21 +513,6 @@ model Notification {
   @@index([type])
 }
 
-model NpqActionPermission {
-  id             String   @id @default(cuid())
-  actionKey      String
-  positionRoleId String
-  canExecute     Boolean  @default(true)
-  scope          String   @default("project")
-  description    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  positionRole PositionRole @relation(fields: [positionRoleId], references: [id], onDelete: Cascade)
-
-  @@unique([actionKey, positionRoleId])
-  @@index([positionRoleId])
-}
 
 model StageGateRecord {
   id                   String   @id @default(cuid())
