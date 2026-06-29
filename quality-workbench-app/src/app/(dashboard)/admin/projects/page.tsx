@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Search } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import { ProjectActivityEditor } from './project-activity-editor';
 
 type PositionBinding = null | {
   positionRoleId: string;
-  positionRole: { id: string; code: string; name: string; roleName?: string | null };
+  positionRole: { id: string; name: string; roleName?: string | null };
 };
 
 type ProjectMember = {
@@ -105,8 +105,15 @@ export default function AdminProjectsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [projectRoles, setProjectRoles] = useState<ProjectRoleItem[]>([]);
-  const projectRoleNames = useMemo(() => projectRoles.filter((r) => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder), [projectRoles]);
+  const roleNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of projectRoles) map.set(r.code, r.name);
+    return map;
+  }, [projectRoles]);
+  const [projectActivityRoles, setProjectActivityRoles] = useState<string[]>([]);
   const [memberDialog, setMemberDialog] = useState<AddMemberDialog | null>(null);
+  const [npqSearch, setNpqSearch] = useState('');
+  const [npqDropdown, setNpqDropdown] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: '' });
   const [basicForm, setBasicForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1' });
 
@@ -173,10 +180,55 @@ export default function AdminProjectsPage() {
   }, []);
 
   const activeUsers = useMemo(() => users.filter((user) => !user.status || user.status === 'active'), [users]);
+  const npqFiltered = useMemo(() => {
+    const kw = npqSearch.trim().toLowerCase();
+    return kw ? activeUsers.filter((u) => u.username.toLowerCase().includes(kw)) : activeUsers;
+  }, [activeUsers, npqSearch]);
+  const npqSelectedName = useMemo(() =>
+    createForm.ownerId ? activeUsers.find((u) => u.id === createForm.ownerId)?.username ?? '' : '',
+  [activeUsers, createForm.ownerId]);
+
+  // 加载选中项目的活动角色
+  useEffect(() => {
+    if (!selectedProjectId) { setProjectActivityRoles([]); return; }
+    let cancelled = false;
+    fetch(`/api/admin/projects/${encodeURIComponent(selectedProjectId)}/activities`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { activityRoles?: string[] } | null) => {
+        if (!cancelled && data?.activityRoles) setProjectActivityRoles(data.activityRoles);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedProjectId]);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
     [projects, selectedProjectId],
   );
+
+  const hasUnsaved = useMemo(() => {
+    if (!selectedProject) return false;
+    return (
+      basicForm.name !== selectedProject.name ||
+      basicForm.description !== (selectedProject.description ?? '') ||
+      basicForm.status !== selectedProject.status ||
+      basicForm.currentStage !== selectedProject.currentStage
+    );
+  }, [selectedProject, basicForm]);
+
+  const projectPanelRoles = useMemo(() => {
+    if (!selectedProject) return [] as { code: string; name: string }[];
+    const codes = new Set<string>();
+    for (const m of (selectedProject.members ?? [])) {
+      const ar = memberAssignedRole(m);
+      if (ar) codes.add(ar);
+    }
+    for (const r of projectActivityRoles) codes.add(r);
+    return Array.from(codes).sort().map((code) => ({
+      code,
+      name: roleNameMap.get(code) ?? code,
+    }));
+  }, [selectedProject, roleNameMap, projectActivityRoles]);
 
   async function requestJson(method: 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>, url = '/api/admin/projects') {
     setSaving(true);
@@ -243,9 +295,7 @@ export default function AdminProjectsPage() {
   }
 
   function memberAssignedRole(member: ProjectMember): string {
-    if (member.assignedRole) return member.assignedRole;
-    // 回退：取用户全局岗位的 code（如 NPQ/PQE/SQE，不含后缀）
-    return member.user.positionBinding?.positionRole?.code ?? '';
+    return member.assignedRole ?? '';
   }
 
   function selectedUserIdsForRole(roleCode: string) {
@@ -394,8 +444,40 @@ export default function AdminProjectsPage() {
                       描述
                       <textarea className={fieldClass('mt-1 min-h-20 w-full py-2')} value={basicForm.description} onChange={(event) => setBasicForm((current) => ({ ...current, description: event.target.value }))} />
                     </label>
+                    <label className="text-xs font-medium text-muted-foreground md:col-span-2">
+                      NPQ 负责人
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        {(() => {
+                          const npq = selectedMembersForRole('NPQ');
+                          return (
+                            <>
+                              {npq.map((member) => (
+                                <span key={member.id} className="inline-flex items-center gap-1 rounded border border-border bg-white px-2 py-1 text-sm">
+                                  <span>{displayUser(member.user)}</span>
+                                  <button
+                                    className="text-muted-foreground hover:text-red-600"
+                                    onClick={() => removeRoleMember('NPQ', member.userId)}
+                                    disabled={saving}
+                                    title="移除"
+                                  >×</button>
+                                </span>
+                              ))}
+                              <button
+                                className="inline-flex h-7 w-7 items-center justify-center rounded border border-dashed border-border text-muted-foreground hover:border-ws-blue hover:text-ws-blue"
+                                onClick={() => setMemberDialog({ roleCode: 'NPQ', roleName: 'NPQ', search: '', selectedUserIds: [] })}
+                                disabled={saving}
+                                title="增加NPQ"
+                              ><Plus className="h-3.5 w-3.5" /></button>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </label>
                   </div>
-                  <div className="flex justify-end border-t border-border px-4 py-3">
+                  <div className="flex items-center justify-end gap-3 border-t border-border px-4 py-3">
+                    {hasUnsaved && (
+                      <span className="text-xs text-amber-600">有未保存的修改</span>
+                    )}
                     <button className={actionButton(true)} onClick={saveBasicInfo} disabled={saving || !basicForm.name.trim()}>保存基本信息</button>
                   </div>
                 </section>
@@ -408,48 +490,48 @@ export default function AdminProjectsPage() {
                     </div>
                     <div className="text-xs text-muted-foreground">{selectedProject.members.length} 人已加入</div>
                   </div>
-                  <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
-                    {projectRoleNames.map((role) => {
+                  <div className="grid gap-2 p-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+                    {projectPanelRoles.filter((role) => role.code !== 'NPQ').map((role) => {
                       const selectedMembers = selectedMembersForRole(role.code);
                       return (
                         <div key={role.code} className="rounded border border-border bg-white">
-                          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                          <div className="flex items-center justify-between px-2.5 py-1.5">
                             <div>
-                              <div className="text-sm font-semibold">{role.name} 分组</div>
-                              <div className="mt-0.5 text-xs text-muted-foreground">{selectedMembers.length} 人</div>
+                              <span className="text-xs font-semibold">{role.name}</span>
+                              <span className="ml-1.5 text-[11px] text-muted-foreground">{selectedMembers.length}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                className={actionButton()}
-                                onClick={() => setMemberDialog({ roleCode: role.code, roleName: role.name, search: '', selectedUserIds: [] })}
-                                disabled={saving}
-                              >
-                                <Plus className="h-3.5 w-3.5" />增加
-                              </button>
-                            </div>
+                            <button
+                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-blue-50 hover:text-ws-blue"
+                              onClick={() => setMemberDialog({ roleCode: role.code, roleName: role.name, search: '', selectedUserIds: [] })}
+                              disabled={saving}
+                              title="增加成员"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
                           </div>
-                          <div className="max-h-48 overflow-auto p-2">
-                            {selectedMembers.map((member) => (
-                              <div key={member.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-ws-content-bg">
-                                <div className="flex min-w-0 flex-1 items-center gap-2">
-                                  <span className="truncate">{displayUser(member.user)}</span>
+                          {selectedMembers.length > 0 && (
+                            <div className="border-t border-border px-2.5 py-1">
+                              {selectedMembers.map((member) => (
+                                <div key={member.id} className="flex items-center py-0.5 text-xs">
+                                  <span className="min-w-0 flex-1 truncate">{displayUser(member.user)}</span>
+                                  <button
+                                    className="ml-1 shrink-0 rounded text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                                    onClick={() => removeRoleMember(role.code, member.userId)}
+                                    disabled={saving}
+                                    title="移除"
+                                  >
+                                    ×
+                                  </button>
                                 </div>
-                                <button
-                                  className={dangerButton()}
-                                  onClick={() => removeRoleMember(role.code, member.userId)}
-                                  disabled={saving}
-                                >
-                                  移除
-                                </button>
-                              </div>
-                            ))}
-                            {selectedMembers.length === 0 && (
-                              <div className="px-2 py-6 text-center text-xs text-muted-foreground">暂无已加入成员</div>
-                            )}
-                          </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+                    {projectPanelRoles.length === 0 && (
+                      <div className="col-span-full py-8 text-center text-xs text-muted-foreground">暂无角色分组数据</div>
+                    )}
                   </div>
                 </section>
 
@@ -509,11 +591,37 @@ export default function AdminProjectsPage() {
                 </span>
               </label>
               <label className="block text-xs font-medium text-muted-foreground">
-                初始成员
-                <select className={fieldClass('mt-1 h-9 w-full')} value={createForm.ownerId} onChange={(event) => setCreateForm((current) => ({ ...current, ownerId: event.target.value }))}>
-                  <option value="">暂不指定</option>
-                  {activeUsers.map((user) => <option key={user.id} value={user.id}>{displayUser(user)}</option>)}
-                </select>
+                初始 NPQ
+                <div className="relative mt-1">
+                  <input
+                    className={fieldClass('h-9 w-full')}
+                    placeholder="搜索用户名..."
+                    value={npqDropdown ? npqSearch : npqSelectedName}
+                    onFocus={() => { setNpqDropdown(true); setNpqSearch(''); }}
+                    onChange={(event) => setNpqSearch(event.target.value)}
+                    onBlur={() => setTimeout(() => setNpqDropdown(false), 150)}
+                  />
+                  {npqDropdown && (
+                    <div
+                      className="absolute bottom-full z-10 mb-1 max-h-48 w-full overflow-auto rounded border border-border bg-white shadow-lg"
+                      onWheel={(e) => e.stopPropagation()}
+                    >                      <div
+                        className="cursor-pointer px-3 py-1.5 text-sm text-muted-foreground hover:bg-ws-content-bg"
+                        onMouseDown={() => { setCreateForm((c) => ({ ...c, ownerId: '' })); setNpqDropdown(false); setNpqSearch(''); }}
+                      >暂不指定</div>
+                      {npqFiltered.map((user) => (
+                        <div
+                          key={user.id}
+                          className="cursor-pointer px-3 py-1.5 text-sm hover:bg-ws-content-bg"
+                          onMouseDown={() => { setCreateForm((c) => ({ ...c, ownerId: user.id })); setNpqDropdown(false); setNpqSearch(''); }}
+                        >{displayUser(user)}</div>
+                      ))}
+                      {npqFiltered.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">未找到匹配用户</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </label>
             </div>
             <div className="flex justify-end gap-2 border-t border-border px-4 py-3">

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/platform/auth/auth.config';
 
-const TEST_ACCOUNTS = ['npq', 'NPQ2', 'pqe', 'sqe', 'fae', 'ram', 'qcm', 'manager', 'admin'];
+const TEST_ACCOUNTS = ['admin', 'manager', '测试NPQ1', '测试NPQ2', '测试PQE1', '测试PQE2', '测试SQE1', '测试SQE2', '测试EMS1', '测试EMS2', '测试FAE1', '测试FAE2', '测试RAM1', '测试RAM2', '测试QCM1', '测试QCM2'];
 const TEST_PASSWORD = 'qe123456';
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -93,7 +93,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
         </a>
 
         <div className="mt-5 rounded-md bg-muted/50 p-3">
-          <div className="mb-2 text-xs font-medium text-muted-foreground">测试账号，点击直接登录</div>
+          <div className="mb-2 text-xs font-medium text-muted-foreground">测试账号（密码: qe123456），点击直接登录</div>
           <div className="flex flex-wrap gap-1">
             {TEST_ACCOUNTS.map((account) => (
               <form key={account} action="/api/auth/login" method="post" className="contents">
@@ -101,7 +101,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
                 <input type="hidden" name="password" value={TEST_PASSWORD} readOnly />
                 <button
                   type="submit"
-                  className="rounded border border-border bg-white px-2 py-1 font-mono text-xs text-foreground hover:border-primary"
+                  className="rounded border border-border bg-white px-2 py-1 text-xs text-foreground hover:border-primary"
                 >
                   {account}
                 </button>

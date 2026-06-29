@@ -12,12 +12,42 @@ export interface DingTalkProfile {
   avatarUrl?: string;
   /** 邮箱 */
   email?: string;
+  /** 钉钉通讯录职位（title） */
+  title?: string;
 }
 
 /** 按钉钉 unionId 查找已有的钉钉用户 */
 export async function findDingTalkUser(unionId: string) {
   return prisma.user.findFirst({
     where: { externalSource: 'dingtalk', externalId: unionId },
+  });
+}
+
+/** 根据钉钉 title 确保存在对应岗位，返回岗位 ID */
+export async function ensurePositionRole(title: string): Promise<string | null> {
+  if (!title.trim()) return null;
+  const t = title.trim();
+
+  const existing = await prisma.positionRole.findFirst({
+    where: { name: t, isActive: true },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const count = await prisma.positionRole.count();
+  const created = await prisma.positionRole.create({
+    data: { name: t, sortOrder: count + 100 },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/** 为用户绑定岗位 */
+export async function bindUserPosition(userId: string, positionRoleId: string) {
+  await prisma.userPosition.upsert({
+    where: { userId },
+    create: { userId, positionRoleId },
+    update: { positionRoleId },
   });
 }
 
@@ -50,7 +80,6 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
       'code' in err &&
       (err as { code: string }).code === 'P2002'
     ) {
-      // 用户名冲突，追加短后缀重试
       const suffix = crypto.randomBytes(3).toString('hex');
       return tryCreate(`${baseUsername}_${suffix}`);
     }
@@ -58,7 +87,7 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
   }
 }
 
-/** 同步钉钉用户档案（昵称/头像/邮箱变更时更新，不改变用户名） */
+/** 同步钉钉用户档案（昵称/头像/邮箱/岗位变更时更新） */
 export async function syncDingTalkUser(userId: string, profile: DingTalkProfile) {
   await prisma.user.update({
     where: { id: userId },

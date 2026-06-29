@@ -7,6 +7,8 @@ import {
   findDingTalkUser,
   createDingTalkUser,
   syncDingTalkUser,
+  ensurePositionRole,
+  bindUserPosition,
   type DingTalkProfile,
 } from '@/lib/db/dingtalk';
 
@@ -100,6 +102,52 @@ export async function GET(request: Request) {
       email: meData.email ?? undefined,
     };
 
+    // 第 2.5 步：获取钉钉通讯录职位（title）
+    if (profile.unionId) {
+      try {
+        console.log('[dingtalk] fetching corp token for title lookup...');
+        const corpTokenRes = await fetch(
+          `https://oapi.dingtalk.com/gettoken?appkey=${encodeURIComponent(config.clientId)}&appsecret=${encodeURIComponent(config.clientSecret)}`,
+        );
+        const corpStatus = corpTokenRes.status;
+        const corpText = await corpTokenRes.text();
+        console.log('[dingtalk] gettoken status:', corpStatus, 'body:', corpText.slice(0, 200));
+        if (corpTokenRes.ok) {
+          const corpData = JSON.parse(corpText) as { errcode: number; access_token?: string };
+          if (corpData.errcode === 0 && corpData.access_token) {
+            const at = corpData.access_token;
+            console.log('[dingtalk] got corp token, fetching userid via unionId...');
+            const idRes = await fetch(
+              `https://oapi.dingtalk.com/topapi/user/getbyunionid?access_token=${at}`,
+              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unionid: profile.unionId }) },
+            );
+            const idText = await idRes.text();
+            console.log('[dingtalk] getbyunionid:', idText.slice(0, 300));
+            if (idRes.ok) {
+              const idData = JSON.parse(idText) as { errcode: number; result?: { userid?: string } };
+              if (idData.errcode === 0 && idData.result?.userid) {
+                const detailRes = await fetch(
+                  `https://oapi.dingtalk.com/topapi/v2/user/get?access_token=${at}`,
+                  { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userid: idData.result.userid }) },
+                );
+                const detailText = await detailRes.text();
+                console.log('[dingtalk] topapi getuser:', detailText.slice(0, 500));
+                if (detailRes.ok) {
+                  const detail = JSON.parse(detailText) as { errcode: number; result?: { title?: string } };
+                  if (detail.errcode === 0 && detail.result?.title) {
+                    profile.title = detail.result.title;
+                    console.log('[dingtalk] user title:', detail.result.title);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // 非关键
+      }
+    }
+
     if (!profile.unionId) {
       console.error('[dingtalk] No unionId in users/me');
       return loginErrorRedirect(request, 'dingtalk_token');
@@ -113,11 +161,19 @@ export async function GET(request: Request) {
       if (existing.status !== 'active') {
         return loginErrorRedirect(request, 'dingtalk_disabled');
       }
-      // 每次登录同步最新档案
       await syncDingTalkUser(existing.id, profile);
       user = existing;
     } else {
       user = await createDingTalkUser(profile);
+    }
+
+    // 直接使用钉钉职位名称绑定岗位，不存在则自动创建
+    if (profile.title) {
+      const roleId = await ensurePositionRole(profile.title);
+      if (roleId) {
+        await bindUserPosition(user.id, roleId);
+        console.log('[dingtalk] Bound position from title:', profile.title);
+      }
     }
 
     // 第 4 步：签发 session

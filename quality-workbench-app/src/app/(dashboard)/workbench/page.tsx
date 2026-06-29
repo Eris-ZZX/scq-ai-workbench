@@ -53,7 +53,7 @@ type WorkbenchData = {
     username: string;
     appRole: string;
     workbenchRole: WorkbenchRole;
-    position: null | { code: string; name: string; roleName: string | null };
+    position: null | { name: string; roleName: string | null };
   };
   actionMetrics: {
     totalTodo: number;

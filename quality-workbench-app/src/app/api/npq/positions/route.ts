@@ -8,8 +8,8 @@ export async function GET() {
 
   const positions = await prisma.positionRole.findMany({
     where: { isActive: true },
-    select: { id: true, code: true, name: true, roleName: true, sortOrder: true },
-    orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+    select: { id: true, name: true, roleName: true, sortOrder: true },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   });
   return NextResponse.json(positions);
 }

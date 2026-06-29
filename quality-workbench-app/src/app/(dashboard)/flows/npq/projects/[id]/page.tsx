@@ -31,7 +31,7 @@ type ProjectMember = {
     username: string;
     positionBinding: null | {
       positionRoleId: string;
-      positionRole: { id: string; code: string; name: string; roleName: string | null };
+      positionRole: { id: string; name: string; roleName: string | null };
     };
   };
 };
@@ -125,7 +125,7 @@ type RoleContext = {
   username: string;
   appRole: string;
   workbenchRole: WorkbenchRole;
-  position: null | { id: string; code: string; name: string; roleName: string | null };
+  position: null | { id: string; name: string; roleName: string | null };
 };
 
 const STAGE_ORDER = ['TR1', 'TR2&3', 'TR4', 'TR4A', 'TR5', 'TR6'];

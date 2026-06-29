@@ -29,7 +29,7 @@ export function getProjectById(projectId: string, userId: string) {
               positionBinding: {
                 select: {
                   positionRoleId: true,
-                  positionRole: { select: { id: true, code: true, name: true, roleName: true } },
+                  positionRole: { select: { id: true, name: true, roleName: true } },
                 },
               },
             },
@@ -113,7 +113,7 @@ export function getMembers(projectId: string) {
           positionBinding: {
             select: {
               positionRoleId: true,
-              positionRole: { select: { id: true, code: true, name: true, roleName: true } },
+              positionRole: { select: { id: true, name: true, roleName: true } },
             },
           },
         },

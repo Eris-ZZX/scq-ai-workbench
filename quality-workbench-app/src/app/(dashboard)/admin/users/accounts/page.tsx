@@ -7,7 +7,6 @@ import { ArrowLeft, Plus, UserCog, X } from 'lucide-react';
 type Role = {
   id: string;
   name: string;
-  roleName: string | null;
   isActive: boolean;
 };
 
@@ -19,7 +18,7 @@ type User = {
   email: string | null;
   positionBinding: null | {
     positionRoleId: string;
-    positionRole: { id: string; name: string; roleName: string | null };
+    positionRole: { id: string; name: string };
   };
 };
 
@@ -47,13 +46,8 @@ const emptyNewUser: NewUserForm = {
   positionRoleId: '',
 };
 
-function roleDisplayName(role: Pick<Role, 'name' | 'roleName'>) {
-  return role.roleName?.trim() || role.name;
-}
-
-function roleFullName(role: Pick<Role, 'name' | 'roleName'>) {
-  const roleName = roleDisplayName(role);
-  return roleName === role.name ? roleName : `${role.name} / ${roleName}`;
+function roleFullName(role: Pick<Role, 'name'>) {
+  return role.name;
 }
 
 export default function AdminUserAccountsPage() {

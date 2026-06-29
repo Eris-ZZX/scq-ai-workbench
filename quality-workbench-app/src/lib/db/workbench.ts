@@ -222,21 +222,21 @@ async function buildProjectEffectiveRoleIds(
 
   const positionRoles = assignedRoles.size > 0
     ? await prisma.positionRole.findMany({
-        where: { code: { in: Array.from(assignedRoles) }, isActive: true },
-        select: { id: true, code: true },
+        where: { name: { in: Array.from(assignedRoles) }, isActive: true },
+        select: { id: true, name: true },
       })
     : [];
 
-  const codeToIds = new Map<string, string[]>();
+  const nameToIds = new Map<string, string[]>();
   for (const pr of positionRoles) {
-    const ids = codeToIds.get(pr.code) ?? [];
+    const ids = nameToIds.get(pr.name) ?? [];
     ids.push(pr.id);
-    codeToIds.set(pr.code, ids);
+    nameToIds.set(pr.name, ids);
   }
 
   for (const mp of memberProjects) {
     if (mp.assignedRole) {
-      const ids = codeToIds.get(mp.assignedRole);
+      const ids = nameToIds.get(mp.assignedRole);
       map.set(mp.projectId, ids ?? []);
     } else {
       map.set(mp.projectId, []);

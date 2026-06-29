@@ -8,18 +8,25 @@ const templatePath = path.resolve(process.cwd(), 'prisma', 'quality-activity-tem
 const TEST_PASSWORD_HASH = '$2b$10$zvMa9qFDxYK1MsTOaKbR6e6Kl6rRhV7L1lY6Zz0zxbDL17yWzCZK6';
 
 const positionRoleSeeds = [
-  ['pos-npq', 'NPQ', 'NPQ', 'NPQ', 'New Product Quality owner', 1],
-  ['pos-pqe', 'PQE', 'PQE', 'PQE', 'Process Quality Engineering', 2],
-  ['pos-sqe', 'SQE', 'SQE', 'SQE-塑胶', 'Supplier Quality Engineering - plastic', 3],
-  ['pos-sqe-metal', 'SQE-METAL', 'SQE', 'SQE-五金', 'Supplier Quality Engineering - metal', 4],
-  ['pos-sqe-smt', 'SQE-SMT', 'SQE', 'SQE-SMT代表', 'Supplier Quality Engineering - SMT', 5],
-  ['pos-sqe-packaging', 'SQE-PACKAGING', 'SQE', 'SQE-包材', 'Supplier Quality Engineering - packaging', 6],
-  ['pos-sqe-custom-electronics', 'SQE-CUSTOM-ELECTRONICS', 'SQE', 'SQE-定制电子代表', 'Supplier Quality Engineering - custom electronics', 7],
-  ['pos-sqe-silicone', 'SQE-SILICONE', 'SQE', 'SQE-硅胶', 'Supplier Quality Engineering - silicone', 8],
-  ['pos-fae', 'FAE', 'FAE', 'FAE', 'Field Application Engineering', 9],
-  ['pos-ram', 'RAM', 'RAM', 'RAM', 'Reliability and Maintainability', 10],
-  ['pos-qcm', 'QCM', 'QCM', 'QCM', 'Quality Control Management', 11],
-  ['pos-manager', 'MANAGER', '管理者', '管理者', 'Business read-only manager', 12],
+  ['pos-npq', 'NPQ', 'New Product Quality owner', 1],
+  ['pos-pqe', 'PQE', 'Process Quality Engineering', 2],
+  ['pos-sqe', 'SQE-塑胶', 'Supplier Quality Engineering - plastic', 3],
+  ['pos-sqe-metal', 'SQE-五金', 'Supplier Quality Engineering - metal', 4],
+  ['pos-sqe-smt', 'SQE-SMT代表', 'Supplier Quality Engineering - SMT', 5],
+  ['pos-sqe-packaging', 'SQE-包材', 'Supplier Quality Engineering - packaging', 6],
+  ['pos-sqe-custom-electronics', 'SQE-定制电子代表', 'Supplier Quality Engineering - custom electronics', 7],
+  ['pos-sqe-silicone', 'SQE-硅胶', 'Supplier Quality Engineering - silicone', 8],
+  ['pos-fae', 'FAE', 'Field Application Engineering', 9],
+  ['pos-ram', 'RAM', 'Reliability and Maintainability', 10],
+  ['pos-qcm', 'QCM', 'Quality Control Management', 11],
+  ['pos-manager', '管理者', 'Business read-only manager', 12],
+  ['pos-pqe-engineer', 'PQE工程师', 'PQE test account role', 13],
+  ['pos-sqe-engineer', 'SQE工程师', 'SQE test account role', 14],
+  ['pos-qc', '品质工程师', 'QCM test account role', 15],
+  ['pos-npq-engineer', 'NPQ工程师', 'NPQ test account role', 16],
+  ['pos-ems-engineer', 'EMS工程师', 'EMS test account role', 17],
+  ['pos-fae-engineer', 'FAE工程师', 'FAE test account role', 18],
+  ['pos-ram-engineer', '可靠性工程师', 'RAM test account role', 19],
 ] as const;
 
 function responsiblePositionRoleId(ownerRole: string) {
@@ -99,18 +106,17 @@ async function main() {
   console.log('  ✓ Stage templates: TR1→TR6');
 
   // ── 预注册 MVP 功能组件 ──
-  for (const [id, code, name, roleName, description, sortOrder] of positionRoleSeeds) {
+  for (const [id, name, description, sortOrder] of positionRoleSeeds) {
     await executeWithRetry(
-      `INSERT INTO PositionRole (id, code, name, roleName, description, isActive, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
-       ON CONFLICT(code) DO UPDATE SET
+      `INSERT INTO PositionRole (id, name, description, isActive, sortOrder, createdAt, updatedAt)
+       VALUES (?, ?, ?, 1, ?, datetime('now'), datetime('now'))
+       ON CONFLICT(id) DO UPDATE SET
          name=excluded.name,
-         roleName=excluded.roleName,
          description=excluded.description,
          isActive=1,
          sortOrder=excluded.sortOrder,
          updatedAt=datetime('now')`,
-      [id, code, name, roleName, description, sortOrder],
+      [id, name, description, sortOrder],
     );
   }
   console.log(`  F3 position roles: ${positionRoleSeeds.length} seeded`);
@@ -243,22 +249,29 @@ async function main() {
   );
   await executeWithRetry(
     `INSERT INTO UserPosition (id, userId, positionRoleId, effectiveAt, createdAt, updatedAt)
-     VALUES ('seed-admin-position', ?, 'pos-npq', datetime('now'), datetime('now'), datetime('now'))
+     VALUES ('seed-admin-position', ?, 'pos-npq-engineer', datetime('now'), datetime('now'), datetime('now'))
      ON CONFLICT(userId) DO UPDATE SET
-       positionRoleId='pos-npq',
+       positionRoleId='pos-npq-engineer',
        updatedAt=datetime('now')`,
     [adminUserId],
   );
 
   const fixedUsers = [
-    ['seed-user-npq', 'npq', 'npq@example.com', 'pos-npq', 'owner'],
-    ['seed-user-npq2', 'NPQ2', 'npq2@example.com', 'pos-npq', 'member'],
-    ['seed-user-pqe', 'pqe', 'pqe@example.com', 'pos-pqe', 'member'],
-    ['seed-user-sqe', 'sqe', 'sqe@example.com', 'pos-sqe', 'member'],
-    ['seed-user-fae', 'fae', 'fae@example.com', 'pos-fae', 'member'],
-    ['seed-user-ram', 'ram', 'ram@example.com', 'pos-ram', 'member'],
-    ['seed-user-qcm', 'qcm', 'qcm@example.com', 'pos-qcm', 'member'],
     ['seed-user-manager', 'manager', 'manager@example.com', 'pos-manager', 'observer'],
+    ['seed-test-npq1', '测试NPQ1', '', 'pos-npq-engineer', 'owner'],
+    ['seed-test-npq2', '测试NPQ2', '', 'pos-npq-engineer', 'member'],
+    ['seed-test-pqe1', '测试PQE1', '', 'pos-pqe-engineer', 'member'],
+    ['seed-test-pqe2', '测试PQE2', '', 'pos-pqe-engineer', 'member'],
+    ['seed-test-sqe1', '测试SQE1', '', 'pos-sqe-engineer', 'member'],
+    ['seed-test-sqe2', '测试SQE2', '', 'pos-sqe-engineer', 'member'],
+    ['seed-test-ems1', '测试EMS1', '', 'pos-ems-engineer', 'member'],
+    ['seed-test-ems2', '测试EMS2', '', 'pos-ems-engineer', 'member'],
+    ['seed-test-fae1', '测试FAE1', '', 'pos-fae-engineer', 'member'],
+    ['seed-test-fae2', '测试FAE2', '', 'pos-fae-engineer', 'member'],
+    ['seed-test-ram1', '测试RAM1', '', 'pos-ram-engineer', 'member'],
+    ['seed-test-ram2', '测试RAM2', '', 'pos-ram-engineer', 'member'],
+    ['seed-test-qcm1', '测试QCM1', '', 'pos-qc', 'member'],
+    ['seed-test-qcm2', '测试QCM2', '', 'pos-qc', 'member'],
   ] as const;
   const seedUserIds: Record<string, string> = { admin: adminUserId };
 
@@ -295,20 +308,21 @@ async function main() {
   await executeWithRetry(
     `INSERT INTO ProjectPositionAssignment
        (id, projectId, positionRoleId, userId, appointedById, note, createdAt, updatedAt)
-     VALUES ('seed-f2-project-npq', 'seed-f2-project', 'pos-npq', ?, ?, 'Seed NPQ owner', datetime('now'), datetime('now'))
+     VALUES ('seed-f2-project-npq', 'seed-f2-project', 'pos-npq-engineer', ?, ?, 'Seed NPQ owner', datetime('now'), datetime('now'))
      ON CONFLICT(projectId, positionRoleId) DO UPDATE SET
        userId=excluded.userId,
        appointedById=excluded.appointedById,
        note=excluded.note,
        updatedAt=datetime('now')`,
-    [seedUserIds.npq, adminUserId],
+    [seedUserIds['测试NPQ1'], adminUserId],
   );
   const assignmentSeeds = [
-    ['pqe', 'pos-pqe', 'Seed PQE owner'],
-    ['sqe', 'pos-sqe', 'Seed SQE owner'],
-    ['fae', 'pos-fae', 'Seed FAE owner'],
-    ['ram', 'pos-ram', 'Seed RAM owner'],
-    ['qcm', 'pos-qcm', 'Seed QCM owner'],
+    ['测试NPQ1', 'pos-npq-engineer', 'Seed NPQ owner'],
+    ['测试PQE1', 'pos-pqe-engineer', 'Seed PQE owner'],
+    ['测试SQE1', 'pos-sqe-engineer', 'Seed SQE owner'],
+    ['测试FAE1', 'pos-fae-engineer', 'Seed FAE owner'],
+    ['测试RAM1', 'pos-ram-engineer', 'Seed RAM owner'],
+    ['测试QCM1', 'pos-qc', 'Seed QCM owner'],
   ] as const;
   for (const [username, positionRoleId, note] of assignmentSeeds) {
     await executeWithRetry(

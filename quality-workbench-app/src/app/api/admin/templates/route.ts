@@ -138,9 +138,6 @@ function chunk<T>(items: T[], size: number) {
   return chunks;
 }
 
-function roleDisplayName(role: { code: string; name: string; roleName: string | null }) {
-  return role.roleName?.trim() || role.name || role.code;
-}
 
 async function getResponsibleRoleIdByOwnerRole(
   client: TemplateWriteClient,
@@ -152,22 +149,17 @@ async function getResponsibleRoleIdByOwnerRole(
         where: {
           isActive: true,
           OR: [
-            { roleName: { in: ownerRoleNames } },
-            { code: { in: ownerRoleNames } },
             { name: { in: ownerRoleNames } },
           ],
         },
-        select: { id: true, code: true, name: true, roleName: true },
+        select: { id: true, name: true, roleName: true },
       })
     : [];
   const exact = new Map<string, string>();
-  const fallback = new Map<string, string>();
   for (const role of roles) {
-    exact.set(roleDisplayName(role), role.id);
-    exact.set(role.code, role.id);
-    if (!fallback.has(role.name)) fallback.set(role.name, role.id);
+    exact.set(role.name, role.id);
   }
-  return (child: TemplateChildInput) => exact.get(child.ownerRoleName) ?? fallback.get(child.ownerRoleName) ?? null;
+  return (child: TemplateChildInput) => exact.get(child.ownerRoleName) ?? null;
 }
 
 async function getTemplateCenterView() {

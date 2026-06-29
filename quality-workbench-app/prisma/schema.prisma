@@ -120,8 +120,7 @@ model ProjectRole {
 
 model PositionRole {
   id          String   @id @default(cuid())
-  code        String   @unique
-  name        String
+  name        String   @unique
   roleName    String?
   description String?
   isActive    Boolean  @default(true)

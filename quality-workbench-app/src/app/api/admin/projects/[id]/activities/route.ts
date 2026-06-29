@@ -46,10 +46,6 @@ function cleanOptional(value: unknown) {
   return text || null;
 }
 
-function roleDisplayName(role: { code: string; name: string; roleName: string | null }) {
-  return role.roleName?.trim() || role.name || role.code;
-}
-
 async function buildResponsibleRoleResolver(
   tx: Prisma.TransactionClient,
   children: NormalizedParent['children'],
@@ -60,22 +56,17 @@ async function buildResponsibleRoleResolver(
         where: {
           isActive: true,
           OR: [
-            { roleName: { in: ownerRoles } },
-            { code: { in: ownerRoles } },
             { name: { in: ownerRoles } },
           ],
         },
-        select: { id: true, code: true, name: true, roleName: true },
+        select: { id: true, name: true, roleName: true },
       })
     : [];
   const exact = new Map<string, string>();
-  const fallback = new Map<string, string>();
   for (const role of positionRoles) {
-    exact.set(roleDisplayName(role), role.id);
-    exact.set(role.code, role.id);
-    if (!fallback.has(role.name)) fallback.set(role.name, role.id);
+    exact.set(role.name, role.id);
   }
-  return (child: NormalizedParent['children'][number]) => exact.get(child.ownerRole) ?? fallback.get(child.ownerRole) ?? null;
+  return (child: NormalizedParent['children'][number]) => exact.get(child.ownerRole) ?? null;
 }
 
 async function checkProjectManager(projectId: string) {
@@ -128,7 +119,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
   const project = await prisma.project.findUnique({ where: { id }, select: { id: true, name: true } });
   if (!project) return NextResponse.json({ error: '项目不存在' }, { status: 404 });
-  return NextResponse.json({ project, parents: await getProjectActivities(id) });
+  const parents = await getProjectActivities(id);
+  const activityRoles = [...new Set(parents.flatMap((p) => p.children.map((c) => c.ownerRole)))].sort();
+  return NextResponse.json({ project, parents, activityRoles });
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {

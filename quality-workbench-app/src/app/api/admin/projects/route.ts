@@ -53,7 +53,7 @@ function projectSelect() {
             positionBinding: {
               select: {
                 positionRoleId: true,
-                positionRole: { select: { id: true, code: true, name: true, roleName: true } },
+                positionRole: { select: { id: true, name: true, roleName: true } },
               },
             },
           },
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       });
       if (ownerId) {
         await tx.projectMember.create({
-          data: { projectId: project.id, userId: ownerId, role: 'member' },
+          data: { projectId: project.id, userId: ownerId, role: 'owner', assignedRole: 'NPQ' },
         });
       }
       return project;
