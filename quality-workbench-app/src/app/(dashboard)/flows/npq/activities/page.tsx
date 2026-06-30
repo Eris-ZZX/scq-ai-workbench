@@ -301,6 +301,17 @@ export default function ActivityTrackingPage() {
     setSelectedChildIds((current) => toggleMany(current, parent.children.map((child) => child.id), checked));
   }
 
+  function toggleStageSelection(group: typeof grouped[number], checked: boolean) {
+    const childIds: string[] = [];
+    const parentIds: string[] = [];
+    for (const p of group.parents) {
+      parentIds.push(p.id);
+      for (const c of p.children) childIds.push(c.id);
+    }
+    setSelectedParentIds((current) => toggleMany(current, parentIds, checked));
+    setSelectedChildIds((current) => toggleMany(current, childIds, checked));
+  }
+
   async function saveEditChanges() {
     const parentIds = Array.from(selectedParentIds);
     const childIds = Array.from(selectedChildIds);
@@ -486,7 +497,7 @@ export default function ActivityTrackingPage() {
         )}
 
         <div className="overflow-hidden rounded-md border border-border bg-white shadow-sm">
-          <div className="grid grid-cols-[minmax(240px,1.5fr)_105px_105px_105px_118px_118px_105px] border-b bg-muted/50 px-4 py-2 text-xs font-semibold text-muted-foreground">
+          <div className="grid grid-cols-[minmax(240px,1.5fr)_84px_105px_148px_118px_118px_105px] border-b bg-muted/50 px-4 py-2 text-xs font-semibold text-muted-foreground">
             <span>项目任务</span>
             <span>状态</span>
             <span>完成情况</span>
@@ -502,8 +513,19 @@ export default function ActivityTrackingPage() {
             const isStageOpen = expandedStages.has(group.stage);
             return (
               <section key={group.stage}>
-                <div className="grid grid-cols-[minmax(240px,1.5fr)_105px_105px_105px_118px_118px_105px] items-center border-b bg-slate-50 px-4 py-2 text-sm">
+                <div className="grid grid-cols-[minmax(240px,1.5fr)_84px_105px_148px_118px_118px_105px] items-center border-b bg-slate-50 px-4 py-2 text-sm">
                   <div className="flex min-w-0 items-center gap-2">
+                    {editMode && (
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={group.parents.every((p) => selectedParentIds.has(p.id))}
+                          onChange={(event) => toggleStageSelection(group, event.target.checked)}
+                          title={`全选 ${group.stage}`}
+                        />
+                        全选
+                      </label>
+                    )}
                     <button
                       type="button"
                       onClick={() => setExpandedStages((current) => toggleSet(current, group.stage))}
@@ -529,7 +551,7 @@ export default function ActivityTrackingPage() {
                   const completedChildren = parent.children.filter((child) => child.status === 'completed' || child.isNotApplicable).length;
                   return (
                     <div key={parent.id} className="border-b last:border-b-0">
-                      <div className="grid grid-cols-[minmax(240px,1.5fr)_105px_105px_105px_118px_118px_105px] items-center px-4 py-3 text-sm">
+                      <div className="grid grid-cols-[minmax(240px,1.5fr)_84px_105px_148px_118px_118px_105px] items-center px-4 py-3 text-sm">
                         <div className="flex min-w-0 items-center gap-2">
                           {editMode && (
                             <input

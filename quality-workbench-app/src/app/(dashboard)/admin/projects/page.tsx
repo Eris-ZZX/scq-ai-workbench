@@ -211,8 +211,7 @@ export default function AdminProjectsPage() {
     return (
       basicForm.name !== selectedProject.name ||
       basicForm.description !== (selectedProject.description ?? '') ||
-      basicForm.status !== selectedProject.status ||
-      basicForm.currentStage !== selectedProject.currentStage
+      basicForm.status !== selectedProject.status
     );
   }, [selectedProject, basicForm]);
 
@@ -280,10 +279,11 @@ export default function AdminProjectsPage() {
 
   async function saveBasicInfo() {
     if (!selectedProject) return;
+    const { currentStage: _, ...rest } = basicForm;
     const updated = await requestJson('PATCH', {
       action: 'updateProject',
       projectId: selectedProject.id,
-      ...basicForm,
+      ...rest,
     });
     if (updated?.id) replaceProject(updated as Project);
   }
@@ -426,10 +426,10 @@ export default function AdminProjectsPage() {
                       项目名称
                       <input className={fieldClass('mt-1 h-9 w-full')} value={basicForm.name} onChange={(event) => setBasicForm((current) => ({ ...current, name: event.target.value }))} />
                     </label>
-                    <label className="text-xs font-medium text-muted-foreground">
+                    <div className="text-xs font-medium text-muted-foreground">
                       当前阶段
-                      <input className={fieldClass('mt-1 h-9 w-full')} value={basicForm.currentStage} onChange={(event) => setBasicForm((current) => ({ ...current, currentStage: event.target.value }))} />
-                    </label>
+                      <div className="mt-1 flex h-9 items-center rounded border border-border bg-muted/30 px-2 text-sm text-muted-foreground">{selectedProject?.currentStage ?? '-'}</div>
+                    </div>
                     <label className="text-xs font-medium text-muted-foreground">
                       状态
                       <select className={fieldClass('mt-1 h-9 w-full')} value={basicForm.status} onChange={(event) => setBasicForm((current) => ({ ...current, status: event.target.value }))}>

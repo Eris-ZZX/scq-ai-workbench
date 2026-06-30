@@ -13,13 +13,13 @@ type TodoType =
   | 'overdue'
   | 'blocked'
   | 'returned'
-  | 'missing_deliverable'
   | 'responsibility'
   | 'pending_parent_close';
 
 type WorkbenchTodoItem = {
   id: string;
   type: TodoType;
+  tags: string[];
   projectId: string;
   parentId: string | null;
   childId: string | null;
@@ -185,7 +185,6 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
       totalTodo: allTodos.length,
       overdue: allTodos.filter((todo) => todo.type === 'overdue').length,
       blocked: allTodos.filter((todo) => todo.type === 'blocked').length,
-      missingDeliverable: allTodos.filter((todo) => todo.type === 'missing_deliverable').length,
       pendingParentClose: allTodos.filter((todo) => todo.type === 'pending_parent_close').length,
     },
     projectTodos: projectTodos
@@ -330,6 +329,7 @@ function buildProjectTodos({
         todos.push({
           id: `parent:${parent.id}`,
           type: parentTodoType,
+          tags: [parentTodoType],
           projectId: project.id,
           parentId: parent.id,
           childId: null,
@@ -347,14 +347,16 @@ function buildProjectTodos({
 
     for (const child of parent.children) {
       if (child.isNotApplicable) continue;
-      if (child.status !== 'in_progress') continue;
+      if (child.status !== 'in_progress' && child.status !== 'returned') continue;
       if (!canSeeChildTodo({ child, session, roleIdSet, projectRole })) continue;
 
       const dueAt = child.plannedDueDateOverride ?? parent.plannedDueDate;
       const type = getChildTodoType(child, dueAt, now);
+      const tags = getChildTodoTags(child, dueAt, now);
       todos.push({
         id: `child:${child.id}`,
         type,
+        tags,
         projectId: project.id,
         parentId: parent.id,
         childId: child.id,
@@ -373,6 +375,7 @@ function buildProjectTodos({
       todos.push({
         id: `parent:${parent.id}`,
         type: 'pending_parent_close' as TodoType,
+        tags: ['pending_parent_close'],
         projectId: project.id,
         parentId: parent.id,
         childId: null,
@@ -423,10 +426,20 @@ function getChildTodoType(
   if (child.status === 'returned') return 'returned';
   if (child.isBlocked) return 'blocked';
   if (dueAt && dueAt < now) return 'overdue';
-  if ((child.requiresAttachment && child.attachments.length === 0) || (child.requiresDeliverable && !child.deliverableUrl)) {
-    return 'missing_deliverable';
-  }
   return 'responsibility';
+}
+
+function getChildTodoTags(
+  child: { status: string; isBlocked: boolean },
+  dueAt: Date | null,
+  now: Date,
+): string[] {
+  const tags: string[] = [];
+  if (child.status === 'returned') tags.push('returned');
+  if (child.isBlocked) tags.push('blocked');
+  if (dueAt && dueAt < now) tags.push('overdue');
+  if (tags.length === 0) tags.push('responsibility');
+  return tags;
 }
 
 function getParentTodoType(
@@ -462,7 +475,6 @@ function getTodoPriority(type: TodoType, dueAt: Date | null, now: Date) {
     overdue: 30,
     pending_parent_close: 40,
     returned: 50,
-    missing_deliverable: 60,
     responsibility: 100,
   };
   const days = dueAt ? Math.floor((dueAt.getTime() - now.getTime()) / 86_400_000) : 0;

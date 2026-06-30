@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -134,6 +134,8 @@ const STAGE_ORDER = ['TR1', 'TR2&3', 'TR4', 'TR4A', 'TR5', 'TR6'];
 export default function ProjectWorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const todoParam = searchParams.get('todo');
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
   const [roleContext, setRoleContext] = useState<RoleContext | null>(null);
   const [stageGates, setStageGates] = useState<StageGate[]>([]);
@@ -199,6 +201,17 @@ export default function ProjectWorkspacePage() {
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [loadWorkspace]);
+
+  const didInit = useRef(false);
+  useEffect(() => {
+    if (!workspace || !todoParam || didInit.current) return;
+    didInit.current = true;
+    const resolved = resolveInitialSelection(todoParam, workspace.parents, workspace.project.currentStage);
+    setSelection(resolved);
+    setExpandedStages(new Set([selectionStage(resolved, workspace.parents) ?? workspace.project.currentStage]));
+    const parentId = resolved.kind === 'parent' || resolved.kind === 'child' ? resolved.parentId : null;
+    setExpandedParents(parentId ? new Set([parentId]) : new Set());
+  }, [workspace, todoParam]);
 
   const projectRole = useMemo(() => {
     const member = (workspace?.project.members as any)?.find((m: any) => m.userId === roleContext?.userId);
@@ -918,7 +931,7 @@ function ChildTreeMeta({ child, parentDueDate }: { child: ActivityChild; parentD
     <span className="mt-1 flex flex-wrap items-center gap-1.5">
       <StatusBadge label={childDisplayStatusLabel(child)} tone={child.isNotApplicable ? 'slate' : childStatusTone(child.status)} />
       <span className="text-xs text-slate-500">{child.ownerRole}</span>
-      {overdue && <StatusBadge label="延期" tone="red" />}
+      {overdue && <StatusBadge label="逾期" tone="amber" />}
       {child.isBlocked && <StatusBadge label="阻塞" tone="red" />}
     </span>
   );
@@ -1050,6 +1063,23 @@ function StatusPill({ label, tone }: { label: string; tone: 'slate' | 'blue' | '
   return <span className={`rounded-full px-2 py-1 text-xs font-medium ${tones[tone]}`}>{label}</span>;
 }
 
+
+function resolveInitialSelection(todoId: string | null, parents: ActivityParent[], currentStage: string): Selection {
+  if (todoId?.startsWith('child:')) {
+    const childId = todoId.slice('child:'.length);
+    for (const parent of parents) {
+      if (parent.children.some((child) => child.id === childId)) return { kind: 'child', parentId: parent.id, childId };
+    }
+  }
+  if (todoId?.startsWith('parent:')) {
+    const parentId = todoId.slice('parent:'.length);
+    if (parents.some((parent) => parent.id === parentId)) return { kind: 'parent', parentId };
+  }
+  const currentParent = parents.find((parent) => parent.stage === currentStage) ?? parents[0];
+  if (!currentParent) return { kind: 'stage', stage: currentStage };
+  const firstChild = currentParent.children.find((child) => !child.isNotApplicable);
+  return firstChild ? { kind: 'child', parentId: currentParent.id, childId: firstChild.id } : { kind: 'parent', parentId: currentParent.id };
+}
 
 function selectionStage(selection: Selection, parents: ActivityParent[]) {
   if (selection.kind === 'stage') return selection.stage;

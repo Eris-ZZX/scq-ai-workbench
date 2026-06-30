@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@/generated/prisma/client';
-import { activateProjectStageActivities, ensureProjectActivities } from '@/lib/db/activities';
+import { ensureProjectActivities } from '@/lib/db/activities';
 import { canManageProject, getProjectAdminAccess, projectScopeWhere, type ProjectAdminAccess } from '@/lib/db/project-admin-access';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
@@ -157,19 +157,14 @@ export async function PATCH(request: Request) {
       const name = clean(body.name);
       if (!name) return NextResponse.json({ error: '请填写项目名称' }, { status: 400 });
       const status = clean(body.status);
-      const currentStage = clean(body.currentStage) || 'TR1';
       await prisma.project.update({
         where: { id: projectId },
         data: {
           name,
           description: cleanOptional(body.description),
           status: validStatuses.has(status) ? status : 'active',
-          currentStage,
         },
       });
-      if (status !== 'completed') {
-        await activateProjectStageActivities(projectId, currentStage, r.session.sub);
-      }
     }
 
     if (action === 'addMembers') {

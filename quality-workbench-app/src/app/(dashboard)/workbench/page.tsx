@@ -11,12 +11,12 @@ type TodoType =
   | 'overdue'
   | 'blocked'
   | 'returned'
-  | 'missing_deliverable'
   | 'responsibility'
   | 'pending_parent_close';
 type WorkbenchTodo = {
   id: string;
   type: TodoType;
+  tags: string[];
   projectId: string;
   parentId: string | null;
   childId: string | null;
@@ -188,7 +188,7 @@ export default function WorkbenchPage() {
           </div>
 
           <div>
-            <div className="hidden grid-cols-[88px_112px_136px_minmax(0,1fr)_24px] gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-1.5 text-xs font-medium text-slate-500 md:grid">
+            <div className="hidden grid-cols-[72px_112px_136px_minmax(0,1fr)_24px] gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-1.5 text-xs font-medium text-slate-500 md:grid">
               <span>类型</span>
               <span>计划完成时间</span>
               <span>项目</span>
@@ -248,7 +248,7 @@ function TodoRow({ todo }: { todo: TodoWithProject }) {
   return (
     <Link
       href={projectTaskHref(todo.projectId, todo.id)}
-      className="grid min-h-11 gap-2 px-4 py-2 transition hover:bg-slate-50 md:grid-cols-[88px_112px_136px_minmax(0,1fr)_24px] md:items-center"
+      className="grid min-h-11 gap-2 px-4 py-2 transition hover:bg-slate-50 md:grid-cols-[72px_112px_136px_minmax(0,1fr)_24px] md:items-center"
     >
       <span className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-semibold ${kind === 'project_activity' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
         {kind === 'project_activity' ? '项目活动' : '子任务'}
@@ -257,7 +257,10 @@ function TodoRow({ todo }: { todo: TodoWithProject }) {
       <span className="min-w-0 truncate text-xs text-slate-600 md:text-sm">{todo.projectName}</span>
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-slate-950">{todo.stage} {todo.title}</span>
-        <span className="mt-0.5 block truncate text-xs text-slate-500">{todo.parentTitle} / {todo.ownerRole}</span>
+        <span className="mt-0.5 flex items-center gap-0.5">
+          <span className="block truncate text-xs text-slate-500">{todo.parentTitle} / {todo.ownerRole}</span>
+          <TodoTags tags={todo.tags} />
+        </span>
       </span>
       <ArrowRight className="h-4 w-4 text-slate-400" />
     </Link>
@@ -280,6 +283,35 @@ function compareTodos(a: TodoWithProject, b: TodoWithProject) {
 
 function getTodoKindRank(todo: Pick<WorkbenchTodo, 'childId'>) {
   return todo.childId ? 1 : 2;
+}
+
+const TODO_TYPE_LABEL: Record<string, string> = {
+  blocked: '阻塞',
+  overdue: '逾期',
+  pending_parent_close: '待关闭',
+  returned: '退回',
+  responsibility: '待处理',
+};
+
+const TODO_TYPE_COLORS: Record<string, string> = {
+  blocked: 'bg-red-50 text-red-700',
+  overdue: 'bg-amber-50 text-amber-700',
+  pending_parent_close: 'bg-purple-50 text-purple-700',
+  returned: 'bg-orange-50 text-orange-700',
+  responsibility: 'bg-slate-100 text-slate-700',
+};
+
+function TodoTags({ tags }: { tags?: string[] }) {
+  if (!tags || tags.length === 0) return null;
+  return (
+    <span className="ml-1.5 inline-flex flex-wrap gap-1">
+      {tags.map((tag) => (
+        <span key={tag} className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ${TODO_TYPE_COLORS[tag] ?? 'bg-slate-100 text-slate-700'}`}>
+          {TODO_TYPE_LABEL[tag] ?? tag}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function getDueTime(value: string | null) {
