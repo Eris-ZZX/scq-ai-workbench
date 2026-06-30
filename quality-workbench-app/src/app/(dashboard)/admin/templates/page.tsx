@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Edit3, FilePlus2, Plus, Save, Trash2, X } from 'lucide-react';
@@ -86,6 +86,31 @@ type ProjectRoleItem = {
   sortOrder: number;
   isActive: boolean;
 };
+
+function toTemplatePayload(stages: TemplateStage[]) {
+  return stages.map((stage, stageIndex) => ({
+    name: stage.name,
+    plannedStartOffsetDays: stage.plannedStartOffsetDays ?? null,
+    plannedDueOffsetDays: stage.plannedDueOffsetDays ?? null,
+    sortOrder: stageIndex + 1,
+    parents: stage.parents.map((parent, parentIndex) => ({
+      name: parent.name,
+      description: parent.description ?? null,
+      closureStandard: parent.closureStandard ?? null,
+      plannedStartOffsetDays: parent.plannedStartOffsetDays ?? null,
+      plannedOffsetDays: parent.plannedOffsetDays ?? null,
+      sortOrder: parentIndex + 1,
+      children: parent.children.map((child, childIndex) => ({
+        title: child.title,
+        ownerRoleName: child.ownerRoleName,
+        deliverableName: child.deliverableName ?? null,
+        requiresDeliverable: child.requiresDeliverable,
+        isRequired: child.isRequired,
+        sortOrder: childIndex + 1,
+      })),
+    })),
+  }));
+}
 
 export default function AdminTemplatesPage() {
   const [templates, setTemplates] = useState<TemplateSet[]>([]);
@@ -283,7 +308,7 @@ export default function AdminTemplatesPage() {
       description: draft.description,
       isActive: draft.isActive,
       changeNotes,
-      stages: draft.stages,
+      stages: toTemplatePayload(draft.stages),
     });
     if (saved?.id) {
       setEditMode(false);
@@ -317,7 +342,7 @@ export default function AdminTemplatesPage() {
 
   async function deleteTemplate() {
     if (!selectedSet) return;
-    if (!window.confirm(`确认删除模板“${selectedSet.name}”？`)) return;
+    if (!window.confirm(`确认删除模板"${selectedSet.name}"？`)) return;
     const deleted = await requestJson('DELETE', undefined, `/api/admin/templates?id=${encodeURIComponent(selectedSet.id)}`);
     if (deleted?.ok) {
       cancelEdit();

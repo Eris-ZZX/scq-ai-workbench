@@ -5,6 +5,7 @@ import { RefreshCw, Save } from 'lucide-react';
 import {
   ActivityStructureEditor,
   cloneActivityStructure,
+  normalizeActivityStructure,
   type ActivityStructureStage,
 } from '../templates/activity-structure-editor';
 
@@ -25,6 +26,11 @@ type ProjectActivityParent = {
   children: ProjectActivityChild[];
 };
 
+type ProjectActivityStage = {
+  id: string;
+  stage: string;
+};
+
 function actionButton(active = false) {
   return `inline-flex h-8 shrink-0 items-center gap-1 rounded border px-2 text-xs transition disabled:cursor-not-allowed disabled:opacity-60 ${
     active
@@ -37,14 +43,24 @@ function isDraftId(id: string) {
   return id.startsWith('stage-') || id.startsWith('activity-') || id.startsWith('child-');
 }
 
-function toStructure(parents: ProjectActivityParent[]): ActivityStructureStage[] {
+export function toStructure(parents: ProjectActivityParent[], stages: ProjectActivityStage[] = []): ActivityStructureStage[] {
   const stageOrder: string[] = [];
+  const stageNames = new Set<string>();
   const groups = new Map<string, ProjectActivityParent[]>();
+
+  for (const stage of stages) {
+    if (!stage.stage || stageNames.has(stage.stage)) continue;
+    stageNames.add(stage.stage);
+    stageOrder.push(stage.stage);
+  }
 
   for (const parent of parents) {
     if (!groups.has(parent.stage)) {
       groups.set(parent.stage, []);
-      stageOrder.push(parent.stage);
+      if (!stageNames.has(parent.stage)) {
+        stageNames.add(parent.stage);
+        stageOrder.push(parent.stage);
+      }
     }
     groups.get(parent.stage)?.push(parent);
   }
@@ -95,6 +111,13 @@ function toProjectPayload(stages: ActivityStructureStage[]) {
     })));
 }
 
+function toStagePayload(stages: ActivityStructureStage[]) {
+  return stages.map((stage, index) => ({
+    stage: stage.name,
+    sortOrder: index + 1,
+  }));
+}
+
 function ProjectActivityEditorView({ projectId }: { projectId: string }) {
   const [stages, setStages] = useState<ActivityStructureStage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,14 +130,14 @@ function ProjectActivityEditorView({ projectId }: { projectId: string }) {
     setLoading(true);
     setError('');
     try {
-    const res = await fetch(`/api/admin/projects/${projectId}/activities`);
+    const res = await fetch(`/api/admin/projects/${projectId}/activities`, { cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
     setLoading(false);
     if (!res.ok) {
       setError(data.error ?? '项目活动加载失败');
       return;
     }
-    setStages(toStructure(data.parents ?? []));
+    setStages(normalizeActivityStructure(toStructure(data.parents ?? [], data.stages ?? [])));
     setDirty(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : '项目活动加载失败');
@@ -136,7 +159,7 @@ function ProjectActivityEditorView({ projectId }: { projectId: string }) {
   }), [stages]);
 
   function updateStages(nextStages: ActivityStructureStage[]) {
-    setStages(cloneActivityStructure(nextStages));
+    setStages(normalizeActivityStructure(cloneActivityStructure(nextStages)));
     setDirty(true);
   }
 
@@ -147,6 +170,7 @@ function ProjectActivityEditorView({ projectId }: { projectId: string }) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        stages: toStagePayload(stages),
         parents: toProjectPayload(stages),
         changeNote: '后台项目管理维护项目活动结构',
       }),
@@ -157,7 +181,11 @@ function ProjectActivityEditorView({ projectId }: { projectId: string }) {
       setError(data.error ?? '项目活动保存失败');
       return;
     }
-    setStages(toStructure(data.parents ?? []));
+    setStages(normalizeActivityStructure(toStructure(data.parents ?? [], data.stages ?? [])));
+    window.localStorage.setItem('npq:project-activities-updated', JSON.stringify({
+      projectId,
+      updatedAt: Date.now(),
+    }));
     setDirty(false);
   }
 

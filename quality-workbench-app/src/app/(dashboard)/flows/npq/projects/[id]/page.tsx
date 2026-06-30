@@ -118,6 +118,7 @@ type WorkspaceData = {
   project: Project;
   parents: ActivityParent[];
   events: ActivityEvent[];
+  stageGates?: StageGate[];
 };
 
 type RoleContext = {
@@ -160,10 +161,9 @@ export default function ProjectWorkspacePage() {
   const loadWorkspace = useCallback(async () => {
     setErrorMsg('');
     try {
-      const [activityRes, permissionRes, gateRes] = await Promise.all([
-        fetch(`/api/npq/projects/${id}/activities`, { cache: 'no-store' }),
+      const [activityRes, permissionRes] = await Promise.all([
+        fetch(`/api/npq/projects/${id}/activities?view=workspace`, { cache: 'no-store' }),
         fetch(`/api/npq/permissions?projectId=${id}&actions=stage_gate.pass`),
-        fetch(`/api/npq/projects/${id}/stage-gates`, { cache: 'no-store' }),
       ]);
       if (!activityRes.ok) {
         router.push('/workbench');
@@ -171,16 +171,13 @@ export default function ProjectWorkspacePage() {
       }
       const activityData = await activityRes.json();
       setWorkspace(activityData);
+      setStageGates(activityData.stageGates ?? []);
 
       if (permissionRes.ok) {
         const permissions = await permissionRes.json();
         setCanPassStageGate(Boolean(permissions['stage_gate.pass']));
       }
-      if (gateRes.ok) {
-        const gateData = await gateRes.json();
-        setStageGates(gateData.gates ?? []);
-      }
-      // 轻量获取当前用户身份（替代之前的 /api/npq/workbench）
+      // 轻量获取当前用户身份
       try {
         const meRes = await fetch('/api/auth/me');
         if (meRes.ok) {

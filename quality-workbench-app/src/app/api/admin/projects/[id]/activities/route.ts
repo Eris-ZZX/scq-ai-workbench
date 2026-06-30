@@ -22,6 +22,11 @@ type ActivityParentInput = {
   children?: ActivityChildInput[];
 };
 
+type ActivityStageInput = {
+  stage?: string;
+  sortOrder?: number;
+};
+
 type NormalizedParent = {
   id: string;
   stage: string;
@@ -113,15 +118,47 @@ async function getProjectActivities(projectId: string) {
   });
 }
 
+async function getProjectActivityStages(projectId: string) {
+  const [gates, parents] = await Promise.all([
+    prisma.stageGateRecord.findMany({
+      where: { projectId },
+      select: { id: true, stage: true, plannedStartDate: true, plannedDueDate: true, status: true, passedAt: true },
+      orderBy: [{ createdAt: 'asc' }],
+    }),
+    prisma.projectActivityParent.findMany({
+      where: { projectId },
+      select: { stage: true },
+      distinct: ['stage'],
+      orderBy: [{ stage: 'asc' }],
+    }),
+  ]);
+  const seen = new Set(gates.map((gate) => gate.stage));
+  return [
+    ...gates,
+    ...parents
+      .filter((parent) => !seen.has(parent.stage))
+      .map((parent) => ({
+        id: `stage:${parent.stage}`,
+        stage: parent.stage,
+        plannedStartDate: null,
+        plannedDueDate: null,
+        status: 'pending',
+        passedAt: null,
+      })),
+  ];
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const r = await checkProjectManager(id);
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
   const project = await prisma.project.findUnique({ where: { id }, select: { id: true, name: true } });
   if (!project) return NextResponse.json({ error: '项目不存在' }, { status: 404 });
-  const parents = await getProjectActivities(id);
-  const activityRoles = [...new Set(parents.flatMap((p) => p.children.map((c) => c.ownerRole)))].sort();
-  return NextResponse.json({ project, parents, activityRoles });
+  const [parents, stages] = await Promise.all([
+    getProjectActivities(id),
+    getProjectActivityStages(id),
+  ]);
+  return NextResponse.json({ project, parents, stages });
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -129,7 +166,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const r = await checkProjectManager(projectId);
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
 
-  let body: { parents?: ActivityParentInput[]; changeNote?: string };
+  let body: { stages?: ActivityStageInput[]; parents?: ActivityParentInput[]; changeNote?: string };
   try {
     body = await request.json();
   } catch {
@@ -143,6 +180,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!project) return NextResponse.json({ error: '项目不存在' }, { status: 404 });
 
   let parents: NormalizedParent[];
+  let stageNames: string[];
   try {
     parents = body.parents.map((parent, parentIndex) => {
       const stage = clean(parent.stage);
@@ -168,6 +206,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         }),
       };
     });
+    stageNames = Array.isArray(body.stages)
+      ? body.stages.map((stage) => clean(stage.stage)).filter(Boolean)
+      : [];
+    for (const parent of parents) {
+      if (!stageNames.includes(parent.stage)) stageNames.push(parent.stage);
+    }
   } catch (error) {
     if (error instanceof Error && error.message === 'INVALID_PARENT') {
       return NextResponse.json({ error: '阶段和项目活动名称为必填项' }, { status: 400 });
@@ -193,6 +237,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         tx,
         parents.flatMap((parent) => parent.children),
       );
+
+      await tx.stageGateRecord.deleteMany({
+        where: { projectId, stage: { notIn: stageNames } },
+      });
+      for (const stage of stageNames) {
+        await tx.stageGateRecord.upsert({
+          where: { projectId_stage: { projectId, stage } },
+          create: { projectId, stage },
+          update: {},
+        });
+      }
 
       await tx.projectActivityParent.deleteMany({
         where: { projectId, id: { notIn: Array.from(incomingParentIds) } },
@@ -270,7 +325,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       });
     });
 
-    return NextResponse.json({ parents: await getProjectActivities(projectId) });
+    const [reloadedParents, stages] = await Promise.all([
+      getProjectActivities(projectId),
+      getProjectActivityStages(projectId),
+    ]);
+    return NextResponse.json({ parents: reloadedParents, stages });
   } catch (error) {
     if (error instanceof Error && error.message === 'INVALID_PARENT') {
       return NextResponse.json({ error: '阶段和项目活动名称为必填项' }, { status: 400 });

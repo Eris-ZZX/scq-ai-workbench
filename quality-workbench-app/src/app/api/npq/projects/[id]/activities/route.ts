@@ -4,7 +4,14 @@ import { getSession } from '@/platform/auth/auth.config';
 import { prisma } from '@/lib/prisma';
 import { ensureProjectActivities } from '@/lib/db/activities';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+const STAGES = ['TR1', 'TR2&3', 'TR4', 'TR4A', 'TR5', 'TR6'];
+
+function stageSortIndex(stage: string) {
+  const index = STAGES.indexOf(stage);
+  return index >= 0 ? index : STAGES.length;
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
   const { id } = await params;
@@ -63,17 +70,23 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           },
         }),
 
-    // 纯读：不调 ensure/activate/refresh，只拉数据
-    prisma.projectActivityParent.findMany({
-      where: { projectId: id },
-      include: {
-        children: {
-          include: { attachments: { where: { deletedAt: null }, select: { id: true } } },
-          orderBy: { sortOrder: 'asc' },
+    // 读取项目活动，支持 ?view=workspace 时仅返回摘要
+    (async () => {
+      const { searchParams } = new URL(request.url);
+      const isWorkspaceView = searchParams.get('view') === 'workspace';
+      return prisma.projectActivityParent.findMany({
+        where: { projectId: id },
+        include: {
+          children: {
+            include: isWorkspaceView
+              ? undefined
+              : { attachments: { where: { deletedAt: null }, select: { id: true } } },
+            orderBy: { sortOrder: 'asc' },
+          },
         },
-      },
-      orderBy: { sortOrder: 'asc' },
-    }),
+        orderBy: { sortOrder: 'asc' },
+      });
+    })(),
 
     prisma.stageGateRecord.findMany({
       where: { projectId: id },
@@ -83,7 +96,26 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   if (!project) return NextResponse.json({ error: '项目不存在或无权访问' }, { status: 404 });
 
-  return NextResponse.json({ project, parents, stageGates });
+  // 为每个阶段门禁计算项目活动统计
+  const parentStats = new Map<string, { total: number; open: number; blocked: number }>();
+  for (const parent of parents) {
+    const stats = parentStats.get(parent.stage) ?? { total: 0, open: 0, blocked: 0 };
+    stats.total += 1;
+    if (parent.status !== 'closed') stats.open += 1;
+    if (parent.hasBlocked) stats.blocked += 1;
+    parentStats.set(parent.stage, stats);
+  }
+
+  return NextResponse.json({
+    project,
+    parents,
+    stageGates: stageGates
+      .map((gate) => ({
+        ...gate,
+        stats: parentStats.get(gate.stage) ?? { total: 0, open: 0, blocked: 0 },
+      }))
+      .sort((a, b) => stageSortIndex(a.stage) - stageSortIndex(b.stage) || a.stage.localeCompare(b.stage)),
+  });
 }
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
