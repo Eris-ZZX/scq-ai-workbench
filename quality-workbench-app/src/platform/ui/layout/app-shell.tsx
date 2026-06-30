@@ -69,7 +69,7 @@ export function AppShell({
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm text-white">{session.username}</div>
                   <div className="text-xs text-ws-sidebar-text/60">
-                    {session.role === 'admin' ? '系统管理员' : '项目成员'}
+                    {session.role === 'admin' ? '系统管理员' : session.role === 'manager' ? '业务管理者' : '项目成员'}
                   </div>
                 </div>
                 <Link href="/workbench" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="个人项目工作台">
@@ -80,7 +80,7 @@ export function AppShell({
           </div>
           {!collapsed && (
             <div className="mt-2 flex gap-1 text-xs">
-              {session.role === 'admin' && (
+              {(session.role === 'admin' || session.role === 'manager') && (
                 <Link href="/admin" className="rounded px-2 py-1 text-ws-sidebar-text/60 transition hover:bg-white/10 hover:text-white">
                   后台
                 </Link>

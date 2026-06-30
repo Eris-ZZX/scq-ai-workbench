@@ -11,9 +11,9 @@ export type ProjectAdminAccess =
   | { kind: 'none'; userId: string };
 
 export async function getProjectAdminAccess(session: SessionLike): Promise<ProjectAdminAccess> {
-  if (session.role === 'admin') return { kind: 'admin', userId: session.sub };
+  if (session.role === 'admin' || session.role === 'manager') return { kind: 'admin', userId: session.sub };
 
-  // 有任何项目成员身份即可进入项目管理页面
+  // 有任何项目成员身份即可进入项目管理页面（含 observer）
   const member = await prisma.projectMember.findFirst({
     where: { userId: session.sub },
     select: { id: true },

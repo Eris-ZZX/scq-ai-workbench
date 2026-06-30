@@ -3,15 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BriefcaseBusiness, ShieldCheck, UserCog, UsersRound } from 'lucide-react';
-
-type Position = {
-  id: string;
-  name: string;
-  roleName: string | null;
-  isActive: boolean;
-  _count?: { userPositions: number; projectAssignments: number; templateChildren: number };
-};
+import { ArrowRight, ShieldCheck, UserCog, UsersRound } from 'lucide-react';
 
 type User = {
   id: string;
@@ -20,7 +12,6 @@ type User = {
 
 export default function AdminUsersDashboardPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -29,16 +20,12 @@ export default function AdminUsersDashboardPage() {
     async function load() {
       setError('');
       try {
-        const [usersRes, positionsRes] = await Promise.all([
-          fetch('/api/admin/users'),
-          fetch('/api/admin/positions'),
-        ]);
+        const usersRes = await fetch('/api/admin/users');
         if (cancelled) return;
         if (usersRes.ok) setUsers(await usersRes.json());
-        if (positionsRes.ok) setPositions(await positionsRes.json());
-        if (!usersRes.ok || !positionsRes.ok) setError('加载用户或角色数据失败，请刷新后重试。');
+        else setError('加载用户数据失败，请刷新后重试。');
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : '加载用户或角色数据失败');
+        if (!cancelled) setError(err instanceof Error ? err.message : '加载用户数据失败');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -47,11 +34,7 @@ export default function AdminUsersDashboardPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const stats = useMemo(() => {
-    const activeUsers = users.filter((user) => user.status === 'active').length;
-    const assignedPositions = positions.reduce((sum, position) => sum + (position._count?.userPositions ?? 0), 0);
-    return { activeUsers, assignedPositions };
-  }, [positions, users]);
+  const activeUsers = useMemo(() => users.filter((user) => user.status === 'active').length, [users]);
 
   if (loading) return <div className="p-8 text-sm text-muted-foreground">加载中...</div>;
 
@@ -65,7 +48,7 @@ export default function AdminUsersDashboardPage() {
           </div>
           <h1 className="mt-1 text-2xl font-semibold text-foreground">用户管理</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            统一查看账号、角色和绑定情况；需要维护时进入下方对应模块。
+            维护用户账号状态、系统权限。岗位由钉钉登录自动同步，无需手动管理。
           </p>
         </div>
 
@@ -77,18 +60,11 @@ export default function AdminUsersDashboardPage() {
 
         <section className="grid gap-4 md:grid-cols-2">
           <EntryCard
-            href="/admin/users/roles"
-            icon={<BriefcaseBusiness className="h-5 w-5" />}
-            title="角色管理"
-            desc="维护分组，以及分组下可分配给用户和项目的角色。"
-            meta={`${positions.length} 个角色，${stats.assignedPositions} 个用户绑定`}
-          />
-          <EntryCard
             href="/admin/users/accounts"
             icon={<UserCog className="h-5 w-5" />}
             title="用户管理"
-            desc="维护账号状态、系统权限，以及每个用户绑定的角色。"
-            meta={`${users.length} 个账号，${stats.activeUsers} 个启用`}
+            desc="维护账号状态、系统权限。岗位由钉钉登录自动获取，无需手动分配。"
+            meta={`${users.length} 个账号，${activeUsers} 个启用`}
           />
         </section>
       </div>

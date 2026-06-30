@@ -31,6 +31,11 @@ const positionRoleSeeds = [
 
 function responsiblePositionRoleId(ownerRole: string) {
   const exact: Record<string, string> = {
+    'NPQ': 'pos-npq',
+    'PQE': 'pos-pqe',
+    'FAE': 'pos-fae',
+    'RAM': 'pos-ram',
+    'QCM': 'pos-qcm',
     'SQE-塑胶': 'pos-sqe',
     'SQE-五金': 'pos-sqe-metal',
     'SQE-SMT代表': 'pos-sqe-smt',
@@ -38,7 +43,7 @@ function responsiblePositionRoleId(ownerRole: string) {
     'SQE-定制电子代表': 'pos-sqe-custom-electronics',
     'SQE-硅胶': 'pos-sqe-silicone',
   };
-  return exact[ownerRole.trim()];
+  return exact[ownerRole.trim()] ?? null;
 }
 
 type QualityActivityTemplateRow = {
@@ -510,7 +515,7 @@ async function seedProjectActivities(
          (id, projectId, parentId, templateChildId, thirdLevelPlan, ownerRole,
           responsibleRoleId, assigneeUserId, status, requiresDeliverable, requiresAttachment,
           requiresNote, deliverableName, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, 'not_started', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'not_started', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
        ON CONFLICT(parentId, thirdLevelPlan, ownerRole) DO UPDATE SET
          templateChildId=excluded.templateChildId,
          responsibleRoleId=excluded.responsibleRoleId,

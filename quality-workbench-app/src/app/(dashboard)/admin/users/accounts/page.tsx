@@ -4,12 +4,6 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Plus, UserCog, X } from 'lucide-react';
 
-type Role = {
-  id: string;
-  name: string;
-  isActive: boolean;
-};
-
 type User = {
   id: string;
   username: string;
@@ -21,20 +15,12 @@ type User = {
     positionRole: { id: string; name: string };
   };
 };
-
-type UserGroup = {
-  id: string;
-  name: string;
-  users: User[];
-};
-
 type NewUserForm = {
   username: string;
   email: string;
   password: string;
   role: string;
   status: string;
-  positionRoleId: string;
 };
 
 const emptyNewUser: NewUserForm = {
@@ -43,16 +29,10 @@ const emptyNewUser: NewUserForm = {
   password: '',
   role: 'user',
   status: 'active',
-  positionRoleId: '',
 };
-
-function roleFullName(role: Pick<Role, 'name'>) {
-  return role.name;
-}
 
 export default function AdminUserAccountsPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -62,21 +42,16 @@ export default function AdminUserAccountsPage() {
   async function load() {
     setError('');
     try {
-      const [usersRes, rolesRes] = await Promise.all([
-        fetch('/api/admin/users'),
-        fetch('/api/admin/positions'),
-      ]);
-      if (usersRes.ok) setUsers(await usersRes.json());
-      if (rolesRes.ok) setRoles(await rolesRes.json());
-      if (!usersRes.ok || !rolesRes.ok) setError('加载用户或岗位失败，请刷新后重试。');
+      const res = await fetch('/api/admin/users');
+      if (res.ok) setUsers(await res.json());
+      if (!res.ok) setError('加载用户失败，请刷新后重试。');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载用户或岗位失败');
+      setError(err instanceof Error ? err.message : '加载用户失败');
     } finally {
       setLoading(false);
     }
   }
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   const activeUsers = useMemo(() => users.filter((user) => user.status === 'active'), [users]);
@@ -126,7 +101,6 @@ export default function AdminUserAccountsPage() {
         password,
         role: newUser.role,
         status: newUser.status,
-        positionRoleId: newUser.positionRoleId || null,
       }),
     });
     setSaving(false);
@@ -135,10 +109,13 @@ export default function AdminUserAccountsPage() {
       setError(body.error ?? '创建用户失败。');
       return;
     }
-    setError('');
-    setNewUser(emptyNewUser);
     setShowCreate(false);
+    setNewUser(emptyNewUser);
     await load();
+  }
+
+  function positionLabel(user: User) {
+    return user.positionBinding?.positionRole?.name || '—';
   }
 
   if (loading) return <div className="p-8 text-sm text-muted-foreground">加载中...</div>;
@@ -149,26 +126,26 @@ export default function AdminUserAccountsPage() {
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <Link href="/admin/users" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-ws-blue">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              用户管理
+              <ArrowLeft className="h-3.5 w-3.5" />用户管理
             </Link>
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
               <UserCog className="h-4 w-4" />
-              Admin / User Accounts
+              Admin / Users / Accounts
             </div>
             <h1 className="mt-1 text-2xl font-semibold text-foreground">用户管理</h1>
-            <p className="mt-1 text-sm text-muted-foreground">按启用状态分列表，并在列表内按岗位分类维护用户。</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              维护账号状态与系统权限。岗位由钉钉登录自动获取，不可手动更改。
+            </p>
           </div>
           <button
-            className="inline-flex h-9 items-center gap-1 rounded border border-ws-blue bg-ws-blue px-3 text-sm font-medium text-white hover:bg-ws-blue/90"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded border border-border bg-white px-3 text-sm transition hover:border-ws-blue hover:text-ws-blue"
             onClick={() => {
-              setError('');
               setNewUser(emptyNewUser);
               setShowCreate(true);
             }}
+            disabled={saving}
           >
-            <Plus className="h-4 w-4" />
-            新增用户
+            <Plus className="h-4 w-4" />新增用户
           </button>
         </div>
 
@@ -178,28 +155,79 @@ export default function AdminUserAccountsPage() {
           </div>
         )}
 
-        <div className="space-y-5">
-          <UserStatusList
-            title="启用用户"
-            users={activeUsers}
-            roles={roles}
-            saving={saving}
-            updateUser={updateUser}
-          />
-          <UserStatusList
-            title="禁用用户"
-            users={disabledUsers}
-            roles={roles}
-            saving={saving}
-            updateUser={updateUser}
-          />
-        </div>
+        <section>
+          {[
+            { name: '启用', users: activeUsers },
+            { name: '禁用', users: disabledUsers },
+          ].map((group) => (
+            group.users.length > 0 && (
+              <div key={group.name} className="mb-6 overflow-hidden rounded-lg border border-border bg-white">
+                <div className="border-b border-border px-4 py-3">
+                  <h2 className="text-sm font-semibold text-foreground">{group.name}</h2>
+                  <div className="mt-0.5 text-xs text-muted-foreground">{group.users.length} 人</div>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm table-fixed">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
+                        <th className="w-2/5 px-3 py-2 text-left">用户</th>
+                        <th className="w-[18%] px-3 py-2 text-left">岗位</th>
+                        <th className="w-[18%] px-3 py-2 text-left">系统权限</th>
+                        <th className="w-[18%] px-3 py-2 text-left">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.users.map((user) => {
+                        const isSuperAdmin = user.username === 'admin';
+                        return (
+                          <tr key={user.id} className="border-b border-border transition hover:bg-muted/20">
+                            <td className="px-3 py-3">
+                              <div className="text-sm font-medium">{user.username}</div>
+                              {user.email && (
+                                <div className="text-xs text-muted-foreground">{user.email}</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-3">
+                              <span className="text-xs text-muted-foreground">{positionLabel(user)}</span>
+                            </td>
+                            <td className="px-3 py-3">
+                              <select
+                                value={user.role}
+                                onChange={(event) => updateUser(user.id, { role: event.target.value })}
+                                disabled={saving || isSuperAdmin}
+                                className="h-8 w-full rounded border border-border px-2 text-xs disabled:bg-muted disabled:text-muted-foreground"
+                              >
+                                <option value="user">用户</option>
+                                <option value="manager">业务管理者</option>
+                                <option value="admin">管理员</option>
+                              </select>
+                            </td>
+                            <td className="px-3 py-3">
+                              <select
+                                value={user.status}
+                                onChange={(event) => updateUser(user.id, { status: event.target.value })}
+                                disabled={saving || isSuperAdmin}
+                                className="h-8 w-full max-w-36 rounded border border-border px-2 text-xs disabled:bg-muted disabled:text-muted-foreground"
+                              >
+                                <option value="active">启用</option>
+                                <option value="disabled">禁用</option>
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          ))}
+        </section>
       </div>
 
       {showCreate && (
         <CreateUserModal
           value={newUser}
-          roles={roles}
           saving={saving}
           onChange={setNewUser}
           onCancel={() => setShowCreate(false)}
@@ -210,145 +238,14 @@ export default function AdminUserAccountsPage() {
   );
 }
 
-function groupUsersByRole(users: User[], roles: Role[]): UserGroup[] {
-  const groups = roles
-    .map((role) => ({
-      id: role.id,
-      name: roleFullName(role),
-      users: users.filter((user) => user.positionBinding?.positionRoleId === role.id),
-    }))
-    .filter((group) => group.users.length > 0);
-  const unassigned = users.filter((user) => !user.positionBinding);
-  if (unassigned.length > 0) groups.push({ id: 'unassigned', name: '未分配岗位', users: unassigned });
-  return groups;
-}
-
-function RoleOptions({ roles }: { roles: Role[] }) {
-  return (
-    <>
-      {roles.map((role) => (
-        <option key={role.id} value={role.id} disabled={!role.isActive}>
-          {roleFullName(role)}
-        </option>
-      ))}
-    </>
-  );
-}
-
-function UserStatusList({
-  title,
-  users,
-  roles,
-  saving,
-  updateUser,
-}: {
-  title: string;
-  users: User[];
-  roles: Role[];
-  saving: boolean;
-  updateUser: (id: string, data: Record<string, string | null>) => Promise<void>;
-}) {
-  const groups = groupUsersByRole(users, roles);
-
-  return (
-    <section className="overflow-hidden rounded-lg border border-border bg-white">
-      <div className="border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">当前 {users.length} 个用户</p>
-      </div>
-
-      {groups.length === 0 ? (
-        <div className="px-4 py-6 text-sm text-muted-foreground">暂无用户</div>
-      ) : (
-        groups.map((group) => (
-          <div key={group.id} className="border-b border-border last:border-b-0">
-            <div className="bg-slate-50 px-4 py-2 text-xs font-medium text-muted-foreground">
-              {group.name} · {group.users.length}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[920px] table-fixed text-sm">
-                <colgroup>
-                  <col className="w-[34%]" />
-                  <col className="w-[18%]" />
-                  <col className="w-[30%]" />
-                  <col className="w-[18%]" />
-                </colgroup>
-                <thead className="text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2">用户</th>
-                    <th className="px-3 py-2">系统权限</th>
-                    <th className="px-3 py-2">岗位</th>
-                    <th className="px-3 py-2">账号状态</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {group.users.map((user) => {
-                    const isSuperAdmin = user.username === 'admin';
-                    return (
-                      <tr key={user.id}>
-                        <td className="px-3 py-3">
-                          <div className="truncate font-medium text-foreground">{user.username}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {user.email ?? '-'}
-                            {isSuperAdmin ? ' / 超级管理账号' : ''}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <select
-                            value={user.role}
-                            onChange={(event) => updateUser(user.id, { role: event.target.value })}
-                            disabled={saving || isSuperAdmin}
-                            className="h-8 w-full max-w-36 rounded border border-border px-2 text-xs disabled:bg-muted disabled:text-muted-foreground"
-                          >
-                            <option value="user">用户</option>
-                            <option value="admin">管理员</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-3">
-                          <select
-                            value={user.positionBinding?.positionRoleId ?? ''}
-                            onChange={(event) => updateUser(user.id, { positionRoleId: event.target.value || null })}
-                            disabled={saving}
-                            className="h-8 w-full rounded border border-border px-2 text-xs"
-                          >
-                            <option value="">未分配岗位</option>
-                            <RoleOptions roles={roles} />
-                          </select>
-                        </td>
-                        <td className="px-3 py-3">
-                          <select
-                            value={user.status}
-                            onChange={(event) => updateUser(user.id, { status: event.target.value })}
-                            disabled={saving || isSuperAdmin}
-                            className="h-8 w-full max-w-36 rounded border border-border px-2 text-xs disabled:bg-muted disabled:text-muted-foreground"
-                          >
-                            <option value="active">启用</option>
-                            <option value="disabled">禁用</option>
-                          </select>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))
-      )}
-    </section>
-  );
-}
-
 function CreateUserModal({
   value,
-  roles,
   saving,
   onChange,
   onCancel,
   onSubmit,
 }: {
   value: NewUserForm;
-  roles: Role[];
   saving: boolean;
   onChange: (value: NewUserForm) => void;
   onCancel: () => void;
@@ -401,6 +298,7 @@ function CreateUserModal({
               onChange={(event) => onChange({ ...value, role: event.target.value })}
             >
               <option value="user">用户</option>
+              <option value="manager">业务管理者</option>
               <option value="admin">管理员</option>
             </select>
           </label>
@@ -413,17 +311,6 @@ function CreateUserModal({
             >
               <option value="active">启用</option>
               <option value="disabled">禁用</option>
-            </select>
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs text-muted-foreground">岗位</span>
-            <select
-              className="h-9 w-full rounded border border-border px-2 text-sm"
-              value={value.positionRoleId}
-              onChange={(event) => onChange({ ...value, positionRoleId: event.target.value })}
-            >
-              <option value="">未分配岗位</option>
-              <RoleOptions roles={roles} />
             </select>
           </label>
         </div>
@@ -444,3 +331,4 @@ function CreateUserModal({
     </div>
   );
 }
+

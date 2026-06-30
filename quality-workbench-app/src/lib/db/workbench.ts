@@ -47,7 +47,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
   for (const mp of memberProjects) {
     projectRoleMap.set(mp.projectId, mp.role as ProjectRole);
   }
-  if (session.role === 'admin') {
+  if (session.role === 'admin' || session.role === 'manager') {
     // admin overrides all per-project roles
   }
 
@@ -103,7 +103,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
   }));
 
   const now = new Date();
-  const projectTodos = session.role === 'admin'
+  const projectTodos = (session.role === 'admin' || session.role === 'manager')
     ? []
     : projectsWithParents.map((project) => {
         const projectRole = projectRoleMap.get(project.id) ?? 'observer' as ProjectRole;
@@ -179,7 +179,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
       userId: session.sub,
       username: session.username,
       appRole: session.role,
-      workbenchRole: session.role === 'admin' ? 'admin' as const : 'executor' as const,
+      workbenchRole: (session.role === 'admin' || session.role === 'manager') ? 'admin' as const : 'executor' as const,
     },
     actionMetrics: {
       totalTodo: allTodos.length,
@@ -217,7 +217,9 @@ async function buildProjectEffectiveRoleIds(
   const map = new Map<string, string[]>();
   const assignedRoles = new Set<string>();
   for (const mp of memberProjects) {
-    if (mp.assignedRole) assignedRoles.add(mp.assignedRole);
+    if (mp.assignedRole) {
+      for (const r of mp.assignedRole.split(',').map((s) => s.trim())) assignedRoles.add(r);
+    }
   }
 
   const positionRoles = assignedRoles.size > 0
@@ -236,8 +238,12 @@ async function buildProjectEffectiveRoleIds(
 
   for (const mp of memberProjects) {
     if (mp.assignedRole) {
-      const ids = nameToIds.get(mp.assignedRole);
-      map.set(mp.projectId, ids ?? []);
+      const allIds: string[] = [];
+      for (const r of mp.assignedRole.split(',').map((s) => s.trim())) {
+        const ids = nameToIds.get(r);
+        if (ids) allIds.push(...ids);
+      }
+      map.set(mp.projectId, allIds);
     } else {
       map.set(mp.projectId, []);
     }
@@ -252,7 +258,7 @@ function buildProjectWhere(
   allEffectiveRoleIds: Set<string>,
 ) {
   const status = { in: BUSINESS_PROJECT_STATUSES };
-  if (session.role === 'admin') return { status };
+  if (session.role === 'admin' || session.role === 'manager') return { status };
 
   const assignedProjectIds = memberProjects.map((mp) => mp.projectId);
   const roleIdList = Array.from(allEffectiveRoleIds);

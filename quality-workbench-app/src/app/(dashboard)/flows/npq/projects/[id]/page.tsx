@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -133,8 +133,6 @@ const STAGE_ORDER = ['TR1', 'TR2&3', 'TR4', 'TR4A', 'TR5', 'TR6'];
 export default function ProjectWorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const todoParam = searchParams.get('todo');
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
   const [roleContext, setRoleContext] = useState<RoleContext | null>(null);
   const [stageGates, setStageGates] = useState<StageGate[]>([]);
@@ -162,11 +160,10 @@ export default function ProjectWorkspacePage() {
   const loadWorkspace = useCallback(async () => {
     setErrorMsg('');
     try {
-      const [activityRes, permissionRes, gateRes, workbenchRes] = await Promise.all([
+      const [activityRes, permissionRes, gateRes] = await Promise.all([
         fetch(`/api/npq/projects/${id}/activities`, { cache: 'no-store' }),
         fetch(`/api/npq/permissions?projectId=${id}&actions=stage_gate.pass`),
         fetch(`/api/npq/projects/${id}/stage-gates`, { cache: 'no-store' }),
-        fetch(`/api/npq/workbench?projectId=${id}`, { cache: 'no-store' }),
       ]);
       if (!activityRes.ok) {
         router.push('/workbench');
@@ -183,10 +180,14 @@ export default function ProjectWorkspacePage() {
         const gateData = await gateRes.json();
         setStageGates(gateData.gates ?? []);
       }
-      if (workbenchRes.ok) {
-        const workbenchData = await workbenchRes.json();
-        setRoleContext(workbenchData.roleContext ?? null);
-      }
+      // 轻量获取当前用户身份（替代之前的 /api/npq/workbench）
+      try {
+        const meRes = await fetch('/api/auth/me');
+        if (meRes.ok) {
+          const me = await meRes.json();
+          setRoleContext({ userId: me.id, appRole: me.role, workbenchRole: 'executor', username: me.username, position: me.positionBinding?.positionRole ?? null });
+        }
+      } catch { /* non-critical */ }
     } catch {
       setErrorMsg('项目工作区加载失败');
     } finally {
@@ -194,36 +195,13 @@ export default function ProjectWorkspacePage() {
     }
   }, [id, router]);
 
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void loadWorkspace();
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [loadWorkspace]);
-
-  useEffect(() => {
-    if (!workspace) return;
-    const timeoutId = window.setTimeout(() => {
-      const visibleParents = filterInProgressParents(workspace.parents, true, roleContext, projectRole, assignedRole);
-      const resolved = resolveInitialSelection(todoParam, visibleParents, workspace.project.currentStage);
-      setSelection(resolved);
-      setExpandedStages(new Set([selectionStage(resolved, visibleParents) ?? workspace.project.currentStage]));
-      const parentId = resolved.kind === 'parent' || resolved.kind === 'child' ? resolved.parentId : null;
-      setExpandedParents(parentId ? new Set([parentId]) : new Set());
-    }, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [roleContext, todoParam, workspace]);
-
-  useEffect(() => {
-    if (!selection) return;
-    const timeoutId = window.setTimeout(() => {
-      const target = document.getElementById(selectionTreeTargetId(selection));
-      if (!target) return;
-      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      if (target instanceof HTMLElement) target.focus({ preventScroll: true });
-    }, 80);
-    return () => window.clearTimeout(timeoutId);
-  }, [selection, expandedStages, expandedParents]);
 
   const projectRole = useMemo(() => {
     const member = (workspace?.project.members as any)?.find((m: any) => m.userId === roleContext?.userId);
@@ -234,6 +212,7 @@ export default function ProjectWorkspacePage() {
     const member = (workspace?.project.members as any)?.find((m: any) => m.userId === roleContext?.userId);
     return member?.assignedRole ?? null;
   }, [workspace, roleContext]);
+
 
   const visibleParents = useMemo(
     () => filterInProgressParents(workspace?.parents ?? [], showInProgressOnly, roleContext, projectRole, assignedRole),
@@ -294,7 +273,7 @@ export default function ProjectWorkspacePage() {
   }
 
   async function patchChild(payload: Record<string, unknown>) {
-    if (!selectedChild) return;
+    if (!selectedChild || !workspace) return;
     setSaving(true);
     setErrorMsg('');
     try {
@@ -303,9 +282,22 @@ export default function ProjectWorkspacePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error ?? '子任务保存失败');
-      await loadWorkspace();
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? '子任务保存失败');
+      }
+      const updated = await response.json();
+      // 本地更新活动树，避免全量重拉
+      setWorkspace((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          parents: (prev.parents as any[]).map((p) => ({
+            ...p,
+            children: p.children.map((c: any) => (c.id === updated.id ? { ...c, ...updated } : c)),
+          })),
+        };
+      });
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : '子任务保存失败');
     } finally {
@@ -345,7 +337,11 @@ export default function ProjectWorkspacePage() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error ?? '项目活动关闭失败');
-      await loadWorkspace();
+      const updated = await response.json();
+      setWorkspace((prev) => {
+        if (!prev) return prev;
+        return { ...prev, parents: (prev.parents as any[]).map((p) => (p.id === updated.id ? { ...p, ...updated } : p)) };
+      });
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : '项目活动关闭失败');
     } finally {
@@ -609,7 +605,7 @@ export default function ProjectWorkspacePage() {
               </div>
 
               <HistoryPanel
-                events={workspace.events}
+                events={[]}
                 parentId={selectedParent?.id ?? null}
                 childId={selectedChild?.id ?? null}
               />
@@ -846,7 +842,7 @@ function ChildDetail({
 }
 
 function HistoryPanel({
-  events,
+  events = [],
   parentId,
   childId,
 }: {
@@ -1057,26 +1053,6 @@ function StatusPill({ label, tone }: { label: string; tone: 'slate' | 'blue' | '
   return <span className={`rounded-full px-2 py-1 text-xs font-medium ${tones[tone]}`}>{label}</span>;
 }
 
-function resolveInitialSelection(todoId: string | null, parents: ActivityParent[], currentStage: string): Selection {
-  if (todoId?.startsWith('child:')) {
-    const childId = todoId.slice('child:'.length);
-    for (const parent of parents) {
-      if (parent.children.some((child) => child.id === childId)) return { kind: 'child', parentId: parent.id, childId };
-    }
-  }
-  if (todoId?.startsWith('parent:')) {
-    const parentId = todoId.slice('parent:'.length);
-    if (parents.some((parent) => parent.id === parentId)) return { kind: 'parent', parentId };
-  }
-  if (todoId?.startsWith('stage:')) {
-    const stage = todoId.split(':').slice(2).join(':') || currentStage;
-    return { kind: 'stage', stage };
-  }
-  const currentParent = parents.find((parent) => parent.stage === currentStage) ?? parents[0];
-  if (!currentParent) return { kind: 'stage', stage: currentStage };
-  const firstChild = currentParent.children.find((child) => !child.isNotApplicable);
-  return firstChild ? { kind: 'child', parentId: currentParent.id, childId: firstChild.id } : { kind: 'parent', parentId: currentParent.id };
-}
 
 function selectionStage(selection: Selection, parents: ActivityParent[]) {
   if (selection.kind === 'stage') return selection.stage;

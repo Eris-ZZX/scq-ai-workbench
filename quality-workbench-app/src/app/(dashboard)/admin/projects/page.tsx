@@ -220,8 +220,8 @@ export default function AdminProjectsPage() {
     if (!selectedProject) return [] as { code: string; name: string }[];
     const codes = new Set<string>();
     for (const m of (selectedProject.members ?? [])) {
-      const ar = memberAssignedRole(m);
-      if (ar) codes.add(ar);
+      const roles = (m.assignedRole ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      for (const r of roles) codes.add(r);
     }
     for (const r of projectActivityRoles) codes.add(r);
     return Array.from(codes).sort().map((code) => ({
@@ -294,21 +294,21 @@ export default function AdminProjectsPage() {
     if (deleted?.ok) await load('');
   }
 
-  function memberAssignedRole(member: ProjectMember): string {
-    return member.assignedRole ?? '';
+  function memberHasRole(member: ProjectMember, roleCode: string): boolean {
+    return (member.assignedRole ?? '').split(',').map((s) => s.trim()).includes(roleCode);
   }
 
   function selectedUserIdsForRole(roleCode: string) {
     return new Set(
       (selectedProject?.members ?? [])
-        .filter((member) => memberAssignedRole(member) === roleCode)
+        .filter((member) => memberHasRole(member, roleCode))
         .map((member) => member.userId),
     );
   }
 
   function selectedMembersForRole(roleCode: string) {
     return (selectedProject?.members ?? []).filter(
-      (member) => memberAssignedRole(member) === roleCode,
+      (member) => memberHasRole(member, roleCode),
     );
   }
 
@@ -326,12 +326,13 @@ export default function AdminProjectsPage() {
     }
   }
 
-  async function removeRoleMember(_roleCode: string, userId: string) {
+  async function removeRoleMember(roleCode: string, userId: string) {
     if (!selectedProject) return;
     const updated = await requestJson('PATCH', {
       action: 'removeMember',
       projectId: selectedProject.id,
       userId,
+      roleName: roleCode,
     });
     if (updated?.id) replaceProject(updated as Project);
   }
@@ -444,7 +445,7 @@ export default function AdminProjectsPage() {
                       描述
                       <textarea className={fieldClass('mt-1 min-h-20 w-full py-2')} value={basicForm.description} onChange={(event) => setBasicForm((current) => ({ ...current, description: event.target.value }))} />
                     </label>
-                    <label className="text-xs font-medium text-muted-foreground md:col-span-2">
+                    <div className="text-xs font-medium text-muted-foreground md:col-span-2">
                       NPQ 负责人
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         {(() => {
@@ -452,13 +453,13 @@ export default function AdminProjectsPage() {
                           return (
                             <>
                               {npq.map((member) => (
-                                <span key={member.id} className="inline-flex items-center gap-1 rounded border border-border bg-white px-2 py-1 text-sm">
-                                  <span>{displayUser(member.user)}</span>
+                                <span key={member.id} className="inline-flex rounded border border-border bg-white text-sm">
+                                  <span className="py-1 pl-2 pr-0.5">{displayUser(member.user)}</span>
                                   <button
-                                    className="text-muted-foreground hover:text-red-600"
+                                    className="border-l border-border px-1.5 py-1 text-muted-foreground hover:bg-red-50 hover:text-red-600"
                                     onClick={() => removeRoleMember('NPQ', member.userId)}
                                     disabled={saving}
-                                    title="移除"
+                                    title="移除NPQ"
                                   >×</button>
                                 </span>
                               ))}
@@ -472,7 +473,7 @@ export default function AdminProjectsPage() {
                           );
                         })()}
                       </div>
-                    </label>
+                    </div>
                   </div>
                   <div className="flex items-center justify-end gap-3 border-t border-border px-4 py-3">
                     {hasUnsaved && (

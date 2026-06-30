@@ -191,11 +191,12 @@ export async function PATCH(request: Request) {
         await prisma.$transaction(async (tx) => {
           const existing = await tx.projectMember.findMany({
             where: { projectId, userId: { in: userIds } },
-            select: { userId: true },
+            select: { id: true, userId: true, role: true, assignedRole: true },
           });
-          const existingSet = new Set(existing.map((m) => m.userId));
-          const newUserIds = userIds.filter((uid) => !existingSet.has(uid));
+          const existingMap = new Map(existing.map((m) => [m.userId, m]));
+          const newUserIds = userIds.filter((uid) => !existingMap.has(uid));
 
+          // 新增用户
           for (const userId of newUserIds) {
             await tx.projectMember.create({
               data: {
@@ -206,22 +207,63 @@ export async function PATCH(request: Request) {
               },
             });
           }
+
+          // 已有成员追加角色
+          for (const userId of userIds) {
+            const m = existingMap.get(userId);
+            if (!m) continue;
+            const currentRoles = m.assignedRole ? m.assignedRole.split(',').map((s) => s.trim()).filter(Boolean) : [];
+            if (!currentRoles.includes(roleName)) {
+              currentRoles.push(roleName);
+              await tx.projectMember.update({
+                where: { id: m.id },
+                data: {
+                  assignedRole: currentRoles.join(','),
+                  role: isOwner ? 'owner' : m.role, // NPQ 升级为 owner
+                },
+              });
+            }
+          }
         });
       }
     }
 
     if (action === 'removeMember') {
       const userId = clean(body.userId);
+      const roleName = clean(body.roleName);
       if (!userId) return NextResponse.json({ error: '缺少用户 ID' }, { status: 400 });
 
       const member = await prisma.projectMember.findFirst({
         where: { projectId, userId },
-        select: { id: true, role: true },
+        select: { id: true, role: true, assignedRole: true },
       });
       if (!member) return NextResponse.json({ error: '成员不存在' }, { status: 404 });
 
-      // 防止移除最后一个 owner
-      if (member.role === 'owner') {
+      // 如果指定了角色名，只移除该角色
+      if (roleName && member.assignedRole) {
+        const roles = member.assignedRole.split(',').map((s) => s.trim()).filter(Boolean);
+        const remaining = roles.filter((r) => r !== roleName);
+        if (remaining.length === 0) {
+          // 最后一个角色 → 删除成员
+          if (member.role === 'owner') {
+            const ownerCount = await prisma.projectMember.count({ where: { projectId, role: 'owner' } });
+            if (ownerCount <= 1) {
+              return NextResponse.json({ error: '不能移除最后一位项目负责人' }, { status: 400 });
+            }
+          }
+          await prisma.projectMember.delete({ where: { id: member.id } });
+        } else {
+          const wasOwner = member.role === 'owner';
+          const stillOwner = wasOwner && remaining.includes('NPQ');
+          await prisma.projectMember.update({
+            where: { id: member.id },
+            data: {
+              assignedRole: remaining.join(','),
+              role: stillOwner ? 'owner' : wasOwner ? 'member' : undefined,
+            },
+          });
+        }
+      } else {
         const ownerCount = await prisma.projectMember.count({
           where: { projectId, role: 'owner' },
         });

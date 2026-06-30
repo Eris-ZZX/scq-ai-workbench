@@ -4,10 +4,16 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
 import bcrypt from 'bcryptjs';
 
-async function checkAdmin() {
+function isAdminOrManager(role: string) {
+  return role === 'admin' || role === 'manager';
+}
+
+async function checkAdmin(writeOp = false) {
   const session = await getSession();
   if (!session) return { error: '未登录', status: 401 };
-  if (session.role !== 'admin') return { error: '需要管理员权限', status: 403 };
+  if (writeOp ? session.role !== 'admin' : !isAdminOrManager(session.role)) {
+    return { error: '需要管理员权限', status: 403 };
+  }
   return { ok: true, session };
 }
 
@@ -17,17 +23,9 @@ export async function GET() {
 
   const users = await prisma.user.findMany({
     select: {
-      id: true,
-      username: true,
-      role: true,
-      status: true,
-      email: true,
-      createdAt: true,
+      id: true, username: true, role: true, status: true, email: true, createdAt: true,
       positionBinding: {
-        select: {
-          positionRoleId: true,
-          positionRole: { select: { id: true, name: true, roleName: true } },
-        },
+        select: { positionRoleId: true, positionRole: { select: { id: true, name: true, roleName: true } } },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -36,94 +34,39 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const r = await checkAdmin();
+  const r = await checkAdmin(true);
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
 
-  let body: {
-    username?: string;
-    password?: string;
-    email?: string | null;
-    role?: string;
-    status?: string;
-    positionRoleId?: string | null;
-  };
-  try {
-    body = await request.json();
-  } catch {
+  let body: { username?: string; password?: string; email?: string | null; role?: string; status?: string };
+  try { body = await request.json(); } catch {
     return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
   }
 
   const username = body.username?.trim();
   const password = body.password;
   const email = body.email?.trim() || null;
-  const role = body.role === 'admin' ? 'admin' : 'user';
+  const role = body.role === 'admin' ? 'admin' : body.role === 'manager' ? 'manager' : 'user';
   const status = body.status === 'disabled' ? 'disabled' : 'active';
-  const positionRoleId = body.positionRoleId?.trim() || null;
 
-  if (!username || !password) {
-    return NextResponse.json({ error: '请填写用户名和密码' }, { status: 400 });
-  }
-  if (!/^[a-zA-Z0-9_-]{1,50}$/.test(username)) {
-    return NextResponse.json({ error: '用户名须为 1-50 位字母、数字、下划线或连字符' }, { status: 400 });
-  }
-  if (password.length < 6 || password.length > 128) {
-    return NextResponse.json({ error: '密码长度应为 6-128 位' }, { status: 400 });
-  }
+  if (!username || !password) return NextResponse.json({ error: '请填写用户名和密码' }, { status: 400 });
+  if (!/^[a-zA-Z0-9_-]{1,50}$/.test(username)) return NextResponse.json({ error: '用户名须为 1-50 位字母、数字、下划线或连字符' }, { status: 400 });
+  if (password.length < 6 || password.length > 128) return NextResponse.json({ error: '密码长度应为 6-128 位' }, { status: 400 });
+
   try {
     const passwordHash = await bcrypt.hash(password, 12);
-    const created = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          username,
-          passwordHash,
-          email,
-          role,
-          status,
+    const created = await prisma.user.create({
+      data: { username, passwordHash, email, role, status },
+      select: {
+        id: true, username: true, role: true, status: true, email: true, createdAt: true,
+        positionBinding: {
+          select: { positionRoleId: true, positionRole: { select: { id: true, name: true, roleName: true } } },
         },
-        select: {
-          id: true,
-          username: true,
-          role: true,
-          status: true,
-          email: true,
-          createdAt: true,
-        },
-      });
-
-      if (positionRoleId) {
-        await tx.userPosition.create({
-          data: { userId: user.id, positionRoleId },
-        });
-      }
-
-      return tx.user.findUnique({
-        where: { id: user.id },
-        select: {
-          id: true,
-          username: true,
-          role: true,
-          status: true,
-          email: true,
-          createdAt: true,
-          positionBinding: {
-            select: {
-              positionRoleId: true,
-              positionRole: { select: { id: true, name: true, roleName: true } },
-            },
-          },
-        },
-      });
+      },
     });
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json({ error: '用户名或邮箱已存在' }, { status: 409 });
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-      return NextResponse.json({ error: '角色不存在' }, { status: 400 });
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2011') {
-      return NextResponse.json({ error: `数据库结构未同步：${String(error.meta?.modelName ?? 'User')} 存在非空旧字段，请刷新数据库迁移后重试` }, { status: 500 });
     }
     console.error('[admin/users:POST]', error);
     return NextResponse.json({ error: '创建用户失败' }, { status: 500 });
@@ -131,13 +74,11 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const r = await checkAdmin();
+  const r = await checkAdmin(true);
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
 
-  let body: { id?: string; role?: string; status?: string; positionRoleId?: string | null };
-  try {
-    body = await request.json();
-  } catch {
+  let body: { id?: string; role?: string; status?: string };
+  try { body = await request.json(); } catch {
     return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
   }
   if (!body.id) return NextResponse.json({ error: '请指定用户' }, { status: 400 });
@@ -158,39 +99,20 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      if (body.role || body.status) {
-        await tx.user.update({
-          where: { id: body.id },
-          data: { role: body.role, status: body.status },
-        });
-      }
-
-      if ('positionRoleId' in body) {
-        if (body.positionRoleId) {
-          await tx.userPosition.upsert({
-            where: { userId },
-            create: { userId, positionRoleId: body.positionRoleId },
-            update: { positionRoleId: body.positionRoleId },
-          });
-        } else {
-          await tx.userPosition.deleteMany({ where: { userId } });
-        }
-      }
-    });
+    if (body.role || body.status) {
+      const role = body.role === 'admin' ? 'admin' : body.role === 'manager' ? 'manager' : body.role === 'user' ? 'user' : undefined;
+      await prisma.user.update({
+        where: { id: body.id },
+        data: { role, status: body.status },
+      });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        id: true,
-        username: true,
-        role: true,
-        status: true,
+        id: true, username: true, role: true, status: true,
         positionBinding: {
-          select: {
-            positionRoleId: true,
-            positionRole: { select: { id: true, name: true, roleName: true } },
-          },
+          select: { positionRoleId: true, positionRole: { select: { id: true, name: true, roleName: true } } },
         },
       },
     });
