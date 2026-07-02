@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ProjectTimelineCard, type StageNode, type TrialPhase } from './ProjectTimelineCard';
 
 type Project = { id: string; name: string; status: string; currentStage?: string | null };
 type ActivityAttachment = {
@@ -123,10 +124,24 @@ export default function ActivityTrackingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ stage: '', status: '', risk: '', owner: '' });
+  const [projectStartDate, setProjectStartDate] = useState<string | null>(null);
+  const [projectExpectedEndDate, setProjectExpectedEndDate] = useState<string | null>(null);
+  const [trialRows, setTrialRows] = useState<Array<{ id: string; item: string; plannedStartDate: string; plannedDueDate: string; note: string }>>([]);
+
+  const loadTrialRows = useCallback((pid: string) => {
+    try {
+      const saved = window.localStorage.getItem(`npq:trial-plan:${pid}`);
+      const parsed = saved ? JSON.parse(saved) : null;
+      setTrialRows(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setTrialRows([]);
+    }
+  }, []);
 
   const loadActivities = useCallback(async (id: string) => {
     if (!id) return;
     setError('');
+    loadTrialRows(id);
     try {
     const res = await fetch(`/api/npq/projects/${id}/activities`, { cache: 'no-store' });
     if (!res.ok) {
@@ -137,18 +152,20 @@ export default function ActivityTrackingPage() {
     const data = await res.json();
     const nextParents = data.parents ?? [];
     const nextStageGates = data.stageGates ?? [];
-    const currentStage = data.project?.currentStage ?? '';
+    setProjectStartDate(data.project?.startDate ?? null);
+    setProjectExpectedEndDate(data.project?.expectedEndDate ?? null);
     const fallbackStage = nextParents[0]?.stage ?? nextStageGates[0]?.stage ?? '';
     setParents(nextParents);
     setStageGates(nextStageGates);
     setEvents(data.events ?? []);
-    setExpandedStages(new Set([currentStage || fallbackStage].filter(Boolean)));
+    const currentStageFromApi = data.project?.currentStage ?? '';
+    setExpandedStages(new Set([currentStageFromApi || fallbackStage].filter(Boolean)));
     setSelectedParentIds(new Set());
     setSelectedChildIds(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : '活动数据加载失败');
     }
-  }, []);
+  }, [loadTrialRows]);
 
   useEffect(() => {
     (async () => {
@@ -370,6 +387,25 @@ export default function ActivityTrackingPage() {
 
   const currentStageIndex = stageOptions.indexOf(currentStage);
   const selectedCount = selectedParentIds.size + selectedChildIds.size;
+
+  const stageNodes = useMemo<StageNode[]>(() => {
+    return stageGates.map((sg) => ({
+      key: sg.stage,
+      label: sg.stage,
+      date: sg.plannedStartDate || sg.plannedDueDate,
+    }));
+  }, [stageGates]);
+
+  const trialPhases = useMemo<TrialPhase[]>(() => {
+    return trialRows
+      .filter((row) => row.item)
+      .map((row) => ({
+        key: row.id,
+        label: row.item,
+        startDate: row.plannedStartDate || null,
+        endDate: row.plannedDueDate || null,
+      }));
+  }, [trialRows]);
   const grouped = stageOptions.map((stage) => {
     const stageParents = parents.filter((parent) => parent.stage === stage);
     const closedCount = stageParents.filter((parent) => parent.status === 'closed').length;
@@ -409,37 +445,11 @@ export default function ActivityTrackingPage() {
             <p className="mt-1 text-sm text-muted-foreground">按阶段筛选并批量维护当前项目的活动子任务、附件、退回和不涉及项。</p>
           </div>
           <div className="flex items-center gap-2">
-            {editMode ? (
-              <>
-                <Button variant="outline" onClick={cancelEdit} disabled={saving}>
-                  <X className="mr-1 h-4 w-4" /> 取消
-                </Button>
-                <Button onClick={saveEditChanges} disabled={saving || selectedCount === 0}>
-                  <Save className="mr-1 h-4 w-4" /> 保存
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" onClick={() => loadActivities(projectId)}>
-                  <RefreshCw className="mr-1 h-4 w-4" /> 刷新
-                </Button>
-                <Button variant="outline" onClick={openMilestoneEdit}>
-                  阶段里程碑编辑
-                </Button>
-                <Button onClick={() => setEditMode(true)}>
-                  编辑
-                </Button>
-              </>
-            )}
+            <Button variant="outline" onClick={() => loadActivities(projectId)}>
+              <RefreshCw className="mr-1 h-4 w-4" /> 刷新
+            </Button>
           </div>
         </div>
-
-        {error && (
-          <div className="mb-4 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-            <span>{error}</span>
-            <button onClick={() => setError('')}><X className="h-4 w-4" /></button>
-          </div>
-        )}
 
         <div className="mb-4 grid gap-3 rounded-md border border-border bg-white p-4 shadow-sm lg:grid-cols-5">
           <label className="text-sm">
@@ -461,44 +471,88 @@ export default function ActivityTrackingPage() {
           <FilterSelect label="负责人" value={filters.owner} options={owners} onChange={(value) => setFilters((f) => ({ ...f, owner: value }))} />
         </div>
 
-        {editMode && (
-          <div className="mb-4 grid gap-3 rounded-md border border-blue-100 bg-blue-50/70 p-3 text-sm lg:grid-cols-[120px_repeat(3,minmax(0,1fr))]">
-            <div className="flex flex-col justify-center">
-              <span className="font-semibold text-blue-900">编辑中</span>
-              <span className="text-xs text-blue-700">已选择 {selectedCount} 项</span>
-            </div>
-            <EditSelect
-              label="子任务状态"
-              value={editDraft.childStatus}
-              options={Object.keys(CHILD_STATUS_LABEL)}
-              labels={CHILD_STATUS_LABEL}
-              onChange={(value) => setEditDraft((current) => ({ ...current, childStatus: value }))}
-              disabled={selectedChildIds.size === 0}
+        {projectId && (
+          <div className="mb-4">
+            <ProjectTimelineCard
+              stageNodes={stageNodes}
+              trialPhases={trialPhases}
+              currentStage={currentStage}
+              projectStartDate={projectStartDate}
+              projectExpectedEndDate={projectExpectedEndDate}
+              headerAction={(
+                <Button variant="outline" size="sm" onClick={openMilestoneEdit}>
+                  阶段里程碑编辑
+                </Button>
+              )}
             />
-            <label className="text-xs font-medium text-blue-900">
-              <span className="mb-1 block">计划开始</span>
-              <input
-                type="date"
-                value={editDraft.plannedStartDate}
-                onChange={(event) => setEditDraft((current) => ({ ...current, plannedStartDate: event.target.value }))}
-                className="h-9 w-full rounded-md border bg-white px-2 text-xs"
-              />
-            </label>
-            <label className="text-xs font-medium text-blue-900">
-              <span className="mb-1 block">计划完成</span>
-              <input
-                type="date"
-                value={editDraft.plannedDueDate}
-                onChange={(event) => setEditDraft((current) => ({ ...current, plannedDueDate: event.target.value }))}
-                className="h-9 w-full rounded-md border bg-white px-2 text-xs"
-              />
-            </label>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+            <span>{error}</span>
+            <button onClick={() => setError('')}><X className="h-4 w-4" /></button>
           </div>
         )}
 
         <div className="overflow-hidden rounded-md border border-border bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-950">项目任务</h2>
+            <div className="flex items-center gap-2">
+              {editMode ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saving}>
+                    <X className="mr-1 h-4 w-4" /> 取消
+                  </Button>
+                  <Button size="sm" onClick={saveEditChanges} disabled={saving || selectedCount === 0}>
+                    <Save className="mr-1 h-4 w-4" /> 保存
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={() => setEditMode(true)}>
+                  编辑
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {editMode && (
+            <div className="grid gap-3 border-b border-blue-100 bg-blue-50/70 p-3 text-sm lg:grid-cols-[120px_repeat(3,minmax(0,1fr))]">
+              <div className="flex flex-col justify-center">
+                <span className="font-semibold text-blue-900">编辑中</span>
+                <span className="text-xs text-blue-700">已选择 {selectedCount} 项</span>
+              </div>
+              <EditSelect
+                label="子任务状态"
+                value={editDraft.childStatus}
+                options={Object.keys(CHILD_STATUS_LABEL)}
+                labels={CHILD_STATUS_LABEL}
+                onChange={(value) => setEditDraft((current) => ({ ...current, childStatus: value }))}
+                disabled={selectedChildIds.size === 0}
+              />
+              <label className="text-xs font-medium text-blue-900">
+                <span className="mb-1 block">计划开始</span>
+                <input
+                  type="date"
+                  value={editDraft.plannedStartDate}
+                  onChange={(event) => setEditDraft((current) => ({ ...current, plannedStartDate: event.target.value }))}
+                  className="h-9 w-full rounded-md border bg-white px-2 text-xs"
+                />
+              </label>
+              <label className="text-xs font-medium text-blue-900">
+                <span className="mb-1 block">计划完成</span>
+                <input
+                  type="date"
+                  value={editDraft.plannedDueDate}
+                  onChange={(event) => setEditDraft((current) => ({ ...current, plannedDueDate: event.target.value }))}
+                  className="h-9 w-full rounded-md border bg-white px-2 text-xs"
+                />
+              </label>
+            </div>
+          )}
+
           <div className="grid grid-cols-[minmax(240px,1.5fr)_84px_105px_148px_118px_118px_105px] border-b bg-muted/50 px-4 py-2 text-xs font-semibold text-muted-foreground">
-            <span>项目任务</span>
+            <span>任务名称</span>
             <span>状态</span>
             <span>完成情况</span>
             <span>标记</span>
@@ -622,6 +676,7 @@ export default function ActivityTrackingPage() {
           onDraftChange={setMilestoneDraft}
           onClose={cancelMilestoneEdit}
           onSave={saveMilestones}
+          onTrialSaved={() => loadTrialRows(projectId)}
         />
       )}
     </div>
@@ -691,6 +746,7 @@ function MilestoneDialog({
   onDraftChange,
   onClose,
   onSave,
+  onTrialSaved,
 }: {
   draft: Record<string, { plannedStartDate: string; plannedDueDate: string }>;
   stages: string[];
@@ -699,6 +755,7 @@ function MilestoneDialog({
   onDraftChange: React.Dispatch<React.SetStateAction<Record<string, { plannedStartDate: string; plannedDueDate: string }>>>;
   onClose: () => void;
   onSave: () => void;
+  onTrialSaved?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<'milestone' | 'trial'>('milestone');
   const [trialRows, setTrialRows] = useState<Array<{ id: string; item: string; plannedStartDate: string; plannedDueDate: string; note: string }>>(() => {
@@ -742,6 +799,7 @@ function MilestoneDialog({
   function saveTrialRows() {
     window.localStorage.setItem(`npq:trial-plan:${projectId}`, JSON.stringify(trialRows));
     setTrialSaved(true);
+    onTrialSaved?.();
     window.setTimeout(() => setTrialSaved(false), 1800);
   }
 

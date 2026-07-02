@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { ProjectTimelineInline, type StageNode, type TrialPhase } from '../../activities/ProjectTimelineCard';
 
 type WorkbenchRole = 'npq' | 'executor' | 'manager' | 'admin';
 type Selection =
@@ -25,6 +26,7 @@ type Selection =
 
 type ProjectMember = {
   role: string;
+  assignedRole: string | null;
   userId: string;
   user: {
     id: string;
@@ -43,6 +45,8 @@ type Project = {
   status: string;
   currentStage: string;
   stageGateStatus: string;
+  startDate: string | null;
+  expectedEndDate: string | null;
   createdAt: string;
   stages: { id: string; name: string; status: string; order: number }[];
   tasks: { id: string; title: string; status: string; stageId: string | null }[];
@@ -109,9 +113,19 @@ type StageGate = {
   id: string;
   stage: string;
   status: string;
+  plannedStartDate: string | null;
+  plannedDueDate: string | null;
   passedAt: string | null;
   conditionReleaseNote: string | null;
   stats: { total: number; open: number; blocked: number };
+};
+
+type TrialPlanRow = {
+  id: string;
+  item: string;
+  plannedStartDate: string;
+  plannedDueDate: string;
+  note: string;
 };
 
 type WorkspaceData = {
@@ -159,6 +173,7 @@ export default function ProjectWorkspacePage() {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showInProgressOnly, setShowInProgressOnly] = useState(true);
+  const [trialRows] = useState<TrialPlanRow[]>(() => readTrialRowsFromStorage(id));
 
   const loadWorkspace = useCallback(async () => {
     setErrorMsg('');
@@ -214,12 +229,12 @@ export default function ProjectWorkspacePage() {
   }, [workspace, todoParam]);
 
   const projectRole = useMemo(() => {
-    const member = (workspace?.project.members as any)?.find((m: any) => m.userId === roleContext?.userId);
+    const member = workspace?.project.members.find((item) => item.userId === roleContext?.userId);
     return member?.role ?? 'member';
   }, [workspace, roleContext]);
 
   const assignedRole = useMemo(() => {
-    const member = (workspace?.project.members as any)?.find((m: any) => m.userId === roleContext?.userId);
+    const member = workspace?.project.members.find((item) => item.userId === roleContext?.userId);
     return member?.assignedRole ?? null;
   }, [workspace, roleContext]);
 
@@ -229,6 +244,23 @@ export default function ProjectWorkspacePage() {
     [roleContext, showInProgressOnly, workspace, projectRole, assignedRole],
   );
   const stageGroups = useMemo(() => groupParentsByStage(visibleParents), [visibleParents]);
+  const summaryStageNodes = useMemo<StageNode[]>(() => {
+    return stageGates.map((gate) => ({
+      key: gate.stage,
+      label: gate.stage,
+      date: gate.plannedStartDate || gate.plannedDueDate,
+    }));
+  }, [stageGates]);
+  const nearestTrialPhase = useMemo<TrialPhase[]>(() => {
+    const nearest = pickNearestTrialRow(trialRows);
+    if (!nearest) return [];
+    return [{
+      key: nearest.id,
+      label: nearest.item,
+      startDate: nearest.plannedStartDate || null,
+      endDate: nearest.plannedDueDate || null,
+    }];
+  }, [trialRows]);
   const taskNumbers = useMemo(
     () => buildTaskNumberMap(workspace?.parents ?? []),
     [workspace],
@@ -296,15 +328,15 @@ export default function ProjectWorkspacePage() {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error ?? '子任务保存失败');
       }
-      const updated = await response.json();
+      const updated = await response.json() as ActivityChild;
       // 本地更新活动树，避免全量重拉
       setWorkspace((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
-          parents: (prev.parents as any[]).map((p) => ({
-            ...p,
-            children: p.children.map((c: any) => (c.id === updated.id ? { ...c, ...updated } : c)),
+          parents: prev.parents.map((parent) => ({
+            ...parent,
+            children: parent.children.map((child) => (child.id === updated.id ? { ...child, ...updated } : child)),
           })),
         };
       });
@@ -347,10 +379,10 @@ export default function ProjectWorkspacePage() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error ?? '项目活动关闭失败');
-      const updated = await response.json();
+      const updated = await response.json() as ActivityParent;
       setWorkspace((prev) => {
         if (!prev) return prev;
-        return { ...prev, parents: (prev.parents as any[]).map((p) => (p.id === updated.id ? { ...p, ...updated } : p)) };
+        return { ...prev, parents: prev.parents.map((parent) => (parent.id === updated.id ? { ...parent, ...updated } : parent)) };
       });
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : '项目活动关闭失败');
@@ -428,6 +460,13 @@ export default function ProjectWorkspacePage() {
               )}
             </div>
           </div>
+          <ProjectTimelineInline
+            stageNodes={summaryStageNodes}
+            trialPhases={nearestTrialPhase}
+            currentStage={project.currentStage}
+            projectStartDate={project.startDate}
+            projectExpectedEndDate={project.expectedEndDate}
+          />
         </header>
 
         <div className="grid min-h-0 gap-4 xl:min-h-[680px] xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -1172,6 +1211,57 @@ function buildTaskNumberMap(parents: ActivityParent[]) {
     });
   }
   return { parents: parentNumbers, children: childNumbers };
+}
+
+function readTrialRowsFromStorage(projectId: string) {
+  if (typeof window === 'undefined') return [];
+  try {
+    const saved = window.localStorage.getItem(`npq:trial-plan:${projectId}`);
+    const parsed = saved ? JSON.parse(saved) : null;
+    return Array.isArray(parsed) ? parsed as TrialPlanRow[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function pickNearestTrialRow(rows: TrialPlanRow[]) {
+  const today = startOfLocalDay(new Date());
+  const candidates = rows
+    .filter((row) => row.item.trim())
+    .map((row) => {
+      const start = parseLocalDate(row.plannedStartDate);
+      const end = parseLocalDate(row.plannedDueDate) ?? start;
+      if (!start && !end) return null;
+      const effectiveStart = start ?? end!;
+      const effectiveEnd = end ?? start!;
+      const isActive = effectiveStart <= today && today <= effectiveEnd;
+      const distance = isActive
+        ? 0
+        : today < effectiveStart
+          ? effectiveStart.getTime() - today.getTime()
+          : today.getTime() - effectiveEnd.getTime();
+      const rank = isActive ? 0 : today < effectiveStart ? 1 : 2;
+      return { row, rank, distance };
+    })
+    .filter((item): item is { row: TrialPlanRow; rank: number; distance: number } => Boolean(item));
+
+  candidates.sort((a, b) => a.rank - b.rank || a.distance - b.distance);
+  return candidates[0]?.row ?? null;
+}
+
+function parseLocalDate(value: string | null | undefined) {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : startOfLocalDay(date);
+  }
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d));
+}
+
+function startOfLocalDay(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
 }
 
 function stageIndex(stage: string) {

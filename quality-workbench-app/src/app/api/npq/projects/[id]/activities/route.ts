@@ -24,6 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           select: {
             id: true, name: true, description: true, status: true,
             currentStage: true, currentStageStartedAt: true, stageGateStatus: true,
+            startDate: true, expectedEndDate: true,
             createdAt: true, updatedAt: true,
             members: {
               select: {
@@ -49,6 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           select: {
             id: true, name: true, description: true, status: true,
             currentStage: true, currentStageStartedAt: true, stageGateStatus: true,
+            startDate: true, expectedEndDate: true,
             createdAt: true, updatedAt: true,
             members: {
               select: {
