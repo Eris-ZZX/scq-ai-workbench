@@ -23,6 +23,8 @@ type Project = {
   description: string | null;
   status: string;
   currentStage: string;
+  startDate: string | null;
+  expectedEndDate: string | null;
   members: ProjectMember[];
   _count: { tasks: number; activityParents: number; activityChildren: number };
 };
@@ -94,6 +96,14 @@ function formatTemplateVersion(version: ActivityTemplate['version']) {
   return version;
 }
 
+/** Convert ISO date string to YYYY-MM-DD for input[type=date], or empty string */
+function toDateInput(value: string | null | undefined): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
 export default function AdminProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -114,8 +124,8 @@ export default function AdminProjectsPage() {
   const [memberDialog, setMemberDialog] = useState<AddMemberDialog | null>(null);
   const [npqSearch, setNpqSearch] = useState('');
   const [npqDropdown, setNpqDropdown] = useState(false);
-  const [createForm, setCreateForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: '' });
-  const [basicForm, setBasicForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1' });
+  const [createForm, setCreateForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: '', startDate: '', expectedEndDate: '' });
+  const [basicForm, setBasicForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', startDate: '', expectedEndDate: '' });
 
   function syncBasicForm(project?: Project) {
     if (!project) return;
@@ -124,6 +134,8 @@ export default function AdminProjectsPage() {
       description: project.description ?? '',
       status: project.status,
       currentStage: project.currentStage,
+      startDate: toDateInput(project.startDate),
+      expectedEndDate: toDateInput(project.expectedEndDate),
     });
   }
 
@@ -211,7 +223,9 @@ export default function AdminProjectsPage() {
     return (
       basicForm.name !== selectedProject.name ||
       basicForm.description !== (selectedProject.description ?? '') ||
-      basicForm.status !== selectedProject.status
+      basicForm.status !== selectedProject.status ||
+      basicForm.startDate !== toDateInput(selectedProject.startDate) ||
+      basicForm.expectedEndDate !== toDateInput(selectedProject.expectedEndDate)
     );
   }, [selectedProject, basicForm]);
 
@@ -269,10 +283,12 @@ export default function AdminProjectsPage() {
       currentStage: createForm.currentStage,
       ownerId: createForm.ownerId,
       activityTemplateSetId: createForm.activityTemplateSetId,
+      startDate: createForm.startDate || undefined,
+      expectedEndDate: createForm.expectedEndDate || undefined,
     });
     if (created?.id) {
       setCreateOpen(false);
-      setCreateForm({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: templates[0]?.id ?? '' });
+      setCreateForm({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: templates[0]?.id ?? '', startDate: '', expectedEndDate: '' });
       await load(created.id);
     }
   }
@@ -284,6 +300,8 @@ export default function AdminProjectsPage() {
       action: 'updateProject',
       projectId: selectedProject.id,
       ...rest,
+      startDate: rest.startDate || undefined,
+      expectedEndDate: rest.expectedEndDate || undefined,
     });
     if (updated?.id) replaceProject(updated as Project);
   }
@@ -441,6 +459,14 @@ export default function AdminProjectsPage() {
                       <Info label="子任务" value={selectedProject._count.activityChildren} />
                       <Info label="任务" value={selectedProject._count.tasks} />
                     </div>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      开始时间
+                      <input type="date" className={fieldClass('mt-1 h-9 w-full')} value={basicForm.startDate} onChange={(event) => setBasicForm((current) => ({ ...current, startDate: event.target.value }))} />
+                    </label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      预计结束时间
+                      <input type="date" className={fieldClass('mt-1 h-9 w-full')} value={basicForm.expectedEndDate} onChange={(event) => setBasicForm((current) => ({ ...current, expectedEndDate: event.target.value }))} />
+                    </label>
                     <label className="text-xs font-medium text-muted-foreground md:col-span-2">
                       描述
                       <textarea className={fieldClass('mt-1 min-h-20 w-full py-2')} value={basicForm.description} onChange={(event) => setBasicForm((current) => ({ ...current, description: event.target.value }))} />
@@ -569,6 +595,16 @@ export default function AdminProjectsPage() {
                 <label className="block text-xs font-medium text-muted-foreground">
                   当前阶段
                   <input className={fieldClass('mt-1 h-9 w-full')} value={createForm.currentStage} onChange={(event) => setCreateForm((current) => ({ ...current, currentStage: event.target.value }))} />
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block text-xs font-medium text-muted-foreground">
+                  开始时间
+                  <input type="date" className={fieldClass('mt-1 h-9 w-full')} value={createForm.startDate} onChange={(event) => setCreateForm((current) => ({ ...current, startDate: event.target.value }))} />
+                </label>
+                <label className="block text-xs font-medium text-muted-foreground">
+                  预计结束时间
+                  <input type="date" className={fieldClass('mt-1 h-9 w-full')} value={createForm.expectedEndDate} onChange={(event) => setCreateForm((current) => ({ ...current, expectedEndDate: event.target.value }))} />
                 </label>
               </div>
               <label className="block text-xs font-medium text-muted-foreground">

@@ -67,6 +67,8 @@ model Project {
   externalSource String? // QMS / PLM
   externalId     String? // 外部系统的项目 ID
   syncAt         DateTime?
+  startDate     DateTime? // 项目开始时间
+  expectedEndDate DateTime? // 项目预计结束时间
   currentStage   String   @default("TR1")
   currentStageStartedAt DateTime?
   stageGateStatus String  @default("active") // "active" | "conditional_release" | "completed"

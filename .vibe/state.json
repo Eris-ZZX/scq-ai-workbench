@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1.0.0",
   "projectRoot": "D:\\Users\\vox1814\\Desktop\\AIspace\\5.Huge-App\\260608-QEworkspace",
-  "updatedAt": "2026-06-29T17:31:25+08:00",
-  "lastSessionId": "session-1782725071067",
-  "source": "codex",
+  "updatedAt": "2026-07-02T10:39:10+08:00",
+  "lastSessionId": "session-1782951900136",
+  "source": "claude",
   "status": "in_progress",
   "currentTask": "F5 登录页测试账号快捷登录修复",
   "features": [
@@ -163,6 +163,6 @@
   "inProgressSteps": [],
   "pendingSteps": [],
   "blocker": "",
-  "lastAction": "修复中文测试账号快捷登录停留登录页问题，并验证全部中文测试账号登录后可进入 /workbench。",
-  "nextStep": "用户在浏览器刷新登录页后实测所有测试账号快捷登录；如仍异常，优先清理浏览器旧 Cookie 后重试。"
+  "lastAction": "ProjectTimelineCard 拆为两条独立时间轴（TR点节点 + 试产时间段条），共用日期尺度，CSS percentage 自适应布局",
+  "nextStep": "考虑将试产计划从 localStorage 迁移到数据库持久化；时间轴是否需要标注\"今天\"位置线"
 }

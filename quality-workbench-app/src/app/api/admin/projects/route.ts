@@ -30,6 +30,14 @@ function cleanUserIds(value: unknown) {
     : [];
 }
 
+function parseDate(value: unknown) {
+  if (typeof value === 'string' && value.trim()) {
+    const d = new Date(value.trim());
+    return isNaN(d.getTime()) ? undefined : d;
+  }
+  return undefined;
+}
+
 function projectSelect() {
   return {
     id: true,
@@ -37,6 +45,8 @@ function projectSelect() {
     description: true,
     status: true,
     currentStage: true,
+    startDate: true,
+    expectedEndDate: true,
     createdAt: true,
     updatedAt: true,
     members: {
@@ -96,6 +106,8 @@ export async function POST(request: Request) {
   const currentStage = clean(body.currentStage) || 'TR1';
   const ownerId = clean(body.ownerId);
   const activityTemplateSetId = clean(body.activityTemplateSetId);
+  const startDate = parseDate(body.startDate);
+  const expectedEndDate = parseDate(body.expectedEndDate);
   if (!name) return NextResponse.json({ error: '请填写项目名称' }, { status: 400 });
   const selectedTemplate = activityTemplateSetId
     ? await prisma.activityTemplateSet.findFirst({
@@ -110,7 +122,7 @@ export async function POST(request: Request) {
   try {
     const created = await prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
-        data: { name, description, status, currentStage },
+        data: { name, description, status, currentStage, startDate, expectedEndDate },
         select: { id: true },
       });
       if (ownerId) {
@@ -157,12 +169,16 @@ export async function PATCH(request: Request) {
       const name = clean(body.name);
       if (!name) return NextResponse.json({ error: '请填写项目名称' }, { status: 400 });
       const status = clean(body.status);
+      const startDate = parseDate(body.startDate);
+      const expectedEndDate = parseDate(body.expectedEndDate);
       await prisma.project.update({
         where: { id: projectId },
         data: {
           name,
           description: cleanOptional(body.description),
           status: validStatuses.has(status) ? status : 'active',
+          startDate,
+          expectedEndDate,
         },
       });
     }

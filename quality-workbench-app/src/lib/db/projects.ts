@@ -49,10 +49,17 @@ export async function createProject(params: {
   ownerId: string;
   templateId?: string;
   activityTemplateSetId?: string;
+  startDate?: Date;
+  expectedEndDate?: Date;
 }) {
   const project = await prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
-      data: { name: params.name, description: params.description },
+      data: {
+        name: params.name,
+        description: params.description,
+        startDate: params.startDate,
+        expectedEndDate: params.expectedEndDate,
+      },
     });
     // Owner membership
     await tx.projectMember.create({
@@ -79,7 +86,7 @@ export async function createProject(params: {
   return project;
 }
 
-export async function updateProject(projectId: string, data: { name?: string; description?: string; status?: string }) {
+export async function updateProject(projectId: string, data: { name?: string; description?: string; status?: string; startDate?: Date; expectedEndDate?: Date }) {
   // 🔧 H-3(static): 状态从completed变走时清空 completedAt
   if (data.status && data.status !== 'completed') {
     return prisma.project.update({

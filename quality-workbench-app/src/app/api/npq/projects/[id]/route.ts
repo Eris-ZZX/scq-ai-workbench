@@ -23,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const isOwner = project.members.some((m) => m.userId === session.sub && m.role === 'owner');
 
-  let body: { name?: string; description?: string; status?: string };
+  let body: { name?: string; description?: string; status?: string; startDate?: string; expectedEndDate?: string };
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
   }
@@ -40,8 +40,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     body.name = trimmed;
   }
 
+  function parseOptionalDate(value?: string) {
+    if (!value) return undefined;
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? undefined : d;
+  }
+
   try {
-    const updated = await updateProject(id, body);
+    const updated = await updateProject(id, {
+      ...body,
+      startDate: parseOptionalDate(body.startDate),
+      expectedEndDate: parseOptionalDate(body.expectedEndDate),
+    });
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json({ error: '更新失败' }, { status: 500 });
