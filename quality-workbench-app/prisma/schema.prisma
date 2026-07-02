@@ -83,6 +83,7 @@ model Project {
   activityAttachments ActivityAttachment[]
   notifications Notification[]
   stageGateRecords StageGateRecord[]
+  trialPlanNodes ProjectTrialPlanNode[]
   activityEvents ActivityEvent[]
   events  ObservabilityEvent[] // 🔧 L17: ObservabilityEvent.projectId 反向关系
 
@@ -534,6 +535,22 @@ model StageGateRecord {
   @@unique([projectId, stage])
   @@index([projectId, status])
   @@index([stage])
+}
+
+model ProjectTrialPlanNode {
+  id             String   @id @default(cuid())
+  projectId      String
+  item           String
+  plannedStartDate DateTime?
+  plannedDueDate   DateTime?
+  note           String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
 }
 
 model Task {

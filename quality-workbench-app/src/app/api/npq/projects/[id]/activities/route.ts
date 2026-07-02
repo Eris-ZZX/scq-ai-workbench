@@ -17,7 +17,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   // 查询项目 + 成员 + 活动 + 阶段门禁，一次 Promise.all
-  const [project, parents, stageGates] = await Promise.all([
+  const [project, parents, stageGates, trialPlanNodes] = await Promise.all([
     session.role === 'admin' || session.role === 'manager'
       ? prisma.project.findUnique({
           where: { id },
@@ -94,6 +94,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       where: { projectId: id },
       orderBy: { stage: 'asc' },
     }),
+
+    prisma.projectTrialPlanNode.findMany({
+      where: { projectId: id },
+      orderBy: { sortOrder: 'asc' },
+    }),
   ]);
 
   if (!project) return NextResponse.json({ error: '项目不存在或无权访问' }, { status: 404 });
@@ -117,6 +122,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         stats: parentStats.get(gate.stage) ?? { total: 0, open: 0, blocked: 0 },
       }))
       .sort((a, b) => stageSortIndex(a.stage) - stageSortIndex(b.stage) || a.stage.localeCompare(b.stage)),
+    trialPlanNodes,
   });
 }
 

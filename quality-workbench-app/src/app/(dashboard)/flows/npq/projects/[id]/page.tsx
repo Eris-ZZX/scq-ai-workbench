@@ -133,6 +133,7 @@ type WorkspaceData = {
   parents: ActivityParent[];
   events: ActivityEvent[];
   stageGates?: StageGate[];
+  trialPlanNodes?: TrialPlanRow[];
 };
 
 type RoleContext = {
@@ -173,7 +174,6 @@ export default function ProjectWorkspacePage() {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showInProgressOnly, setShowInProgressOnly] = useState(true);
-  const [trialRows] = useState<TrialPlanRow[]>(() => readTrialRowsFromStorage(id));
 
   const loadWorkspace = useCallback(async () => {
     setErrorMsg('');
@@ -252,7 +252,7 @@ export default function ProjectWorkspacePage() {
     }));
   }, [stageGates]);
   const nearestTrialPhase = useMemo<TrialPhase[]>(() => {
-    const nearest = pickNearestTrialRow(trialRows);
+    const nearest = pickNearestTrialRow(workspace?.trialPlanNodes ?? []);
     if (!nearest) return [];
     return [{
       key: nearest.id,
@@ -260,7 +260,7 @@ export default function ProjectWorkspacePage() {
       startDate: nearest.plannedStartDate || null,
       endDate: nearest.plannedDueDate || null,
     }];
-  }, [trialRows]);
+  }, [workspace]);
   const taskNumbers = useMemo(
     () => buildTaskNumberMap(workspace?.parents ?? []),
     [workspace],
@@ -1211,17 +1211,6 @@ function buildTaskNumberMap(parents: ActivityParent[]) {
     });
   }
   return { parents: parentNumbers, children: childNumbers };
-}
-
-function readTrialRowsFromStorage(projectId: string) {
-  if (typeof window === 'undefined') return [];
-  try {
-    const saved = window.localStorage.getItem(`npq:trial-plan:${projectId}`);
-    const parsed = saved ? JSON.parse(saved) : null;
-    return Array.isArray(parsed) ? parsed as TrialPlanRow[] : [];
-  } catch {
-    return [];
-  }
 }
 
 function pickNearestTrialRow(rows: TrialPlanRow[]) {

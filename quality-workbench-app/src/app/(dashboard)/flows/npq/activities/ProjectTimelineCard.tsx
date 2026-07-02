@@ -318,8 +318,8 @@ export function ProjectTimelineInline({
       <svg className="block h-auto w-full" viewBox={`0 0 ${svgW} ${svgH}`} role="img" aria-label="项目 TR 时间轴">
         <rect x="0" y="0" width={svgW} height={svgH} rx="8" fill="transparent" />
         <g>
-          <rect x="0" y="0" width="62" height="18" rx="9" fill="white" stroke="#e2e8f0" />
-          <text x="31" y="13" textAnchor="middle" fontSize="9.5" fontWeight="500" fill="#64748b">TR 时间轴</text>
+          <rect x="0" y="0" width="54" height="15" rx="7.5" fill="white" stroke="#e2e8f0" />
+          <text x="27" y="11" textAnchor="middle" fontSize="8.2" fontWeight="500" fill="#64748b">TR 时间轴</text>
         </g>
         {ready && (
           <>
@@ -343,35 +343,37 @@ export function ProjectTimelineInline({
           return (
             <g key={node.key} transform={`translate(${x} 0)`}>
               <rect
-                x={node.label.length > 3 ? -22 : -17}
-                y="29"
-                width={node.label.length > 3 ? 44 : 34}
-                height="15"
-                rx="7.5"
+                x={node.label.length > 3 ? -18 : -14}
+                y="30"
+                width={node.label.length > 3 ? 36 : 28}
+                height="12"
+                rx="6"
                 fill={isCurrent ? '#0f172a' : '#ffffff'}
                 stroke={isCurrent ? '#0f172a' : '#e2e8f0'}
               />
-              <text x="0" y="40" textAnchor="middle" fontSize="9.5" fontWeight={isCurrent ? 700 : 500} fill={isCurrent ? '#ffffff' : '#475569'}>
+              <text x="0" y="39" textAnchor="middle" fontSize="7.8" fontWeight={isCurrent ? 700 : 500} fill={isCurrent ? '#ffffff' : '#475569'}>
                 {node.label}
               </text>
-              <text x="0" y="52" textAnchor="middle" fontSize="7.5" fill={isCurrent ? '#0f172a' : '#64748b'}>
+              <text x="0" y="51" textAnchor="middle" fontSize="7" fill={isCurrent ? '#0f172a' : '#64748b'}>
                 {fmtDate(node.date)}
               </text>
             </g>
           );
         })}
         <g transform="translate(0 104)">
-          <rect x="0" y="0" width="58" height="18" rx="9" fill="white" stroke="#e2e8f0" />
-          <text x="29" y="13" textAnchor="middle" fontSize="9.5" fontWeight="500" fill="#64748b">最近试产</text>
+          <rect x="0" y="0" width="50" height="15" rx="7.5" fill="white" stroke="#e2e8f0" />
+          <text x="25" y="11" textAnchor="middle" fontSize="8.2" fontWeight="500" fill="#64748b">最近试产</text>
           {hasTrial ? trialBars.map((item) => {
-            const x = xForPct(item.left);
-            const w = Math.max(24, (item.width / 100) * svgW);
+            const rawX = xForPct(item.left);
+            const w = Math.max(46, (item.width / 100) * svgW);
+            const x = Math.min(rawX, svgW - w - 118);
             const dateText = item.startText === item.endText ? item.startText : `${item.startText} - ${item.endText}`;
+            const dateX = Math.min(x + w + 8, svgW - 104);
             return (
               <g key={item.phase.key}>
                 <rect x={x} y="26" width={w} height="14" rx="4" fill="#0ea5e9" />
-                <text x={x + 5} y="36.5" fontSize="8.5" fontWeight="600" fill="white">{item.phase.label}</text>
-                <text x={Math.min(x + w + 8, svgW - 104)} y="36.5" fontSize="8.5" fill="#0369a1">{dateText}</text>
+                <text x={x + w / 2} y="36.5" textAnchor="middle" fontSize="8.5" fontWeight="600" fill="white">{item.phase.label}</text>
+                <text x={dateX} y="36.5" fontSize="8.5" fill="#0369a1">{dateText}</text>
               </g>
             );
           }) : (

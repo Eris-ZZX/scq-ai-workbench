@@ -63,6 +63,7 @@ type StageGate = {
   plannedDueDate: string | null;
   passedAt: string | null;
 };
+type TrialPlanRow = { id: string; item: string; plannedStartDate: string; plannedDueDate: string; note: string };
 type ActivityEvent = {
   id: string;
   actionType: string;
@@ -126,22 +127,11 @@ export default function ActivityTrackingPage() {
   const [filters, setFilters] = useState({ stage: '', status: '', risk: '', owner: '' });
   const [projectStartDate, setProjectStartDate] = useState<string | null>(null);
   const [projectExpectedEndDate, setProjectExpectedEndDate] = useState<string | null>(null);
-  const [trialRows, setTrialRows] = useState<Array<{ id: string; item: string; plannedStartDate: string; plannedDueDate: string; note: string }>>([]);
-
-  const loadTrialRows = useCallback((pid: string) => {
-    try {
-      const saved = window.localStorage.getItem(`npq:trial-plan:${pid}`);
-      const parsed = saved ? JSON.parse(saved) : null;
-      setTrialRows(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setTrialRows([]);
-    }
-  }, []);
+  const [trialRows, setTrialRows] = useState<TrialPlanRow[]>([]);
 
   const loadActivities = useCallback(async (id: string) => {
     if (!id) return;
     setError('');
-    loadTrialRows(id);
     try {
     const res = await fetch(`/api/npq/projects/${id}/activities`, { cache: 'no-store' });
     if (!res.ok) {
@@ -152,12 +142,14 @@ export default function ActivityTrackingPage() {
     const data = await res.json();
     const nextParents = data.parents ?? [];
     const nextStageGates = data.stageGates ?? [];
+    const nextTrialRows = Array.isArray(data.trialPlanNodes) ? data.trialPlanNodes.map(normalizeTrialPlanRow) : [];
     setProjectStartDate(data.project?.startDate ?? null);
     setProjectExpectedEndDate(data.project?.expectedEndDate ?? null);
     const fallbackStage = nextParents[0]?.stage ?? nextStageGates[0]?.stage ?? '';
     setParents(nextParents);
     setStageGates(nextStageGates);
     setEvents(data.events ?? []);
+    setTrialRows(nextTrialRows);
     const currentStageFromApi = data.project?.currentStage ?? '';
     setExpandedStages(new Set([currentStageFromApi || fallbackStage].filter(Boolean)));
     setSelectedParentIds(new Set());
@@ -165,7 +157,7 @@ export default function ActivityTrackingPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : '活动数据加载失败');
     }
-  }, [loadTrialRows]);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -676,7 +668,8 @@ export default function ActivityTrackingPage() {
           onDraftChange={setMilestoneDraft}
           onClose={cancelMilestoneEdit}
           onSave={saveMilestones}
-          onTrialSaved={() => loadTrialRows(projectId)}
+          initialTrialRows={trialRows}
+          onTrialSaved={setTrialRows}
         />
       )}
     </div>
@@ -746,6 +739,7 @@ function MilestoneDialog({
   onDraftChange,
   onClose,
   onSave,
+  initialTrialRows,
   onTrialSaved,
 }: {
   draft: Record<string, { plannedStartDate: string; plannedDueDate: string }>;
@@ -755,25 +749,22 @@ function MilestoneDialog({
   onDraftChange: React.Dispatch<React.SetStateAction<Record<string, { plannedStartDate: string; plannedDueDate: string }>>>;
   onClose: () => void;
   onSave: () => void;
-  onTrialSaved?: () => void;
+  initialTrialRows: TrialPlanRow[];
+  onTrialSaved?: (rows: TrialPlanRow[]) => void;
 }) {
   const [activeTab, setActiveTab] = useState<'milestone' | 'trial'>('milestone');
-  const [trialRows, setTrialRows] = useState<Array<{ id: string; item: string; plannedStartDate: string; plannedDueDate: string; note: string }>>(() => {
+  const [trialRows, setTrialRows] = useState<TrialPlanRow[]>(() => {
     const fallback = [
       { id: 'sample-material-ready', item: '试产物料齐套', plannedStartDate: '', plannedDueDate: '', note: '确认关键物料、包材、治具到位' },
       { id: 'sample-pilot-build', item: '小批量试产', plannedStartDate: '', plannedDueDate: '', note: '验证产线节拍、工艺稳定性和质量问题闭环' },
       { id: 'sample-reliability', item: '试产可靠性验证', plannedStartDate: '', plannedDueDate: '', note: '覆盖关键可靠性和功能验证项目' },
       { id: 'sample-review', item: '试产总结评审', plannedStartDate: '', plannedDueDate: '', note: '输出试产问题清单、风险结论和量产放行建议' },
     ];
-    try {
-      const saved = window.localStorage.getItem(`npq:trial-plan:${projectId}`);
-      const parsed = saved ? JSON.parse(saved) : null;
-      return Array.isArray(parsed) ? parsed : fallback;
-    } catch {
-      return fallback;
-    }
+    return initialTrialRows.length > 0 ? initialTrialRows : fallback;
   });
   const [trialSaved, setTrialSaved] = useState(false);
+  const [trialSaving, setTrialSaving] = useState(false);
+  const [trialError, setTrialError] = useState('');
 
   function updateTrialRow(rowId: string, fields: Partial<(typeof trialRows)[number]>) {
     setTrialRows((current) => current.map((row) => (row.id === rowId ? { ...row, ...fields } : row)));
@@ -796,11 +787,30 @@ function MilestoneDialog({
     setTrialRows((current) => current.filter((row) => row.id !== rowId));
   }
 
-  function saveTrialRows() {
-    window.localStorage.setItem(`npq:trial-plan:${projectId}`, JSON.stringify(trialRows));
-    setTrialSaved(true);
-    onTrialSaved?.();
-    window.setTimeout(() => setTrialSaved(false), 1800);
+  async function saveTrialRows() {
+    setTrialSaving(true);
+    setTrialError('');
+    try {
+      const response = await fetch(`/api/npq/projects/${projectId}/trial-plan`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: trialRows }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? '试产计划保存失败');
+      }
+      const savedRows = await response.json();
+      const normalizedRows = Array.isArray(savedRows) ? savedRows.map(normalizeTrialPlanRow) : [];
+      setTrialRows(normalizedRows);
+      setTrialSaved(true);
+      onTrialSaved?.(normalizedRows);
+      window.setTimeout(() => setTrialSaved(false), 1800);
+    } catch (err) {
+      setTrialError(err instanceof Error ? err.message : '试产计划保存失败');
+    } finally {
+      setTrialSaving(false);
+    }
   }
 
   return (
@@ -876,8 +886,8 @@ function MilestoneDialog({
           ) : (
             <div className="overflow-hidden rounded-md border border-border">
               <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
-                <div className="text-xs font-semibold text-muted-foreground">试产计划暂不关联其他数据</div>
-                <Button variant="outline" size="sm" onClick={addTrialRow} disabled={saving}>
+                <div className="text-xs font-semibold text-muted-foreground">试产计划保存后所有成员可见</div>
+                <Button variant="outline" size="sm" onClick={addTrialRow} disabled={saving || trialSaving}>
                   + 试产节点
                 </Button>
               </div>
@@ -917,7 +927,7 @@ function MilestoneDialog({
                   <button
                     type="button"
                     onClick={() => removeTrialRow(row.id)}
-                    disabled={saving}
+                    disabled={saving || trialSaving}
                     className="inline-flex h-8 w-8 items-center justify-center rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
                     title="删除试产节点"
                   >
@@ -930,6 +940,9 @@ function MilestoneDialog({
                   暂无试产节点，点击“+ 试产节点”新增。
                 </div>
               )}
+              {trialError && (
+                <div className="border-t px-3 py-2 text-xs text-red-600">{trialError}</div>
+              )}
             </div>
           )}
         </div>
@@ -938,13 +951,13 @@ function MilestoneDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             取消
           </Button>
-          {activeTab === 'trial' && trialSaved && <span className="self-center text-xs text-green-700">试产计划已保存到本地</span>}
+          {activeTab === 'trial' && trialSaved && <span className="self-center text-xs text-green-700">试产计划已保存</span>}
           {activeTab === 'milestone' ? (
             <Button onClick={onSave} disabled={saving}>
               保存阶段里程碑
             </Button>
           ) : (
-            <Button onClick={saveTrialRows} disabled={saving}>
+            <Button onClick={saveTrialRows} disabled={saving || trialSaving}>
               保存试产计划
             </Button>
           )}
@@ -1062,6 +1075,16 @@ function buildMilestoneDraft(stageGates: StageGate[], stages: string[]) {
       }];
     }),
   );
+}
+
+function normalizeTrialPlanRow(row: Partial<TrialPlanRow>): TrialPlanRow {
+  return {
+    id: row.id ?? `trial-${Date.now()}`,
+    item: row.item ?? '',
+    plannedStartDate: toDateInput(row.plannedStartDate ?? null),
+    plannedDueDate: toDateInput(row.plannedDueDate ?? null),
+    note: row.note ?? '',
+  };
 }
 
 function toDateInput(value: string | null) {
