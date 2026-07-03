@@ -26,6 +26,20 @@ pnpm-debug.log*
 # Vibe Tracker local backups
 .vibe/.bak/
 
+# Deployment-only repository excludes
+.vibe/
+00-docs/
+01-prototypes/
+AGENTS.md
+CLAUDE.md
+quality-workbench-app/src/__tests__/
+quality-workbench-app/vitest.config.ts
+quality-workbench-app/vitest.setup.ts
+
+# AI/tool local config that is machine-specific
+.claude/
+**/.claude/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db
