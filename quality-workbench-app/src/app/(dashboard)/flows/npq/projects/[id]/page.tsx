@@ -157,7 +157,6 @@ export default function ProjectWorkspacePage() {
   const [canPassStageGate, setCanPassStageGate] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [gateNotes, setGateNotes] = useState<Record<string, string>>({});
   const [childDraft, setChildDraft] = useState({
     status: 'not_started',
@@ -219,13 +218,11 @@ export default function ProjectWorkspacePage() {
 
   const didInit = useRef(false);
   useEffect(() => {
-    if (!workspace || !todoParam || didInit.current) return;
+    if (!workspace || didInit.current) return;
     didInit.current = true;
     const resolved = resolveInitialSelection(todoParam, workspace.parents, workspace.project.currentStage);
     setSelection(resolved);
     setExpandedStages(new Set([selectionStage(resolved, workspace.parents) ?? workspace.project.currentStage]));
-    const parentId = resolved.kind === 'parent' || resolved.kind === 'child' ? resolved.parentId : null;
-    setExpandedParents(parentId ? new Set([parentId]) : new Set());
   }, [workspace, todoParam]);
 
   const projectRole = useMemo(() => {
@@ -304,14 +301,12 @@ export default function ProjectWorkspacePage() {
     sum + parent.children.filter(isChildEffectivelyCompleted).length
   ), 0);
   const overallProgress = totalChildren > 0 ? Math.round((completedChildren / totalChildren) * 100) : 0;
+  const detailHeader = buildDetailHeader(selection, selectedParent, selectedChild, taskNumbers);
 
   function selectItem(next: Selection) {
     setSelection(next);
     const stage = selectionStage(next, allParents);
     if (stage) setExpandedStages((current) => new Set([...current, stage]));
-    if (next.kind === 'parent' || next.kind === 'child') {
-      setExpandedParents((current) => new Set([...current, next.parentId]));
-    }
   }
 
   async function patchChild(payload: Record<string, unknown>) {
@@ -491,7 +486,7 @@ export default function ProjectWorkspacePage() {
                 </button>
               </label>
               <h2 className="text-base font-semibold">项目任务树</h2>
-              <p className="mt-0.5 text-xs text-slate-500">按阶段、项目活动、子任务展开</p>
+              <p className="mt-0.5 text-xs text-slate-500">按阶段、项目活动展开</p>
             </div>
             <div className="max-h-[42vh] flex-1 overflow-auto p-2 xl:max-h-[calc(100vh-180px)]">
               {stageGroups.length === 0 ? (
@@ -546,7 +541,6 @@ export default function ProjectWorkspacePage() {
                       <div className="ml-3 border-l border-slate-100 pl-2">
                         {group.parents.map((parent) => {
                           const parentNumber = taskNumbers.parents.get(parent.id) ?? `${group.index}.${parent.sortOrder + 1}`;
-                          const parentExpanded = expandedParents.has(parent.id);
                           const childCount = parent.children.length;
                           const completed = parent.children.filter(isChildEffectivelyCompleted).length;
                           const parentDisplayStatus = parentDisplayStatusLabel(parent);
@@ -556,15 +550,12 @@ export default function ProjectWorkspacePage() {
                                 type="button"
                                 id={selectionTreeTargetId({ kind: 'parent', parentId: parent.id })}
                                 onClick={() => {
-                                  setSelection({ kind: 'parent', parentId: parent.id });
-                                  setExpandedStages((current) => new Set([...current, group.stage]));
-                                  setExpandedParents((current) => toggleSet(current, parent.id));
+                                  selectItem({ kind: 'parent', parentId: parent.id });
                                 }}
                                 className={`mt-1 flex w-full items-start gap-2 rounded-md px-2 py-2 text-left outline-none hover:bg-slate-50 ${
                                   selection?.kind === 'parent' && selection.parentId === parent.id ? 'bg-slate-100 ring-2 ring-blue-200' : ''
                                 }`}
                               >
-                                {parentExpanded ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0" /> : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0" />}
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate text-sm font-medium">{parentNumber} {parent.projectTaskName}</span>
                                   <span className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -572,22 +563,8 @@ export default function ProjectWorkspacePage() {
                                     <span className="text-xs text-slate-500">{completed}/{childCount} 子任务</span>
                                   </span>
                                 </span>
+                                <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                               </button>
-
-                              {parentExpanded && (
-                                <div className="ml-5 space-y-1 border-l border-slate-100 pl-2">
-                                  {parent.children.map((child) => (
-                                    <TreeButton
-                                      key={child.id}
-                                      selected={selection?.kind === 'child' && selection.childId === child.id}
-                                      onClick={() => selectItem({ kind: 'child', parentId: parent.id, childId: child.id })}
-                                      targetId={selectionTreeTargetId({ kind: 'child', parentId: parent.id, childId: child.id })}
-                                      title={`${taskNumbers.children.get(child.id) ?? `${parentNumber}.${child.sortOrder + 1}`} ${child.thirdLevelPlan}`}
-                                      metaNode={<ChildTreeMeta child={child} parentDueDate={parent.plannedDueDate} />}
-                                    />
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           );
                         })}
@@ -600,9 +577,19 @@ export default function ProjectWorkspacePage() {
           </aside>
 
           <main className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 px-4 py-3">
-              <h2 className="text-base font-semibold">任务详情</h2>
-              <p className="mt-0.5 text-xs text-slate-500">上方是关键信息，中间是提交与动作，下方是留痕记录</p>
+            <div className="space-y-3 border-b border-slate-100 px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold">任务详情</h2>
+                <p className="mt-0.5 text-xs text-slate-500">上方是关键信息，中间是提交与动作，下方是留痕记录</p>
+              </div>
+              {detailHeader && (
+                <DetailHeader
+                  title={detailHeader.title}
+                  subtitle={detailHeader.subtitle}
+                  status={detailHeader.status}
+                  statusTone={detailHeader.statusTone}
+                />
+              )}
             </div>
 
             <div className="grid gap-4 p-3 sm:p-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -622,21 +609,24 @@ export default function ProjectWorkspacePage() {
                 {selection?.kind === 'parent' && selectedParent && (
                   <ParentDetail
                     parent={selectedParent}
+                    parentNumber={taskNumbers.parents.get(selectedParent.id) ?? ''}
+                    childNumbers={taskNumbers.children}
                     readonly={readonly}
                     canClose={projectRole === 'owner' && isParentReadyToClose(selectedParent)}
                     saving={saving}
                     onClose={() => closeParent(selectedParent)}
+                    onSelectChild={(childId) => selectItem({ kind: 'child', parentId: selectedParent.id, childId })}
                   />
                 )}
 
                 {selection?.kind === 'child' && selectedParent && selectedChild && (
                   <ChildDetail
-                    parent={selectedParent}
                     child={selectedChild}
                     draft={childDraft}
                     readonly={readonly}
                     canReturn={projectRole === 'owner'}
                     saving={saving}
+                    onBackToParent={() => selectItem({ kind: 'parent', parentId: selectedParent.id })}
                     onDraftChange={(patch) => setChildDraft((current) => ({ ...current, ...patch }))}
                     onSave={() => saveChild()}
                     onStart={() => saveChild('in_progress')}
@@ -648,13 +638,13 @@ export default function ProjectWorkspacePage() {
 
                 {!selection && (
                   <div className="rounded-lg border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
-                    从左侧选择过点、项目活动或子任务
+                    从左侧选择过点或项目活动
                   </div>
                 )}
               </div>
 
               <HistoryPanel
-                events={[]}
+                events={workspace.events}
                 parentId={selectedParent?.id ?? null}
                 childId={selectedChild?.id ?? null}
               />
@@ -709,34 +699,106 @@ function StageDetail({
   );
 }
 
+function buildDetailHeader(
+  selection: Selection | null,
+  selectedParent: ActivityParent | null,
+  selectedChild: ActivityChild | null,
+  taskNumbers: { parents: Map<string, string>; children: Map<string, string> },
+) {
+  if (selection?.kind === 'parent' && selectedParent) {
+    const parentNumber = taskNumbers.parents.get(selectedParent.id) ?? '';
+    return {
+      title: selectedParent.projectTaskName,
+      subtitle: `${parentNumber ? `${parentNumber} / ` : ''}${selectedParent.stage} / 计划 ${selectedParent.plannedDueDate ? formatDate(selectedParent.plannedDueDate) : '-'}`,
+      status: parentDisplayStatusLabel(selectedParent),
+      statusTone: parentStatusTone(selectedParent),
+    };
+  }
+  if (selection?.kind === 'child' && selectedParent && selectedChild) {
+    const childNumber = taskNumbers.children.get(selectedChild.id) ?? '';
+    const dueDate = selectedChild.plannedDueDateOverride ?? selectedParent.plannedDueDate;
+    return {
+      title: selectedChild.thirdLevelPlan,
+      subtitle: `${childNumber ? `${childNumber} / ` : ''}${selectedParent.stage} / ${selectedParent.projectTaskName} / 责任角色 ${selectedChild.ownerRole} / 计划 ${dueDate ? formatDate(dueDate) : '-'}`,
+      status: childDisplayStatusLabel(selectedChild),
+      statusTone: selectedChild.isNotApplicable ? 'slate' as const : childStatusTone(selectedChild.status),
+    };
+  }
+  return null;
+}
+
 function ParentDetail({
   parent,
+  parentNumber,
+  childNumbers,
   readonly,
   canClose,
   saving,
   onClose,
+  onSelectChild,
 }: {
   parent: ActivityParent;
+  parentNumber: string;
+  childNumbers: Map<string, string>;
   readonly: boolean;
   canClose: boolean;
   saving: boolean;
   onClose: () => void;
+  onSelectChild: (childId: string) => void;
 }) {
   const childCount = parent.children.length;
   const completed = parent.children.filter(isChildEffectivelyCompleted).length;
+  const overdueCount = parent.children.filter((child) => isChildOverdue(child, parent.plannedDueDate)).length;
+  const blockedCount = parent.children.filter((child) => child.isBlocked && !isChildEffectivelyCompleted(child)).length;
   const progressPercent = childCount > 0 ? Math.round((completed / childCount) * 100) : 0;
+  const sortedChildren = parent.children.slice().sort((a, b) => a.sortOrder - b.sortOrder);
   return (
     <section className="space-y-4">
-      <DetailHeader
-        title={parent.projectTaskName}
-        subtitle={`${parent.stage} / ${completed}/${childCount} 子任务完成 / 计划 ${parent.plannedDueDate ? formatDate(parent.plannedDueDate) : '-'}`}
-        status={parentDisplayStatusLabel(parent)}
-        statusTone={parentStatusTone(parent)}
-      />
       <div className="grid gap-3 md:grid-cols-3">
-        <InfoTile label="完成率" value={`${progressPercent}%`} />
-        <InfoTile label="阻塞" value={parent.hasBlocked ? '有阻塞' : '无阻塞'} />
-        <InfoTile label="逾期" value={parent.hasOverdue ? '已逾期' : '未逾期'} />
+        <InfoTile label="子任务完成率" value={`${progressPercent}%=${completed}/${childCount}`} />
+        <InfoTile label="逾期子任务" value={`${overdueCount}`} tone="amber" />
+        <InfoTile label="阻塞子任务" value={`${blockedCount}`} tone="red" />
+      </div>
+      <div className="overflow-hidden rounded-lg border border-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+          <div className="text-sm font-semibold">子任务列表</div>
+          <div className="text-xs text-slate-500">点击子任务进入详情</div>
+        </div>
+        {sortedChildren.length === 0 ? (
+          <div className="px-3 py-8 text-center text-sm text-slate-500">暂无子任务</div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {sortedChildren.map((child) => {
+              const overdue = isChildOverdue(child, parent.plannedDueDate);
+              const dueDate = child.plannedDueDateOverride ?? parent.plannedDueDate;
+              return (
+                <button
+                  key={child.id}
+                  type="button"
+                  id={selectionTreeTargetId({ kind: 'child', parentId: parent.id, childId: child.id })}
+                  onClick={() => onSelectChild(child.id)}
+                  className="grid w-full gap-2 px-3 py-2.5 text-left hover:bg-slate-50 md:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="min-w-0 truncate text-sm font-medium">
+                      {childNumbers.get(child.id) ?? `${parentNumber}.${child.sortOrder + 1}`} {child.thirdLevelPlan}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <StatusBadge label={childDisplayStatusLabel(child)} tone={child.isNotApplicable ? 'slate' : childStatusTone(child.status)} />
+                      {overdue && <StatusBadge label="逾期" tone="amber" />}
+                      {child.isBlocked && <StatusBadge label="阻塞" tone="red" />}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 md:justify-end">
+                    <span>{child.ownerRole}</span>
+                    <span>计划 {dueDate ? formatDate(dueDate) : '-'}</span>
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="rounded-lg border border-slate-200 p-3">
         <div className="text-sm font-medium">关闭规则</div>
@@ -752,12 +814,12 @@ function ParentDetail({
 }
 
 function ChildDetail({
-  parent,
   child,
   draft,
   readonly,
   canReturn,
   saving,
+  onBackToParent,
   onDraftChange,
   onSave,
   onStart,
@@ -765,7 +827,6 @@ function ChildDetail({
   onToggleBlock,
   onReturn,
 }: {
-  parent: ActivityParent;
   child: ActivityChild;
   draft: {
     status: string;
@@ -781,6 +842,7 @@ function ChildDetail({
   readonly: boolean;
   canReturn: boolean;
   saving: boolean;
+  onBackToParent: () => void;
   onDraftChange: (patch: Partial<typeof draft>) => void;
   onSave: () => void;
   onStart: () => void;
@@ -790,11 +852,14 @@ function ChildDetail({
 }) {
   return (
     <section className="min-w-0 space-y-4">
-      <DetailHeader
-        title={child.thirdLevelPlan}
-        subtitle={`${parent.stage} / ${parent.projectTaskName} / 责任角色 ${child.ownerRole} / 计划 ${formatDate(child.plannedDueDateOverride ?? parent.plannedDueDate)}`}
-        status={childDisplayStatusLabel(child)}
-      />
+      <button
+        type="button"
+        onClick={onBackToParent}
+        className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-900"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        返回项目活动详情
+      </button>
       <div className="grid gap-3 md:grid-cols-3">
         <InfoTile label="提交标准" value={child.requiresDeliverable ? '需要交付件' : '完成说明'} />
         <InfoTile label="交付件" value={child.deliverableName ?? '-'} />
@@ -936,46 +1001,6 @@ function EventList({ events }: { events: ActivityEvent[] }) {
   );
 }
 
-function TreeButton({
-  selected,
-  onClick,
-  targetId,
-  title,
-  meta,
-  metaNode,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  targetId?: string;
-  title: string;
-  meta?: string;
-  metaNode?: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      id={targetId}
-      onClick={onClick}
-      className={`mt-1 w-full rounded-md px-2 py-1.5 text-left outline-none hover:bg-slate-50 ${selected ? 'bg-slate-100 ring-2 ring-blue-200' : ''}`}
-    >
-      <span className="block truncate text-sm">{title}</span>
-      {metaNode ?? <span className="mt-0.5 block truncate text-xs text-slate-500">{meta}</span>}
-    </button>
-  );
-}
-
-function ChildTreeMeta({ child, parentDueDate }: { child: ActivityChild; parentDueDate: string | null }) {
-  const overdue = isChildOverdue(child, parentDueDate);
-  return (
-    <span className="mt-1 flex flex-wrap items-center gap-1.5">
-      <StatusBadge label={childDisplayStatusLabel(child)} tone={child.isNotApplicable ? 'slate' : childStatusTone(child.status)} />
-      <span className="text-xs text-slate-500">{child.ownerRole}</span>
-      {overdue && <StatusBadge label="逾期" tone="amber" />}
-      {child.isBlocked && <StatusBadge label="阻塞" tone="red" />}
-    </span>
-  );
-}
-
 function DetailHeader({
   title,
   subtitle,
@@ -1074,9 +1099,14 @@ function StatusBadge({ label, tone }: { label: string; tone: 'slate' | 'blue' | 
   );
 }
 
-function InfoTile({ label, value }: { label: string; value: string }) {
+function InfoTile({ label, value, tone = 'slate' }: { label: string; value: string; tone?: 'slate' | 'amber' | 'red' }) {
+  const toneClasses = {
+    slate: 'border-slate-200 bg-white text-slate-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    red: 'border-red-200 bg-red-50 text-red-700',
+  };
   return (
-    <div className="min-w-0 rounded-lg border border-slate-200 px-3 py-2">
+    <div className={`min-w-0 rounded-lg border px-3 py-2 ${toneClasses[tone]}`}>
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-1 break-words text-sm font-semibold">{value}</div>
     </div>
@@ -1116,8 +1146,7 @@ function resolveInitialSelection(todoId: string | null, parents: ActivityParent[
   }
   const currentParent = parents.find((parent) => parent.stage === currentStage) ?? parents[0];
   if (!currentParent) return { kind: 'stage', stage: currentStage };
-  const firstChild = currentParent.children.find((child) => !child.isNotApplicable);
-  return firstChild ? { kind: 'child', parentId: currentParent.id, childId: firstChild.id } : { kind: 'parent', parentId: currentParent.id };
+  return { kind: 'parent', parentId: currentParent.id };
 }
 
 function selectionStage(selection: Selection, parents: ActivityParent[]) {
@@ -1141,7 +1170,7 @@ function filterInProgressParents(parents: ActivityParent[], enabled: boolean, ro
         ? parent.children
         : parent.children.filter((child) => isChildVisibleInAttentionFilter(child, parent.plannedDueDate, roleContext, assignedRole));
       return {
-        parent: { ...parent, children },
+        parent,
         visible: isParentVisibleInAttentionFilter(parent, children.length, isOwner),
       };
     })
