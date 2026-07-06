@@ -261,22 +261,24 @@ async function main() {
     [adminUserId],
   );
 
+  // Note: test account emails set to null (not '') to avoid UNIQUE constraint conflict in SQLite.
+  // SQLite treats multiple NULLs as distinct in a UNIQUE column, but multiple '' are duplicates.
   const fixedUsers = [
     ['seed-user-manager', 'manager', 'manager@example.com', 'pos-manager', 'observer'],
-    ['seed-test-npq1', '测试NPQ1', '', 'pos-npq-engineer', 'owner'],
-    ['seed-test-npq2', '测试NPQ2', '', 'pos-npq-engineer', 'member'],
-    ['seed-test-pqe1', '测试PQE1', '', 'pos-pqe-engineer', 'member'],
-    ['seed-test-pqe2', '测试PQE2', '', 'pos-pqe-engineer', 'member'],
-    ['seed-test-sqe1', '测试SQE1', '', 'pos-sqe-engineer', 'member'],
-    ['seed-test-sqe2', '测试SQE2', '', 'pos-sqe-engineer', 'member'],
-    ['seed-test-ems1', '测试EMS1', '', 'pos-ems-engineer', 'member'],
-    ['seed-test-ems2', '测试EMS2', '', 'pos-ems-engineer', 'member'],
-    ['seed-test-fae1', '测试FAE1', '', 'pos-fae-engineer', 'member'],
-    ['seed-test-fae2', '测试FAE2', '', 'pos-fae-engineer', 'member'],
-    ['seed-test-ram1', '测试RAM1', '', 'pos-ram-engineer', 'member'],
-    ['seed-test-ram2', '测试RAM2', '', 'pos-ram-engineer', 'member'],
-    ['seed-test-qcm1', '测试QCM1', '', 'pos-qc', 'member'],
-    ['seed-test-qcm2', '测试QCM2', '', 'pos-qc', 'member'],
+    ['seed-test-npq1', '测试NPQ1', null, 'pos-npq-engineer', 'owner'],
+    ['seed-test-npq2', '测试NPQ2', null, 'pos-npq-engineer', 'member'],
+    ['seed-test-pqe1', '测试PQE1', null, 'pos-pqe-engineer', 'member'],
+    ['seed-test-pqe2', '测试PQE2', null, 'pos-pqe-engineer', 'member'],
+    ['seed-test-sqe1', '测试SQE1', null, 'pos-sqe-engineer', 'member'],
+    ['seed-test-sqe2', '测试SQE2', null, 'pos-sqe-engineer', 'member'],
+    ['seed-test-ems1', '测试EMS1', null, 'pos-ems-engineer', 'member'],
+    ['seed-test-ems2', '测试EMS2', null, 'pos-ems-engineer', 'member'],
+    ['seed-test-fae1', '测试FAE1', null, 'pos-fae-engineer', 'member'],
+    ['seed-test-fae2', '测试FAE2', null, 'pos-fae-engineer', 'member'],
+    ['seed-test-ram1', '测试RAM1', null, 'pos-ram-engineer', 'member'],
+    ['seed-test-ram2', '测试RAM2', null, 'pos-ram-engineer', 'member'],
+    ['seed-test-qcm1', '测试QCM1', null, 'pos-qc', 'member'],
+    ['seed-test-qcm2', '测试QCM2', null, 'pos-qc', 'member'],
   ] as const;
   const seedUserIds: Record<string, string> = { admin: adminUserId };
 
