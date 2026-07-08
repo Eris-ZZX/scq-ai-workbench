@@ -80,8 +80,8 @@ export async function ensureProjectActivities(projectId: string, actorUserId?: s
             projectId,
             stage: template.stage,
             projectTaskName: template.projectTaskName,
-            plannedStartDate: defaultStartDate(template.stage),
-            plannedDueDate: defaultDueDate(template.stage),
+            plannedStartDate: null,
+            plannedDueDate: null,
             sortOrder: parentIndex,
           },
           select: { id: true, sortOrder: true },
@@ -159,19 +159,13 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
     let childCount = 0;
     for (const stage of version.stages) {
       const stageName = stage.name;
-      const stageStartDate = stage.plannedStartOffsetDays != null
-        ? offsetDate(stage.plannedStartOffsetDays)
-        : defaultStartDate(stageName);
-      const stageDueDate = stage.plannedDueOffsetDays != null
-        ? offsetDate(stage.plannedDueOffsetDays)
-        : defaultDueDate(stageName);
       await tx.stageGateRecord.upsert({
         where: { projectId_stage: { projectId, stage: stageName } },
         create: {
           projectId,
           stage: stageName,
-          plannedStartDate: stageStartDate,
-          plannedDueDate: stageDueDate,
+          plannedStartDate: null,
+          plannedDueDate: null,
         },
         update: {},
       });
@@ -184,10 +178,8 @@ async function ensureStructuredProjectActivities(projectId: string, actorUserId?
             templateParentId: parent.id,
             stage: stageName,
             projectTaskName: parent.name,
-            plannedStartDate: parent.plannedStartOffsetDays != null
-              ? offsetDate(parent.plannedStartOffsetDays)
-              : stageStartDate,
-            plannedDueDate: parent.plannedOffsetDays != null ? offsetDate(parent.plannedOffsetDays) : stageDueDate,
+            plannedStartDate: null,
+            plannedDueDate: null,
             sortOrder: parent.sortOrder || parentCount,
           },
           select: { id: true },

@@ -158,7 +158,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     getProjectActivities(id),
     getProjectActivityStages(id),
   ]);
-  return NextResponse.json({ project, parents, stages });
+  const activityRoles = [...new Set(parents.flatMap((p) => p.children.map((c) => c.ownerRole)))].sort();
+  return NextResponse.json({ project, parents, stages, activityRoles });
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {

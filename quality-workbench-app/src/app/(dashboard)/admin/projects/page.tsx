@@ -592,10 +592,6 @@ export default function AdminProjectsPage() {
                     {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
-                <label className="block text-xs font-medium text-muted-foreground">
-                  当前阶段
-                  <input className={fieldClass('mt-1 h-9 w-full')} value={createForm.currentStage} onChange={(event) => setCreateForm((current) => ({ ...current, currentStage: event.target.value }))} />
-                </label>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block text-xs font-medium text-muted-foreground">
