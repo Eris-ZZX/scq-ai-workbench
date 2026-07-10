@@ -1,5 +1,5 @@
 // ─── 供应链质量部 AI 综合工作台 — Prisma Schema ───
-// MVP: SQLite  |  长期迁移: PostgreSQL + pgvector
+// PostgreSQL  |  长期可选: pgvector
 // 设计原则: 数据模型一步到位，预留外部系统集成字段
 
 generator client {
@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ═══════════════════════════════════════════════

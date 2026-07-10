@@ -1,11 +1,15 @@
-import { createClient } from '@libsql/client';
+import 'dotenv/config';
 import path from 'node:path';
 import fs from 'node:fs';
+import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const dbPath = path.resolve(process.cwd(), 'dev.db');
-const db = createClient({ url: `file:${dbPath}` });
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter } as never);
+
 const templatePath = path.resolve(process.cwd(), 'prisma', 'quality-activity-template.json');
 const TEST_PASSWORD_HASH = '$2b$10$zvMa9qFDxYK1MsTOaKbR6e6Kl6rRhV7L1lY6Zz0zxbDL17yWzCZK6';
+const SOURCE_BATCH_ID = 'quality-activity-template-20260611';
 
 const positionRoleSeeds = [
   ['pos-npq', 'NPQ', 'New Product Quality owner', 1],
@@ -56,77 +60,41 @@ type QualityActivityTemplateRow = {
   sortOrder: number;
 };
 
-// 🔧 M16: SQLITE_BUSY 重试包装器（最多重试 3 次，指数退避）
-async function executeWithRetry(
-  sql: string,
-  args: unknown[],
-  maxRetries = 3,
-) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await db.execute({ sql, args });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (attempt < maxRetries && msg.includes('SQLITE_BUSY')) {
-        const delay = Math.min(100 * 2 ** attempt, 1000);
-        console.log(`  ⚠ SQLITE_BUSY, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`);
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-      throw e;
-    }
-  }
-  // Unreachable — maxRetries must be >= 1
-  throw new Error('maxRetries must be >= 1');
-}
-
 async function main() {
   console.log('🌱 Seeding database...');
-  console.log(`   DB: ${dbPath}\n`);
-
-  // 🔧 H9: 用 ON CONFLICT DO UPDATE 代替 INSERT OR REPLACE
-  //       避免 createdAt 被重置，避免触发级联删除
+  console.log(`   DB: ${process.env.DATABASE_URL}\n`);
 
   // ── TR1→TR6 默认阶段模板 ──
-  const stages = [
+  const stages: [string, string, number][] = [
     ['seed-tr1', 'TR1 概念评审', 1],
     ['seed-tr2', 'TR2 方案评审', 2],
     ['seed-tr3', 'TR3 样机评审', 3],
     ['seed-tr4', 'TR4 试产评审', 4],
     ['seed-tr5', 'TR5 量产准入', 5],
     ['seed-tr6', 'TR6 项目结项', 6],
-  ] as const;
+  ];
 
   for (const [id, name, order] of stages) {
-    await executeWithRetry(
-      `INSERT INTO StageTemplate (id, name, "order", isDefault, createdAt, updatedAt)
-       VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET
-         name=excluded.name,
-         "order"=excluded."order",
-         updatedAt=datetime('now')`,
-      [id, name, order],
-    );
+    await prisma.stageTemplate.upsert({
+      where: { id },
+      update: { name, order },
+      create: { id, name, order, isDefault: true },
+    });
   }
   console.log('  ✓ Stage templates: TR1→TR6');
 
-  // ── 预注册 MVP 功能组件 ──
+  // ── F3 岗位角色 ──
   for (const [id, name, description, sortOrder] of positionRoleSeeds) {
-    await executeWithRetry(
-      `INSERT INTO PositionRole (id, name, description, isActive, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, 1, ?, datetime('now'), datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET
-         name=excluded.name,
-         description=excluded.description,
-         isActive=1,
-         sortOrder=excluded.sortOrder,
-         updatedAt=datetime('now')`,
-      [id, name, description, sortOrder],
-    );
+    await prisma.positionRole.upsert({
+      where: { id },
+      update: { name, description, isActive: true, sortOrder },
+      create: { id, name, description, isActive: true, sortOrder },
+    });
   }
   console.log(`  F3 position roles: ${positionRoleSeeds.length} seeded`);
 
-  const components = [
+  // ── 预注册 MVP 功能组件 ──
+  const components: [string, string, string, number][] = [
     ['cmp-workbench', '个人项目工作台', '/workbench', 1],
     ['cmp-npq-activities', '批量修改', '/flows/npq/activities', 2],
     ['cmp-npq-activity-dashboard', '活动管理看板', '/flows/npq/activity-dashboard', 3],
@@ -136,53 +104,45 @@ async function main() {
     ['cmp-admin-users', '用户管理', '/admin/users', 7],
     ['cmp-admin-components', '功能组件管理', '/admin/components', 8],
     ['cmp-admin-observability', '运行日志', '/admin/observability', 9],
-  ] as const;
-
-  for (const [id, name, cp, order] of components) {
-    await executeWithRetry(
-      `INSERT INTO ComponentConfig (id, name, path, enabled, "order", createdAt, updatedAt)
-       VALUES (?, ?, ?, 1, ?, datetime('now'), datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET
-         name=excluded.name,
-         path=excluded.path,
-         "order"=excluded."order",
-         updatedAt=datetime('now')`,
-      [id, name, cp, order],
-    );
-  }
-  await executeWithRetry(
-    `UPDATE ComponentConfig
-     SET dependsOnId = NULL, updatedAt = datetime('now')
-     WHERE dependsOnId = 'cmp-npq-projects'`,
-  );
-  await executeWithRetry(
-    `DELETE FROM ComponentConfig
-     WHERE id IN ('cmp-npq-projects', 'cmp-npq-todos', 'cmp-npq-tasks')
-        OR path IN ('/flows/npq/projects', '/flows/npq/todos', '/flows/npq/tasks')`,
-    [],
-  );
-  await executeWithRetry(
-    `DELETE FROM ComponentConfig
-     WHERE id = 'cmp-project-workbench'
-        OR path = '/project-workbench'`,
-    [],
-  );
-  console.log(`  ✓ Component configs: ${components.length} registered (with F3 positions)`);
-
-  // ── 设置组件依赖关系 ──
-  const deps = [
-    ['cmp-npq-activity-dashboard', 'cmp-npq-activities'], // 管理看板依赖活动跟踪
-    ['cmp-admin-users', 'cmp-admin-positions'], // 用户岗位绑定依赖岗位字典
-    ['cmp-admin-components', 'cmp-admin-templates'], // 组件管理依赖模板配置
   ];
 
-  for (const [childId, parentId] of deps) {
-    await executeWithRetry(
-      `UPDATE ComponentConfig SET dependsOnId = ? WHERE id = ?`,
-      [parentId, childId],
-    );
+  for (const [id, name, cp, order] of components) {
+    await prisma.componentConfig.upsert({
+      where: { id },
+      update: { name, path: cp, order },
+      create: { id, name, path: cp, order, enabled: true },
+    });
   }
-  console.log('  ✓ Component dependencies: tasks→projects, activities→projects, dashboard→activities');
+  // 清理历史遗留组件（幂等重跑用）
+  await prisma.componentConfig.updateMany({
+    where: { dependsOnId: 'cmp-npq-projects' },
+    data: { dependsOnId: null },
+  });
+  await prisma.componentConfig.deleteMany({
+    where: {
+      OR: [
+        { id: { in: ['cmp-npq-projects', 'cmp-npq-todos', 'cmp-npq-tasks'] } },
+        { path: { in: ['/flows/npq/projects', '/flows/npq/todos', '/flows/npq/tasks'] } },
+        { id: 'cmp-project-workbench' },
+        { path: '/project-workbench' },
+      ],
+    },
+  });
+  console.log(`  ✓ Component configs: ${components.length} registered (with F3 positions)`);
+
+  // ── 组件依赖关系 ──
+  const deps: [string, string][] = [
+    ['cmp-npq-activity-dashboard', 'cmp-npq-activities'],
+    ['cmp-admin-users', 'cmp-admin-positions'],
+    ['cmp-admin-components', 'cmp-admin-templates'],
+  ];
+  for (const [childId, parentId] of deps) {
+    await prisma.componentConfig.update({
+      where: { id: childId },
+      data: { dependsOnId: parentId },
+    });
+  }
+  console.log('  ✓ Component dependencies wired');
 
   // ── F2 质量活动模板库 ──
   const activityTemplates = JSON.parse(
@@ -190,80 +150,84 @@ async function main() {
   ) as QualityActivityTemplateRow[];
 
   for (const row of activityTemplates) {
-    await executeWithRetry(
-      `INSERT INTO ActivityTemplate
-         (id, stage, projectTaskName, thirdLevelPlan, ownerRole,
-          deliverableName, requiresDeliverable, sourceBatchId, sortOrder,
-          isActive, createdAt, updatedAt)
-       VALUES
-         (?, ?, ?, ?, ?, ?, ?, 'quality-activity-template-20260611', ?, 1, datetime('now'), datetime('now'))
-       ON CONFLICT(stage, projectTaskName, thirdLevelPlan, ownerRole, sourceBatchId) DO UPDATE SET
-         deliverableName=excluded.deliverableName,
-         requiresDeliverable=excluded.requiresDeliverable,
-         sortOrder=excluded.sortOrder,
-         isActive=1,
-         updatedAt=datetime('now')`,
-      [
-        `qat-${row.sortOrder}`,
-        row.stage,
-        row.projectTaskName,
-        row.thirdLevelPlan,
-        row.ownerRole,
-        row.deliverableName,
-        row.requiresDeliverable ? 1 : 0,
-        row.sortOrder,
-      ],
-    );
+    await prisma.activityTemplate.upsert({
+      where: {
+        stage_projectTaskName_thirdLevelPlan_ownerRole_sourceBatchId: {
+          stage: row.stage,
+          projectTaskName: row.projectTaskName,
+          thirdLevelPlan: row.thirdLevelPlan,
+          ownerRole: row.ownerRole,
+          sourceBatchId: SOURCE_BATCH_ID,
+        },
+      },
+      update: {
+        deliverableName: row.deliverableName,
+        requiresDeliverable: row.requiresDeliverable,
+        sortOrder: row.sortOrder,
+        isActive: true,
+      },
+      create: {
+        id: `qat-${row.sortOrder}`,
+        stage: row.stage,
+        projectTaskName: row.projectTaskName,
+        thirdLevelPlan: row.thirdLevelPlan,
+        ownerRole: row.ownerRole,
+        deliverableName: row.deliverableName,
+        requiresDeliverable: row.requiresDeliverable,
+        sourceBatchId: SOURCE_BATCH_ID,
+        sortOrder: row.sortOrder,
+        isActive: true,
+      },
+    });
   }
   console.log(`  ✓ Activity templates: ${activityTemplates.length} imported`);
   await seedStructuredActivityTemplate(activityTemplates);
   console.log('  F3 structured activity template: default v1 published');
 
   // ── F2 示例项目活动实例 ──
-  const existingAdmin = await executeWithRetry('SELECT id FROM User WHERE username = ? LIMIT 1', ['admin']);
-  const adminUserId = String(existingAdmin.rows[0]?.id ?? 'seed-admin');
-  if (existingAdmin.rows[0]?.id) {
-    await executeWithRetry(
-      `UPDATE User
-       SET passwordHash=?, role='admin', status='active', updatedAt=datetime('now')
-       WHERE id=?`,
-      [TEST_PASSWORD_HASH, adminUserId],
-    );
-  } else {
-    await executeWithRetry(
-      `INSERT INTO User (id, username, passwordHash, email, role, status, createdAt, updatedAt)
-       VALUES (?, 'admin', ?, 'admin@example.com', 'admin', 'active', datetime('now'), datetime('now'))`,
-      [adminUserId, TEST_PASSWORD_HASH],
-    );
-  }
-  await executeWithRetry(
-    `INSERT INTO Project (id, name, description, status, createdAt, updatedAt)
-     VALUES ('seed-f2-project', 'F2 新产品导入活动样例项目', '由质量活动模板库生成的 TR1-TR6 全阶段活动实例', 'active', datetime('now'), datetime('now'))
-     ON CONFLICT(id) DO UPDATE SET
-       name=excluded.name,
-       description=excluded.description,
-       status='active',
-       updatedAt=datetime('now')`,
-    [],
-  );
-  await executeWithRetry(
-    `INSERT INTO ProjectMember (id, projectId, userId, role, createdAt)
-     VALUES ('seed-f2-member-admin', 'seed-f2-project', ?, 'owner', datetime('now'))
-     ON CONFLICT(projectId, userId) DO UPDATE SET role='owner'`,
-    [adminUserId],
-  );
-  await executeWithRetry(
-    `INSERT INTO UserPosition (id, userId, positionRoleId, effectiveAt, createdAt, updatedAt)
-     VALUES ('seed-admin-position', ?, 'pos-npq-engineer', datetime('now'), datetime('now'), datetime('now'))
-     ON CONFLICT(userId) DO UPDATE SET
-       positionRoleId='pos-npq-engineer',
-       updatedAt=datetime('now')`,
-    [adminUserId],
-  );
+  const admin = await prisma.user.upsert({
+    where: { username: 'admin' },
+    update: { passwordHash: TEST_PASSWORD_HASH, role: 'admin', status: 'active' },
+    create: {
+      id: 'seed-admin',
+      username: 'admin',
+      passwordHash: TEST_PASSWORD_HASH,
+      email: 'admin@example.com',
+      role: 'admin',
+      status: 'active',
+    },
+  });
+  const adminUserId = admin.id;
 
-  // Note: test account emails set to null (not '') to avoid UNIQUE constraint conflict in SQLite.
-  // SQLite treats multiple NULLs as distinct in a UNIQUE column, but multiple '' are duplicates.
-  const fixedUsers = [
+  await prisma.project.upsert({
+    where: { id: 'seed-f2-project' },
+    update: {
+      name: 'F2 新产品导入活动样例项目',
+      description: '由质量活动模板库生成的 TR1-TR6 全阶段活动实例',
+      status: 'active',
+    },
+    create: {
+      id: 'seed-f2-project',
+      name: 'F2 新产品导入活动样例项目',
+      description: '由质量活动模板库生成的 TR1-TR6 全阶段活动实例',
+      status: 'active',
+    },
+  });
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: 'seed-f2-project', userId: adminUserId } },
+    update: { role: 'owner' },
+    create: { id: 'seed-f2-member-admin', projectId: 'seed-f2-project', userId: adminUserId, role: 'owner' },
+  });
+
+  await prisma.userPosition.upsert({
+    where: { userId: adminUserId },
+    update: { positionRoleId: 'pos-npq-engineer' },
+    create: { id: 'seed-admin-position', userId: adminUserId, positionRoleId: 'pos-npq-engineer' },
+  });
+
+  // 固定角色测试账号。email 用 null 而非 '' 以避开唯一约束冲突。
+  const fixedUsers: [string, string, string | null, string, string][] = [
     ['seed-user-manager', 'manager', 'manager@example.com', 'pos-manager', 'observer'],
     ['seed-test-npq1', '测试NPQ1', null, 'pos-npq-engineer', 'owner'],
     ['seed-test-npq2', '测试NPQ2', null, 'pos-npq-engineer', 'member'],
@@ -279,82 +243,78 @@ async function main() {
     ['seed-test-ram2', '测试RAM2', null, 'pos-ram-engineer', 'member'],
     ['seed-test-qcm1', '测试QCM1', null, 'pos-qc', 'member'],
     ['seed-test-qcm2', '测试QCM2', null, 'pos-qc', 'member'],
-  ] as const;
+  ];
   const seedUserIds: Record<string, string> = { admin: adminUserId };
 
   for (const [seedId, username, email, positionRoleId, projectRole] of fixedUsers) {
-    const existing = await executeWithRetry('SELECT id FROM User WHERE username = ? LIMIT 1', [username]);
-    const userId = String(existing.rows[0]?.id ?? seedId);
-    await executeWithRetry(
-      `INSERT INTO User (id, username, passwordHash, email, role, status, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, 'user', 'active', datetime('now'), datetime('now'))
-       ON CONFLICT(username) DO UPDATE SET
-         passwordHash=excluded.passwordHash,
-         role='user',
-         status='active',
-         updatedAt=datetime('now')`,
-      [userId, username, TEST_PASSWORD_HASH, email],
-    );
-    seedUserIds[username] = userId;
-    await executeWithRetry(
-      `INSERT INTO UserPosition (id, userId, positionRoleId, effectiveAt, createdAt, updatedAt)
-       VALUES (?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
-       ON CONFLICT(userId) DO UPDATE SET
-         positionRoleId=excluded.positionRoleId,
-         updatedAt=datetime('now')`,
-      [`seed-${username}-position`, userId, positionRoleId],
-    );
-    await executeWithRetry(
-      `INSERT INTO ProjectMember (id, projectId, userId, role, createdAt)
-       VALUES (?, 'seed-f2-project', ?, ?, datetime('now'))
-       ON CONFLICT(projectId, userId) DO UPDATE SET role=excluded.role`,
-      [`seed-f2-member-${username}`, userId, projectRole],
-    );
+    const user = await prisma.user.upsert({
+      where: { username },
+      update: { passwordHash: TEST_PASSWORD_HASH, role: 'user', status: 'active' },
+      create: {
+        id: seedId,
+        username,
+        passwordHash: TEST_PASSWORD_HASH,
+        email,
+        role: 'user',
+        status: 'active',
+      },
+    });
+    seedUserIds[username] = user.id;
+
+    await prisma.userPosition.upsert({
+      where: { userId: user.id },
+      update: { positionRoleId },
+      create: { id: `seed-${username}-position`, userId: user.id, positionRoleId },
+    });
+
+    await prisma.projectMember.upsert({
+      where: { projectId_userId: { projectId: 'seed-f2-project', userId: user.id } },
+      update: { role: projectRole },
+      create: { id: `seed-f2-member-${username}`, projectId: 'seed-f2-project', userId: user.id, role: projectRole },
+    });
   }
 
-  await executeWithRetry(
-    `INSERT INTO ProjectPositionAssignment
-       (id, projectId, positionRoleId, userId, appointedById, note, createdAt, updatedAt)
-     VALUES ('seed-f2-project-npq', 'seed-f2-project', 'pos-npq-engineer', ?, ?, 'Seed NPQ owner', datetime('now'), datetime('now'))
-     ON CONFLICT(projectId, positionRoleId) DO UPDATE SET
-       userId=excluded.userId,
-       appointedById=excluded.appointedById,
-       note=excluded.note,
-       updatedAt=datetime('now')`,
-    [seedUserIds['测试NPQ1'], adminUserId],
-  );
-  const assignmentSeeds = [
-    ['测试NPQ1', 'pos-npq-engineer', 'Seed NPQ owner'],
-    ['测试PQE1', 'pos-pqe-engineer', 'Seed PQE owner'],
-    ['测试SQE1', 'pos-sqe-engineer', 'Seed SQE owner'],
-    ['测试FAE1', 'pos-fae-engineer', 'Seed FAE owner'],
-    ['测试RAM1', 'pos-ram-engineer', 'Seed RAM owner'],
-    ['测试QCM1', 'pos-qc', 'Seed QCM owner'],
-  ] as const;
-  for (const [username, positionRoleId, note] of assignmentSeeds) {
-    await executeWithRetry(
-      `INSERT INTO ProjectPositionAssignment
-         (id, projectId, positionRoleId, userId, appointedById, note, createdAt, updatedAt)
-       VALUES (?, 'seed-f2-project', ?, ?, ?, ?, datetime('now'), datetime('now'))
-       ON CONFLICT(projectId, positionRoleId) DO UPDATE SET
-         userId=excluded.userId,
-         appointedById=excluded.appointedById,
-         note=excluded.note,
-         updatedAt=datetime('now')`,
-      [`seed-f2-project-${username}`, positionRoleId, seedUserIds[username], adminUserId, note],
-    );
+  const assignmentSeeds: [string, string, string, string][] = [
+    ['seed-f2-project-npq', '测试NPQ1', 'pos-npq-engineer', 'Seed NPQ owner'],
+    ['seed-f2-project-测试PQE1', '测试PQE1', 'pos-pqe-engineer', 'Seed PQE owner'],
+    ['seed-f2-project-测试SQE1', '测试SQE1', 'pos-sqe-engineer', 'Seed SQE owner'],
+    ['seed-f2-project-测试FAE1', '测试FAE1', 'pos-fae-engineer', 'Seed FAE owner'],
+    ['seed-f2-project-测试RAM1', '测试RAM1', 'pos-ram-engineer', 'Seed RAM owner'],
+    ['seed-f2-project-测试QCM1', '测试QCM1', 'pos-qc', 'Seed QCM owner'],
+  ];
+  for (const [id, username, positionRoleId, note] of assignmentSeeds) {
+    await prisma.projectPositionAssignment.upsert({
+      where: { projectId_positionRoleId: { projectId: 'seed-f2-project', positionRoleId } },
+      update: { userId: seedUserIds[username], appointedById: adminUserId, note },
+      create: {
+        id,
+        projectId: 'seed-f2-project',
+        positionRoleId,
+        userId: seedUserIds[username],
+        appointedById: adminUserId,
+        note,
+      },
+    });
   }
-  await executeWithRetry(
-    `INSERT INTO ProjectActivitySnapshotMeta
-       (id, projectId, templateSetId, templateVersionId, generatedAt, generatedById, localAdjustmentCount, notApplicableCount, updatedAt)
-     VALUES ('seed-f2-project-template-snapshot', 'seed-f2-project', 'seed-npq-activity-template', 'seed-npq-activity-template-v1', datetime('now'), ?, 0, 0, datetime('now'))
-     ON CONFLICT(projectId) DO UPDATE SET
-       templateSetId=excluded.templateSetId,
-       templateVersionId=excluded.templateVersionId,
-       generatedById=excluded.generatedById,
-       updatedAt=datetime('now')`,
-    [adminUserId],
-  );
+
+  await prisma.projectActivitySnapshotMeta.upsert({
+    where: { projectId: 'seed-f2-project' },
+    update: {
+      templateSetId: 'seed-npq-activity-template',
+      templateVersionId: 'seed-npq-activity-template-v1',
+      generatedById: adminUserId,
+    },
+    create: {
+      id: 'seed-f2-project-template-snapshot',
+      projectId: 'seed-f2-project',
+      templateSetId: 'seed-npq-activity-template',
+      templateVersionId: 'seed-npq-activity-template-v1',
+      generatedById: adminUserId,
+      localAdjustmentCount: 0,
+      notApplicableCount: 0,
+    },
+  });
+
   await seedProjectActivities('seed-f2-project', activityTemplates);
   await seedStageGateRecords('seed-f2-project', activityTemplates);
   console.log('  ✓ F2 sample project activity instance: seed-f2-project');
@@ -374,37 +334,44 @@ async function seedStructuredActivityTemplate(templates: QualityActivityTemplate
   const templateSetId = 'seed-npq-activity-template';
   const versionId = 'seed-npq-activity-template-v1';
 
-  await executeWithRetry(
-    `INSERT INTO ActivityTemplateSet
-       (id, code, name, description, isBuiltIn, isActive, latestPublishedVersionId, createdAt, updatedAt)
-     VALUES (?, 'npq-quality-activity', 'NPQ quality activity template', 'Built-in NPQ activity template generated from the quality activity checklist.', 1, 1, NULL, datetime('now'), datetime('now'))
-     ON CONFLICT(code) DO UPDATE SET
-       name=excluded.name,
-       description=excluded.description,
-       isBuiltIn=1,
-       isActive=1,
-       updatedAt=datetime('now')`,
-    [templateSetId],
-  );
+  await prisma.activityTemplateSet.upsert({
+    where: { code: 'npq-quality-activity' },
+    update: {
+      name: 'NPQ quality activity template',
+      description: 'Built-in NPQ activity template generated from the quality activity checklist.',
+      isBuiltIn: true,
+      isActive: true,
+    },
+    create: {
+      id: templateSetId,
+      code: 'npq-quality-activity',
+      name: 'NPQ quality activity template',
+      description: 'Built-in NPQ activity template generated from the quality activity checklist.',
+      isBuiltIn: true,
+      isActive: true,
+    },
+  });
 
-  await executeWithRetry(
-    `INSERT INTO ActivityTemplateVersion
-       (id, templateSetId, version, status, publishedAt, notes, createdAt, updatedAt)
-     VALUES (?, ?, 1, 'published', datetime('now'), 'Seeded from quality-activity-template.json', datetime('now'), datetime('now'))
-     ON CONFLICT(templateSetId, version) DO UPDATE SET
-       status='published',
-       publishedAt=COALESCE(ActivityTemplateVersion.publishedAt, excluded.publishedAt),
-       notes=excluded.notes,
-       updatedAt=datetime('now')`,
-    [versionId, templateSetId],
-  );
+  await prisma.activityTemplateVersion.upsert({
+    where: { templateSetId_version: { templateSetId, version: 1 } },
+    update: {
+      status: 'published',
+      notes: 'Seeded from quality-activity-template.json',
+    },
+    create: {
+      id: versionId,
+      templateSetId,
+      version: 1,
+      status: 'published',
+      publishedAt: new Date(),
+      notes: 'Seeded from quality-activity-template.json',
+    },
+  });
 
-  await executeWithRetry(
-    `UPDATE ActivityTemplateSet
-     SET latestPublishedVersionId = ?, updatedAt = datetime('now')
-     WHERE id = ?`,
-    [versionId, templateSetId],
-  );
+  await prisma.activityTemplateSet.update({
+    where: { id: templateSetId },
+    data: { latestPublishedVersionId: versionId },
+  });
 
   const stageOrder = new Map<string, number>();
   const parentKeyToId = new Map<string, string>();
@@ -413,14 +380,11 @@ async function seedStructuredActivityTemplate(templates: QualityActivityTemplate
   for (const row of templates) {
     if (!stageOrder.has(row.stage)) stageOrder.set(row.stage, stageOrder.size + 1);
     const stageId = `ats-${slug(row.stage)}`;
-    await executeWithRetry(
-      `INSERT INTO ActivityTemplateStage (id, versionId, name, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-       ON CONFLICT(versionId, name) DO UPDATE SET
-         sortOrder=excluded.sortOrder,
-         updatedAt=datetime('now')`,
-      [stageId, versionId, row.stage, stageOrder.get(row.stage) ?? 0],
-    );
+    await prisma.activityTemplateStage.upsert({
+      where: { versionId_name: { versionId, name: row.stage } },
+      update: { sortOrder: stageOrder.get(row.stage) ?? 0 },
+      create: { id: stageId, versionId, name: row.stage, sortOrder: stageOrder.get(row.stage) ?? 0 },
+    });
 
     const parentKey = `${row.stage}::${row.projectTaskName}`;
     let parentId = parentKeyToId.get(parentKey);
@@ -428,66 +392,57 @@ async function seedStructuredActivityTemplate(templates: QualityActivityTemplate
       parentIndex += 1;
       parentId = `atp-${parentIndex}`;
       parentKeyToId.set(parentKey, parentId);
-      await executeWithRetry(
-        `INSERT INTO ActivityTemplateParent
-           (id, stageId, name, plannedOffsetDays, sortOrder, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-         ON CONFLICT(stageId, name) DO UPDATE SET
-           plannedOffsetDays=excluded.plannedOffsetDays,
-           sortOrder=excluded.sortOrder,
-           updatedAt=datetime('now')`,
-        [parentId, stageId, row.projectTaskName, 30, parentIndex],
-      );
+      await prisma.activityTemplateParent.upsert({
+        where: { stageId_name: { stageId, name: row.projectTaskName } },
+        update: { plannedOffsetDays: 30, sortOrder: parentIndex },
+        create: { id: parentId, stageId, name: row.projectTaskName, plannedOffsetDays: 30, sortOrder: parentIndex },
+      });
     }
 
     const roleId = responsiblePositionRoleId(row.ownerRole);
-    await executeWithRetry(
-      `INSERT INTO ActivityTemplateChild
-         (id, parentId, title, ownerRoleName, responsibleRoleId,
-          deliverableName, requiresDeliverable, requiresAttachment, requiresNote,
-          isRequired, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))
-       ON CONFLICT(parentId, title, ownerRoleName) DO UPDATE SET
-         responsibleRoleId=excluded.responsibleRoleId,
-         deliverableName=excluded.deliverableName,
-         requiresDeliverable=excluded.requiresDeliverable,
-         requiresAttachment=excluded.requiresAttachment,
-         requiresNote=excluded.requiresNote,
-         isRequired=1,
-         sortOrder=excluded.sortOrder,
-         updatedAt=datetime('now')`,
-      [
-        `atc-${row.sortOrder}`,
+    await prisma.activityTemplateChild.upsert({
+      where: {
+        parentId_title_ownerRoleName: { parentId, title: row.thirdLevelPlan, ownerRoleName: row.ownerRole },
+      },
+      update: {
+        responsibleRoleId: roleId,
+        deliverableName: row.deliverableName,
+        requiresDeliverable: row.requiresDeliverable,
+        requiresAttachment: row.requiresDeliverable,
+        requiresNote: !row.requiresDeliverable,
+        isRequired: true,
+        sortOrder: row.sortOrder,
+      },
+      create: {
+        id: `atc-${row.sortOrder}`,
         parentId,
-        row.thirdLevelPlan,
-        row.ownerRole,
-        roleId,
-        row.deliverableName,
-        row.requiresDeliverable ? 1 : 0,
-        row.requiresDeliverable ? 1 : 0,
-        row.requiresDeliverable ? 0 : 1,
-        row.sortOrder,
-      ],
-    );
+        title: row.thirdLevelPlan,
+        ownerRoleName: row.ownerRole,
+        responsibleRoleId: roleId,
+        deliverableName: row.deliverableName,
+        requiresDeliverable: row.requiresDeliverable,
+        requiresAttachment: row.requiresDeliverable,
+        requiresNote: !row.requiresDeliverable,
+        isRequired: true,
+        sortOrder: row.sortOrder,
+      },
+    });
   }
 }
 
 async function seedStageGateRecords(projectId: string, templates: QualityActivityTemplateRow[]) {
   const stages = [...new Set(templates.map((row) => row.stage))];
   for (const stage of stages) {
-    await executeWithRetry(
-      `INSERT INTO StageGateRecord (id, projectId, stage, status, createdAt, updatedAt)
-       VALUES (?, ?, ?, 'pending', datetime('now'), datetime('now'))
-       ON CONFLICT(projectId, stage) DO UPDATE SET updatedAt=datetime('now')`,
-      [`sgr-${projectId}-${slug(stage)}`, projectId, stage],
-    );
+    await prisma.stageGateRecord.upsert({
+      where: { projectId_stage: { projectId, stage } },
+      update: {},
+      create: { id: `sgr-${projectId}-${slug(stage)}`, projectId, stage, status: 'pending' },
+    });
   }
 }
 
-async function seedProjectActivities(
-  projectId: string,
-  templates: QualityActivityTemplateRow[],
-) {
+async function seedProjectActivities(projectId: string, templates: QualityActivityTemplateRow[]) {
+  const plannedDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const parentKeyToId = new Map<string, string>();
   let parentIndex = 0;
 
@@ -498,50 +453,57 @@ async function seedProjectActivities(
       parentIndex += 1;
       parentId = `pa-${parentIndex}`;
       parentKeyToId.set(parentKey, parentId);
-      await executeWithRetry(
-        `INSERT INTO ProjectActivityParent
-           (id, projectId, templateParentId, stage, projectTaskName, status, plannedDueDate,
-            progressPercent, hasBlocked, hasOverdue, sortOrder, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, 'not_started', date('now', '+30 days'), 0, 0, 0, ?, datetime('now'), datetime('now'))
-         ON CONFLICT(projectId, stage, projectTaskName) DO UPDATE SET
-           templateParentId=excluded.templateParentId,
-           sortOrder=excluded.sortOrder,
-           updatedAt=datetime('now')`,
-        [parentId, projectId, `atp-${parentIndex}`, row.stage, row.projectTaskName, parentIndex],
-      );
+      await prisma.projectActivityParent.upsert({
+        where: {
+          projectId_stage_projectTaskName: { projectId, stage: row.stage, projectTaskName: row.projectTaskName },
+        },
+        update: { templateParentId: `atp-${parentIndex}`, sortOrder: parentIndex },
+        create: {
+          id: parentId,
+          projectId,
+          templateParentId: `atp-${parentIndex}`,
+          stage: row.stage,
+          projectTaskName: row.projectTaskName,
+          status: 'not_started',
+          plannedDueDate,
+          progressPercent: 0,
+          hasBlocked: false,
+          hasOverdue: false,
+          sortOrder: parentIndex,
+        },
+      });
     }
 
-    const childId = `pac-${row.sortOrder}`;
-    await executeWithRetry(
-      `INSERT INTO ProjectActivityChild
-         (id, projectId, parentId, templateChildId, thirdLevelPlan, ownerRole,
-          responsibleRoleId, assigneeUserId, status, requiresDeliverable, requiresAttachment,
-          requiresNote, deliverableName, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'not_started', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-       ON CONFLICT(parentId, thirdLevelPlan, ownerRole) DO UPDATE SET
-         templateChildId=excluded.templateChildId,
-         responsibleRoleId=excluded.responsibleRoleId,
-         requiresDeliverable=excluded.requiresDeliverable,
-         requiresAttachment=excluded.requiresAttachment,
-         requiresNote=excluded.requiresNote,
-         deliverableName=excluded.deliverableName,
-         sortOrder=excluded.sortOrder,
-         updatedAt=datetime('now')`,
-      [
-        childId,
+    await prisma.projectActivityChild.upsert({
+      where: {
+        parentId_thirdLevelPlan_ownerRole: { parentId, thirdLevelPlan: row.thirdLevelPlan, ownerRole: row.ownerRole },
+      },
+      update: {
+        templateChildId: `atc-${row.sortOrder}`,
+        responsibleRoleId: responsiblePositionRoleId(row.ownerRole),
+        requiresDeliverable: row.requiresDeliverable,
+        requiresAttachment: row.requiresDeliverable,
+        requiresNote: !row.requiresDeliverable,
+        deliverableName: row.deliverableName,
+        sortOrder: row.sortOrder,
+      },
+      create: {
+        id: `pac-${row.sortOrder}`,
         projectId,
         parentId,
-        `atc-${row.sortOrder}`,
-        row.thirdLevelPlan,
-        row.ownerRole,
-        responsiblePositionRoleId(row.ownerRole),
-        row.requiresDeliverable ? 1 : 0,
-        row.requiresDeliverable ? 1 : 0,
-        row.requiresDeliverable ? 0 : 1,
-        row.deliverableName,
-        row.sortOrder,
-      ],
-    );
+        templateChildId: `atc-${row.sortOrder}`,
+        thirdLevelPlan: row.thirdLevelPlan,
+        ownerRole: row.ownerRole,
+        responsibleRoleId: responsiblePositionRoleId(row.ownerRole),
+        assigneeUserId: null,
+        status: 'not_started',
+        requiresDeliverable: row.requiresDeliverable,
+        requiresAttachment: row.requiresDeliverable,
+        requiresNote: !row.requiresDeliverable,
+        deliverableName: row.deliverableName,
+        sortOrder: row.sortOrder,
+      },
+    });
   }
 }
 
@@ -550,4 +512,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => db.close());
+  .finally(() => prisma.$disconnect());

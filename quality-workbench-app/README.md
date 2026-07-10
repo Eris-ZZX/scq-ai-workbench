@@ -11,7 +11,7 @@ Browser
   -> Next.js 页面
   -> Next.js API Routes
   -> Prisma Client
-  -> SQLite 数据库文件
+  -> PostgreSQL 数据库
 ```
 
 当前仓库中的 `quality-workbench-app` 是实际应用目录。项目包含前端页面、后端接口、数据库 schema 和迁移文件。
@@ -24,8 +24,10 @@ Browser
 Node.js 20 LTS 或更新版本
 npm
 Git
-可写的数据目录，用于存放 SQLite 数据库文件
+PostgreSQL 16（推荐用 Docker 运行,见下方 docker-compose.yml）
 ```
+
+> 应用作为宿主机进程运行(`npm run start`),数据库为 PostgreSQL。本地开发与生产共用同一份 `docker-compose.yml` 启动 PostgreSQL:端口只绑 `127.0.0.1:5432`,不对外暴露。
 
 如需通过 Nginx、IIS 或其他网关暴露服务，请将外部访问地址反向代理到应用监听端口。
 
@@ -56,6 +58,14 @@ New-Item -ItemType File -Path .env -Force
 ```
 
 然后按下方“环境变量”章节填写配置。
+
+启动 PostgreSQL（Docker,首次会拉取 postgres:16 镜像）：
+
+```bash
+docker compose up -d
+```
+
+> 生产环境请先在同目录 `.env` 设置强 `POSTGRES_PASSWORD`(以及可选的 `POSTGRES_USER` / `POSTGRES_DB`),再执行 `docker compose up -d`,并确保 `DATABASE_URL` 与之匹配。
 
 生成 Prisma Client：
 
@@ -105,15 +115,20 @@ npm run start
 生产环境至少需要配置：
 
 ```env
-DATABASE_URL="file:/absolute/path/to/prod.db"
+DATABASE_URL="postgresql://qe:强密码@localhost:5432/qe?schema=public"
 JWT_SECRET="replace-with-a-long-random-secret"
+
+# docker-compose.yml 用于创建 PostgreSQL 的账号(需与 DATABASE_URL 一致)
+POSTGRES_USER="qe"
+POSTGRES_PASSWORD="强密码"
+POSTGRES_DB="qe"
 ```
 
 说明：
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `DATABASE_URL` | 是 | SQLite 数据库连接地址。生产环境建议使用绝对路径，例如 `file:/data/qeworkbench/prod.db`。 |
+| `DATABASE_URL` | 是 | PostgreSQL 连接串,格式 `postgresql://用户:密码@主机:5432/库名?schema=public`。生产环境用户名/密码/库名需与 `docker-compose.yml` 的 `POSTGRES_*` 一致。 |
 | `JWT_SECRET` | 是 | 登录会话签名密钥。生产环境必须配置，建议使用 32 位以上随机字符串。 |
 | `DINGTALK_CLIENT_ID` | 否 | 钉钉扫码登录应用 ID。启用钉钉登录时需要。 |
 | `DINGTALK_CLIENT_SECRET` | 否 | 钉钉扫码登录应用密钥。启用钉钉登录时需要。 |
@@ -122,15 +137,16 @@ JWT_SECRET="replace-with-a-long-random-secret"
 
 部署红线：
 
-- 生产环境 `DATABASE_URL` 必须指向服务器固定数据目录，不要使用仓库目录内的 `dev.db`。
-- 重新部署代码不会自动删除数据库；只有当 `DATABASE_URL` 指向新的或不存在的文件时，才会创建新库。
+- 生产环境 `DATABASE_URL` 必须指向服务器上运行的 PostgreSQL,凭据与 `docker-compose.yml` 一致。
+- 数据库端口只绑 `127.0.0.1`,不要对公网暴露 `5432`。
+- 重新部署代码不会自动删除数据库;数据存放在 Docker 命名卷 `qe_pgdata`,需单独做备份。
 - `JWT_SECRET` 变更后，已有登录会话会失效。
 
 注意：
 
 - 不要将 `.env` 提交到 Git。
-- 不要在多个应用实例同时写同一个本地 SQLite 文件，容易产生锁冲突。
-- 如果需要多人长期稳定使用，建议将 SQLite 文件放在服务器本地磁盘，并做好定期备份。
+- 生产环境务必设置强 `POSTGRES_PASSWORD`,不要沿用本地开发的弱密码。
+- 定期对 PostgreSQL 做备份(如 `pg_dump`),重要数据勿仅依赖单机命名卷。
 
 ## 4.1 钉钉登录配置
 
@@ -188,16 +204,17 @@ npx prisma generate
 npm run db:seed
 ```
 
-本地开发默认数据库文件通常是：
-
-```text
-quality-workbench-app/dev.db
-```
-
-生产环境建议不要使用仓库目录内的 `dev.db`，应将数据库文件放到服务器数据目录，例如：
+本地开发数据库由 `docker compose up -d` 启动的 PostgreSQL 提供,连接串在 `.env` 的 `DATABASE_URL`:
 
 ```env
-DATABASE_URL="file:/data/qeworkbench/prod.db"
+DATABASE_URL="postgresql://qe:dev@localhost:5432/qe?schema=public"
+```
+
+生产环境使用服务器上运行的 PostgreSQL,凭据换成强密码,数据落在 Docker 命名卷 `qe_pgdata`。重置本地库可用:
+
+```bash
+docker compose down -v && docker compose up -d
+npx prisma migrate deploy && npm run db:seed
 ```
 
 ## 6. 更新部署
@@ -299,7 +316,6 @@ public/                静态资源
 ```text
 node_modules/
 .next/
-dev.db
 .env
 *.log
 *.tsbuildinfo
@@ -309,7 +325,7 @@ dev.db
 
 - `node_modules/` 由 `npm ci` 安装生成。
 - `.next/` 由 `npm run build` 生成。
-- `dev.db` 是本地开发数据库。
+- 数据库数据存放在 Docker 命名卷 `qe_pgdata`,不在仓库目录内。
 - `.env` 包含环境变量和密钥，应由服务器单独配置。
 
 ## 11. 常见问题
@@ -359,15 +375,16 @@ npm run db:seed
 
 并确认 `.env` 中的 `DATABASE_URL`。
 
-### 11.4 SQLite 文件权限问题
+### 11.4 数据库连接失败
 
-确保运行应用的系统用户对数据库文件和所在目录有读写权限。
+确认 PostgreSQL 容器在运行,且 `.env` 的 `DATABASE_URL` 与 `docker-compose.yml` 凭据一致。
 
 示例：
 
 ```bash
-mkdir -p /data/qeworkbench
-chown -R appuser:appuser /data/qeworkbench
+docker compose ps          # 确认 db 容器为 healthy
+docker compose logs db      # 查看数据库日志
+npx prisma migrate status   # 检查迁移状态
 ```
 
 ## 12. 版本同步
