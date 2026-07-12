@@ -4,7 +4,7 @@
 # 端口只绑 127.0.0.1,不对外暴露;应用作为宿主机进程连 localhost:5432
 services:
   db:
-    image: postgres:16
+    image: postgres:17
     container_name: qe-postgres
     restart: unless-stopped
     environment:

@@ -288,38 +288,6 @@ export async function activateProjectStageActivities(
   return parentResult.count + childResult.count;
 }
 
-function defaultDueDate(stage: string) {
-  const offset: Record<string, number> = {
-    TR1: 14,
-    'TR2&3': 30,
-    TR4: 45,
-    TR4A: 60,
-    TR5: 75,
-    TR6: 90,
-  };
-  const date = new Date();
-  date.setDate(date.getDate() + (offset[stage] ?? 30));
-  return date;
-}
-
-function defaultStartDate(stage: string) {
-  const offset: Record<string, number> = {
-    TR1: 0,
-    'TR2&3': 14,
-    TR4: 30,
-    TR4A: 45,
-    TR5: 60,
-    TR6: 75,
-  };
-  return offsetDate(offset[stage] ?? 0);
-}
-
-function offsetDate(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date;
-}
-
 export async function getProjectActivityView(projectId: string, options?: { attachmentMode?: 'summary' | 'detail' }) {
   await ensureProjectActivities(projectId);
   const project = await prisma.project.findUnique({

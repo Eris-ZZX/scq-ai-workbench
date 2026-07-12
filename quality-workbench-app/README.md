@@ -24,7 +24,7 @@ Browser
 Node.js 20 LTS 或更新版本
 npm
 Git
-PostgreSQL 16（推荐用 Docker 运行,见下方 docker-compose.yml）
+PostgreSQL 17（推荐用 Docker 运行,见下方 docker-compose.yml）
 ```
 
 > 应用作为宿主机进程运行(`npm run start`),数据库为 PostgreSQL。本地开发与生产共用同一份 `docker-compose.yml` 启动 PostgreSQL:端口只绑 `127.0.0.1:5432`,不对外暴露。
@@ -59,7 +59,7 @@ New-Item -ItemType File -Path .env -Force
 
 然后按下方“环境变量”章节填写配置。
 
-启动 PostgreSQL（Docker,首次会拉取 postgres:16 镜像）：
+启动 PostgreSQL（Docker,首次会拉取 postgres:17 镜像）：
 
 ```bash
 docker compose up -d
