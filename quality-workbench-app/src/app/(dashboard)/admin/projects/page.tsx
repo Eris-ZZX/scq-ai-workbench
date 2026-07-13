@@ -570,20 +570,21 @@ export default function AdminProjectsPage() {
       </div>
 
       {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 px-4 py-10">
           <div className="w-full max-w-lg rounded-lg border border-border bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="text-sm font-semibold">新增项目</div>
               <button className={actionButton()} onClick={() => setCreateOpen(false)}>关闭</button>
             </div>
-            <div className="space-y-4 p-4">
+            <div className="max-h-[min(480px,calc(100vh-200px))] overflow-y-auto p-4">
+              <div className="space-y-3">
               <label className="block text-xs font-medium text-muted-foreground">
                 项目名称
                 <input className={fieldClass('mt-1 h-9 w-full')} value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))} />
               </label>
               <label className="block text-xs font-medium text-muted-foreground">
                 描述
-                <textarea className={fieldClass('mt-1 min-h-20 w-full py-2')} value={createForm.description} onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))} />
+                <textarea className={fieldClass('mt-1 min-h-16 w-full py-2')} value={createForm.description} onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))} />
               </label>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block text-xs font-medium text-muted-foreground">
@@ -657,6 +658,7 @@ export default function AdminProjectsPage() {
                 </div>
               </label>
             </div>
+          </div>
             <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
               <button className={actionButton()} onClick={() => setCreateOpen(false)} disabled={saving}>取消</button>
               <button className={actionButton(true)} onClick={createProject} disabled={saving || !createForm.name.trim()}>保存</button>

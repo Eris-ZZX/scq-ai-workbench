@@ -443,18 +443,18 @@ export default function ProjectWorkspacePage() {
             </div>
             <div className="flex w-full max-w-lg flex-col gap-3">
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>当前阶段子任务完成率</span>
-                <span>{completedChildren}/{totalChildren} / {overallProgress}%</span>
-              </div>
-              <div className="mt-1.5 h-2 rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-slate-900" style={{ width: `${overallProgress}%` }} />
-              </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
                 <span>当前阶段项目活动完成率</span>
                 <span>{currentStageClosedParents}/{currentStageParents.length} / {currentStageParentProgress}%</span>
               </div>
               <div className="mt-1.5 h-2 rounded-full bg-slate-100">
                 <div className="h-full rounded-full bg-ws-blue" style={{ width: `${currentStageParentProgress}%` }} />
+              </div>
+              <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                <span>当前阶段子任务完成率</span>
+                <span>{completedChildren}/{totalChildren} / {overallProgress}%</span>
+              </div>
+              <div className="mt-1.5 h-2 rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-slate-900" style={{ width: `${overallProgress}%` }} />
               </div>
               {projectRole === 'owner' && (
                 <div className="flex justify-end">
