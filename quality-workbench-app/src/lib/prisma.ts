@@ -1,11 +1,9 @@
 import 'dotenv/config';
 import { PrismaClient } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
-  pgPool: Pool | undefined;
 };
 
 function createPrismaClient() {
@@ -17,16 +15,7 @@ function createPrismaClient() {
     throw new Error('DATABASE_URL must be a PostgreSQL connection string');
   }
 
-  const pool =
-    globalForPrisma.pgPool ??
-    new Pool({
-      connectionString,
-    });
-  if (process.env.NODE_ENV !== 'production') {
-    globalForPrisma.pgPool = pool;
-  }
-
-  const adapter = new PrismaPg(pool);
+  const adapter = new PrismaPg({ connectionString });
   return new PrismaClient({ adapter } as never);
 }
 
@@ -39,6 +28,5 @@ if (process.env.NODE_ENV !== 'production') {
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
     await prisma.$disconnect();
-    await globalForPrisma.pgPool?.end();
   });
 }

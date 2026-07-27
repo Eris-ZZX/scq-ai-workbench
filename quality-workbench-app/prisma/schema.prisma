@@ -1,5 +1,5 @@
 // ─── 供应链质量部 AI 综合工作台 — Prisma Schema ───
-// Runtime: PostgreSQL  |  Local AI-resource import source may still be SQLite snapshot
+// PostgreSQL  | AI 资源库可从 SQLite 快照一次性导入
 // 设计原则: 数据模型一步到位，预留外部系统集成字段
 
 generator client {

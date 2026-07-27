@@ -120,6 +120,7 @@ export default function AdminProjectsPage() {
     for (const r of projectRoles) map.set(r.code, r.name);
     return map;
   }, [projectRoles]);
+  const [projectActivityRoles, setProjectActivityRoles] = useState<string[]>([]);
   const [memberDialog, setMemberDialog] = useState<AddMemberDialog | null>(null);
   const [npqSearch, setNpqSearch] = useState('');
   const [npqDropdown, setNpqDropdown] = useState(false);
@@ -199,6 +200,19 @@ export default function AdminProjectsPage() {
     createForm.ownerId ? activeUsers.find((u) => u.id === createForm.ownerId)?.username ?? '' : '',
   [activeUsers, createForm.ownerId]);
 
+  // 加载选中项目的活动角色
+  useEffect(() => {
+    if (!selectedProjectId) { setProjectActivityRoles([]); return; }
+    let cancelled = false;
+    fetch(`/api/admin/projects/${encodeURIComponent(selectedProjectId)}/activities`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { activityRoles?: string[] } | null) => {
+        if (!cancelled && data?.activityRoles) setProjectActivityRoles(data.activityRoles);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedProjectId]);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
     [projects, selectedProjectId],
@@ -216,25 +230,18 @@ export default function AdminProjectsPage() {
   }, [selectedProject, basicForm]);
 
   const projectPanelRoles = useMemo(() => {
-    const fromCatalog = [...projectRoles]
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((r) => ({ code: r.code, name: r.name }));
-    if (fromCatalog.length > 0) return fromCatalog;
-
-    const fallback = ['NPQ', 'PQE', 'SQE', 'FAE', 'RAM', 'QCM'];
-    return fallback.map((code) => ({
+    if (!selectedProject) return [] as { code: string; name: string }[];
+    const codes = new Set<string>();
+    for (const m of (selectedProject.members ?? [])) {
+      const roles = (m.assignedRole ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      for (const r of roles) codes.add(r);
+    }
+    for (const r of projectActivityRoles) codes.add(r);
+    return Array.from(codes).sort().map((code) => ({
       code,
       name: roleNameMap.get(code) ?? code,
     }));
-  }, [projectRoles, roleNameMap]);
-
-  const unassignedMembers = useMemo(() => {
-    if (!selectedProject) return [];
-    return (selectedProject.members ?? []).filter((member) => {
-      const roles = (member.assignedRole ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-      return roles.length === 0;
-    });
-  }, [selectedProject]);
+  }, [selectedProject, roleNameMap, projectActivityRoles]);
 
   async function requestJson(method: 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>, url = '/api/admin/projects') {
     setSaving(true);
@@ -549,31 +556,6 @@ export default function AdminProjectsPage() {
                         </div>
                       );
                     })}
-                    {unassignedMembers.length > 0 && (
-                      <div className="rounded border border-dashed border-amber-300 bg-amber-50/40">
-                        <div className="flex items-center justify-between px-2.5 py-1.5">
-                          <div>
-                            <span className="text-xs font-semibold text-amber-800">未分组</span>
-                            <span className="ml-1.5 text-[11px] text-muted-foreground">{unassignedMembers.length}</span>
-                          </div>
-                        </div>
-                        <div className="border-t border-amber-200 px-2.5 py-1">
-                          {unassignedMembers.map((member) => (
-                            <div key={member.id} className="flex items-center py-0.5 text-xs">
-                              <span className="min-w-0 flex-1 truncate">{displayUser(member.user)}</span>
-                              <button
-                                className="ml-1 shrink-0 rounded text-muted-foreground hover:bg-red-50 hover:text-red-600"
-                                onClick={() => removeRoleMember('', member.userId)}
-                                disabled={saving}
-                                title="移出项目"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                     {projectPanelRoles.length === 0 && (
                       <div className="col-span-full py-8 text-center text-xs text-muted-foreground">暂无角色分组数据</div>
                     )}
@@ -588,20 +570,21 @@ export default function AdminProjectsPage() {
       </div>
 
       {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 px-4 py-10">
           <div className="w-full max-w-lg rounded-lg border border-border bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="text-sm font-semibold">新增项目</div>
               <button className={actionButton()} onClick={() => setCreateOpen(false)}>关闭</button>
             </div>
-            <div className="space-y-4 p-4">
+            <div className="max-h-[min(480px,calc(100vh-200px))] overflow-y-auto p-4">
+              <div className="space-y-3">
               <label className="block text-xs font-medium text-muted-foreground">
                 项目名称
                 <input className={fieldClass('mt-1 h-9 w-full')} value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))} />
               </label>
               <label className="block text-xs font-medium text-muted-foreground">
                 描述
-                <textarea className={fieldClass('mt-1 min-h-20 w-full py-2')} value={createForm.description} onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))} />
+                <textarea className={fieldClass('mt-1 min-h-16 w-full py-2')} value={createForm.description} onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))} />
               </label>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block text-xs font-medium text-muted-foreground">
@@ -609,10 +592,6 @@ export default function AdminProjectsPage() {
                   <select className={fieldClass('mt-1 h-9 w-full')} value={createForm.status} onChange={(event) => setCreateForm((current) => ({ ...current, status: event.target.value }))}>
                     {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
-                </label>
-                <label className="block text-xs font-medium text-muted-foreground">
-                  当前阶段
-                  <input className={fieldClass('mt-1 h-9 w-full')} value={createForm.currentStage} onChange={(event) => setCreateForm((current) => ({ ...current, currentStage: event.target.value }))} />
                 </label>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
@@ -679,6 +658,7 @@ export default function AdminProjectsPage() {
                 </div>
               </label>
             </div>
+          </div>
             <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
               <button className={actionButton()} onClick={() => setCreateOpen(false)} disabled={saving}>取消</button>
               <button className={actionButton(true)} onClick={createProject} disabled={saving || !createForm.name.trim()}>保存</button>

@@ -17,7 +17,7 @@ export async function getUsageStats() {
   ]);
 
   const p95Raw = await prisma.$queryRawUnsafe<[{ p95: number | null }]>(
-    `SELECT durationMs AS p95 FROM ObservabilityEvent WHERE eventType='request' AND durationMs IS NOT NULL ORDER BY durationMs ASC LIMIT 1 OFFSET (SELECT CAST(COUNT(*)*0.95 AS INT) FROM ObservabilityEvent WHERE eventType='request' AND durationMs IS NOT NULL)`
+    `SELECT "durationMs" AS p95 FROM "ObservabilityEvent" WHERE "eventType"='request' AND "durationMs" IS NOT NULL ORDER BY "durationMs" ASC LIMIT 1 OFFSET (SELECT CAST(COUNT(*)*0.95 AS INT) FROM "ObservabilityEvent" WHERE "eventType"='request' AND "durationMs" IS NOT NULL)`
   );
   const p95 = p95Raw?.[0]?.p95 ?? 0;
 

@@ -296,11 +296,17 @@ export default function ProjectWorkspacePage() {
   const readonly = projectRole === 'observer';
   const allParents = workspace.parents;
   const closedParents = allParents.filter((parent) => parent.status === 'closed').length;
-  const totalChildren = allParents.reduce((sum, parent) => sum + parent.children.length, 0);
-  const completedChildren = allParents.reduce((sum, parent) => (
+  const currentStageParents = allParents.filter((p) => p.stage === project.currentStage);
+  const totalChildren = currentStageParents.reduce((sum, parent) => sum + parent.children.length, 0);
+  const completedChildren = currentStageParents.reduce((sum, parent) => (
     sum + parent.children.filter(isChildEffectivelyCompleted).length
   ), 0);
   const overallProgress = totalChildren > 0 ? Math.round((completedChildren / totalChildren) * 100) : 0;
+
+  const currentStageClosedParents = currentStageParents.filter((p) => p.status === 'closed').length;
+  const currentStageParentProgress = currentStageParents.length > 0
+    ? Math.round((currentStageClosedParents / currentStageParents.length) * 100)
+    : 0;
   const detailHeader = buildDetailHeader(selection, selectedParent, selectedChild, taskNumbers);
 
   function selectItem(next: Selection) {
@@ -437,7 +443,14 @@ export default function ProjectWorkspacePage() {
             </div>
             <div className="flex w-full max-w-lg flex-col gap-3">
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>子任务完成率</span>
+                <span>当前阶段项目活动完成率</span>
+                <span>{currentStageClosedParents}/{currentStageParents.length} / {currentStageParentProgress}%</span>
+              </div>
+              <div className="mt-1.5 h-2 rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-ws-blue" style={{ width: `${currentStageParentProgress}%` }} />
+              </div>
+              <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                <span>当前阶段子任务完成率</span>
                 <span>{completedChildren}/{totalChildren} / {overallProgress}%</span>
               </div>
               <div className="mt-1.5 h-2 rounded-full bg-slate-100">
@@ -755,7 +768,7 @@ function ParentDetail({
   return (
     <section className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <InfoTile label="子任务完成率" value={`${progressPercent}%=${completed}/${childCount}`} />
+        <InfoTile label="当前阶段子任务完成率" value={`${progressPercent}%=${completed}/${childCount}`} />
         <InfoTile label="逾期子任务" value={`${overdueCount}`} tone="amber" />
         <InfoTile label="阻塞子任务" value={`${blockedCount}`} tone="red" />
       </div>

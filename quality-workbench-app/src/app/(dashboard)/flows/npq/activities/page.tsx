@@ -279,6 +279,19 @@ export default function ActivityTrackingPage() {
     setMilestoneEditMode(true);
   }
 
+  async function updateProjectDates(startDate: string | null, expectedEndDate: string | null) {
+    if (!projectId) return;
+    const res = await fetch(`/api/npq/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startDate: startDate || undefined, expectedEndDate: expectedEndDate || undefined }),
+    });
+    if (res.ok) {
+      setProjectStartDate(startDate);
+      setProjectExpectedEndDate(expectedEndDate);
+    }
+  }
+
   function cancelMilestoneEdit() {
     setMilestoneEditMode(false);
     setMilestoneDraft({});
@@ -670,6 +683,9 @@ export default function ActivityTrackingPage() {
           onSave={saveMilestones}
           initialTrialRows={trialRows}
           onTrialSaved={setTrialRows}
+          projectStartDate={projectStartDate}
+          projectExpectedEndDate={projectExpectedEndDate}
+          onProjectDatesChange={updateProjectDates}
         />
       )}
     </div>
@@ -741,6 +757,9 @@ function MilestoneDialog({
   onSave,
   initialTrialRows,
   onTrialSaved,
+  projectStartDate,
+  projectExpectedEndDate,
+  onProjectDatesChange,
 }: {
   draft: Record<string, { plannedStartDate: string; plannedDueDate: string }>;
   stages: string[];
@@ -751,14 +770,22 @@ function MilestoneDialog({
   onSave: () => void;
   initialTrialRows: TrialPlanRow[];
   onTrialSaved?: (rows: TrialPlanRow[]) => void;
+  projectStartDate: string | null;
+  projectExpectedEndDate: string | null;
+  onProjectDatesChange: (startDate: string | null, expectedEndDate: string | null) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'milestone' | 'trial'>('milestone');
+  const [activeTab, setActiveTab] = useState<'project' | 'milestone' | 'trial'>('milestone');
+  const [projStart, setProjStart] = useState(toDateInput(projectStartDate));
+  const [projEnd, setProjEnd] = useState(toDateInput(projectExpectedEndDate));
   const [trialRows, setTrialRows] = useState<TrialPlanRow[]>(() => {
     const fallback = [
-      { id: 'sample-material-ready', item: '试产物料齐套', plannedStartDate: '', plannedDueDate: '', note: '确认关键物料、包材、治具到位' },
-      { id: 'sample-pilot-build', item: '小批量试产', plannedStartDate: '', plannedDueDate: '', note: '验证产线节拍、工艺稳定性和质量问题闭环' },
-      { id: 'sample-reliability', item: '试产可靠性验证', plannedStartDate: '', plannedDueDate: '', note: '覆盖关键可靠性和功能验证项目' },
-      { id: 'sample-review', item: '试产总结评审', plannedStartDate: '', plannedDueDate: '', note: '输出试产问题清单、风险结论和量产放行建议' },
+      { id: 'proto', item: '原型机', plannedStartDate: '', plannedDueDate: '', note: '功能验证和初步测试' },
+      { id: 'proto-plus', item: '原型机PLUS', plannedStartDate: '', plannedDueDate: '', note: '设计优化后的第二轮验证' },
+      { id: 'evt1', item: 'EVT1', plannedStartDate: '', plannedDueDate: '', note: '工程验证测试第一轮' },
+      { id: 'evt2', item: 'EVT2', plannedStartDate: '', plannedDueDate: '', note: '工程验证测试第二轮' },
+      { id: 'dvt1', item: 'DVT1', plannedStartDate: '', plannedDueDate: '', note: '设计验证测试第一轮' },
+      { id: 'dvt2', item: 'DVT2', plannedStartDate: '', plannedDueDate: '', note: '设计验证测试第二轮' },
+      { id: 'pvt', item: 'PVT', plannedStartDate: '', plannedDueDate: '', note: '生产验证测试，量产前最终确认' },
     ];
     return initialTrialRows.length > 0 ? initialTrialRows : fallback;
   });
@@ -830,6 +857,13 @@ function MilestoneDialog({
           <div className="flex gap-2">
             <button
               type="button"
+              onClick={() => setActiveTab('project')}
+              className={`rounded-t-md border px-3 py-2 text-sm font-medium ${activeTab === 'project' ? 'border-b-white bg-white text-slate-950' : 'bg-slate-50 text-slate-500 hover:text-slate-900'}`}
+            >
+              项目时间
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('milestone')}
               className={`rounded-t-md border px-3 py-2 text-sm font-medium ${activeTab === 'milestone' ? 'border-b-white bg-white text-slate-950' : 'bg-slate-50 text-slate-500 hover:text-slate-900'}`}
             >
@@ -846,7 +880,30 @@ function MilestoneDialog({
         </div>
 
         <div className="overflow-y-auto px-5 py-4">
-          {activeTab === 'milestone' ? (
+          {activeTab === 'project' ? (
+            <div className="grid gap-4 rounded-md border border-border p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <label className="text-sm">
+                  <span className="mb-1 block font-medium">项目开始时间</span>
+                  <input
+                    type="date"
+                    value={projStart}
+                    onChange={(event) => setProjStart(event.target.value)}
+                    className="h-9 w-full rounded border px-2 text-sm"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block font-medium">预计结束时间</span>
+                  <input
+                    type="date"
+                    value={projEnd}
+                    onChange={(event) => setProjEnd(event.target.value)}
+                    className="h-9 w-full rounded border px-2 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+          ) : activeTab === 'milestone' ? (
             <div className="overflow-hidden rounded-md border border-border">
               <div className="grid grid-cols-[92px_1fr_1fr] bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground">
                 <span>阶段</span>
@@ -952,7 +1009,11 @@ function MilestoneDialog({
             取消
           </Button>
           {activeTab === 'trial' && trialSaved && <span className="self-center text-xs text-green-700">试产计划已保存</span>}
-          {activeTab === 'milestone' ? (
+          {activeTab === 'project' ? (
+            <Button onClick={() => { onProjectDatesChange(projStart || null, projEnd || null); }} disabled={saving}>
+              保存项目时间
+            </Button>
+          ) : activeTab === 'milestone' ? (
             <Button onClick={onSave} disabled={saving}>
               保存阶段里程碑
             </Button>
