@@ -79,10 +79,9 @@ export function isPostgresDatabaseUrl(url: string | undefined): boolean {
   return url.startsWith('postgres://') || url.startsWith('postgresql://');
 }
 
-/** Take PG advisory lock only when migration writes also target that Postgres. */
+/** Take PG advisory lock whenever target DATABASE_URL is PostgreSQL. */
 export function shouldUseMigrationAdvisoryLock(databaseUrl: string | undefined): boolean {
-  if (!isPostgresDatabaseUrl(databaseUrl)) return false;
-  return process.env.AI_RESOURCES_MIGRATE_TARGET === 'postgres';
+  return isPostgresDatabaseUrl(databaseUrl);
 }
 
 export function resolveSourceStoragePath(sqlitePath: string): string {

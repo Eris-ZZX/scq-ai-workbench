@@ -4,10 +4,8 @@
  *
  * Env:
  *   SOURCE_SQLITE_PATH — readonly portal SQLite snapshot
- *   DATABASE_URL       — when AI_RESOURCES_MIGRATE_TARGET=postgres and URL is postgres://,
- *                        business writes use @prisma/adapter-pg + dedicated advisory lock.
- *                        Otherwise writes rehearse against local libsql/SQLite (schema is sqlite today).
- *                        Production cutover requires switching prisma schema provider to postgresql first.
+ *   DATABASE_URL       — PostgreSQL URL (required). Business writes use @prisma/adapter-pg;
+ *                        a dedicated pg.Client holds pg_advisory_lock for the run.
  *   SOURCE_STORAGE_PATH (optional) — portal uploads dir; defaults to <sqlite-dir>/storage/uploads
  */
 import 'dotenv/config';

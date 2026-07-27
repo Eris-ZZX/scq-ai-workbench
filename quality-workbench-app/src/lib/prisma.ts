@@ -1,25 +1,32 @@
+import 'dotenv/config';
 import { PrismaClient } from '@/generated/prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
-import path from 'node:path';
-import fs from 'node:fs';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  pgPool: Pool | undefined;
 };
 
 function createPrismaClient() {
-  const cwd = process.cwd();
-  const candidates = [cwd, path.resolve(cwd, '..'), path.resolve(cwd, '..', '..')];
-  let dbFile = path.join(cwd, 'dev.db');
-  for (const dir of candidates) {
-    if (fs.existsSync(path.join(dir, 'dev.db'))) {
-      dbFile = path.join(dir, 'dev.db');
-      break;
-    }
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is required');
   }
-  const dbUrl = `file:${dbFile}`;
-  // PrismaLibSql 接受 { url } 配置，内部自己创建 client，不是接受 pre-made client
-  const adapter = new PrismaLibSql({ url: dbUrl });
+  if (!connectionString.startsWith('postgres://') && !connectionString.startsWith('postgresql://')) {
+    throw new Error('DATABASE_URL must be a PostgreSQL connection string');
+  }
+
+  const pool =
+    globalForPrisma.pgPool ??
+    new Pool({
+      connectionString,
+    });
+  if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.pgPool = pool;
+  }
+
+  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter } as never);
 }
 
@@ -32,5 +39,6 @@ if (process.env.NODE_ENV !== 'production') {
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
     await prisma.$disconnect();
+    await globalForPrisma.pgPool?.end();
   });
 }
