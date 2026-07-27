@@ -13,7 +13,9 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "migrate:ai-resources": "tsx scripts/migrate-ai-resources-from-sqlite.ts"
+    "migrate:ai-resources": "tsx scripts/migrate-ai-resources-from-sqlite.ts",
+    "verify:ai-resources": "tsx scripts/verify-ai-resource-migration.ts",
+    "accept:ai-resources": "tsx scripts/accept-ai-resources.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
