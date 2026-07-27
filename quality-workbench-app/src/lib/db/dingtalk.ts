@@ -1,4 +1,5 @@
 // lib/db/dingtalk.ts — 钉钉用户数据库操作
+import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { DUMMY_HASH } from './auth';
 import crypto from 'crypto';
@@ -16,10 +17,15 @@ export interface DingTalkProfile {
   title?: string;
 }
 
-/** 按钉钉 unionId 查找已有的钉钉用户 */
+/** 按钉钉 unionId 查找已有的钉钉用户（组合唯一约束） */
 export async function findDingTalkUser(unionId: string) {
-  return prisma.user.findFirst({
-    where: { externalSource: 'dingtalk', externalId: unionId },
+  return prisma.user.findUnique({
+    where: {
+      externalSource_externalId: {
+        externalSource: 'dingtalk',
+        externalId: unionId,
+      },
+    },
   });
 }
 
@@ -51,6 +57,10 @@ export async function bindUserPosition(userId: string, positionRoleId: string) {
   });
 }
 
+function isUniqueConflict(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}
+
 /** 为钉钉扫码用户自动创建本地账号 */
 export async function createDingTalkUser(profile: DingTalkProfile) {
   const baseUsername = profile.nick || `dt_${profile.unionId.slice(0, 8)}`;
@@ -74,16 +84,22 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
   try {
     return await tryCreate(baseUsername);
   } catch (err: unknown) {
-    if (
-      err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as { code: string }).code === 'P2002'
-    ) {
-      const suffix = crypto.randomBytes(3).toString('hex');
-      return tryCreate(`${baseUsername}_${suffix}`);
+    if (!isUniqueConflict(err)) throw err;
+
+    // 并发创建同一 unionId：直接返回已有用户
+    const existingByExternal = await findDingTalkUser(profile.unionId);
+    if (existingByExternal) return existingByExternal;
+
+    // 用户名冲突：换后缀重试；若仍撞 external 唯一则再查一次
+    const suffix = crypto.randomBytes(3).toString('hex');
+    try {
+      return await tryCreate(`${baseUsername}_${suffix}`);
+    } catch (retryErr: unknown) {
+      if (!isUniqueConflict(retryErr)) throw retryErr;
+      const raced = await findDingTalkUser(profile.unionId);
+      if (raced) return raced;
+      throw retryErr;
     }
-    throw err;
   }
 }
 

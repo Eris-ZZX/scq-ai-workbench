@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { DUMMY_HASH, findByUsername, verifyPassword } from '@/lib/db/auth';
 import { createSession } from '@/platform/auth/auth.config';
+import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 import { getRequestUrl } from '@/platform/auth/request-url';
 
 type LoginBody = {
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
   });
 
   if (formMode) {
-    const response = NextResponse.redirect(getRequestUrl(request, '/workbench'), { status: 303 });
+    const response = NextResponse.redirect(getRequestUrl(request, DEFAULT_AFTER_LOGIN), { status: 303 });
     response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
     return response;
   }

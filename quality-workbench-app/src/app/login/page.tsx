@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/platform/auth/auth.config';
+import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 import { QuickLoginBar } from './quick-login-bar';
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -19,7 +20,7 @@ function dingtalkErrorMessage(params: SearchParams): string | null {
 
 export default async function LoginPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const session = await getSession();
-  if (session) redirect('/workbench');
+  if (session) redirect(DEFAULT_AFTER_LOGIN);
 
   const params = (await searchParams) ?? {};
   const registered = hasParam(params, 'registered', '1');

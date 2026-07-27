@@ -101,10 +101,23 @@ export async function PATCH(request: Request) {
   try {
     if (body.role || body.status) {
       const role = body.role === 'admin' ? 'admin' : body.role === 'manager' ? 'manager' : body.role === 'user' ? 'user' : undefined;
-      await prisma.user.update({
-        where: { id: body.id },
-        data: { role, status: body.status },
-      });
+
+      // Disabling a user can drop the last effective AI-resource module admin.
+      if (body.status === 'disabled') {
+        const { assertNotLastEffectiveAdmin } = await import('@/modules/ai-resources/guards');
+        await prisma.$transaction(async (tx) => {
+          await assertNotLastEffectiveAdmin(tx, userId, null);
+          await tx.user.update({
+            where: { id: body.id },
+            data: { role, status: body.status },
+          });
+        });
+      } else {
+        await prisma.user.update({
+          where: { id: body.id },
+          data: { role, status: body.status },
+        });
+      }
     }
 
     const user = await prisma.user.findUnique({
@@ -118,6 +131,10 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json(user);
   } catch (error) {
+    const { AiResourceError } = await import('@/modules/ai-resources/errors');
+    if (error instanceof AiResourceError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error('[admin/users:PATCH]', error);
     return NextResponse.json({ error: '更新失败' }, { status: 500 });
   }

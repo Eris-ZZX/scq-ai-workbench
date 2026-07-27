@@ -45,6 +45,20 @@ model User {
   activityEvents ActivityEvent[]
   events         ObservabilityEvent[]
 
+  // AI 资源库模块
+  aiResourceMembership          AiResourceMembership?
+  aiResourcesCreated            AiResource[]              @relation("AiResourceCreator")
+  aiResourceReviewsRequested    AiResourceReviewRequest[] @relation("AiResourceReviewRequester")
+  aiResourceReviewsHandled      AiResourceReviewRequest[] @relation("AiResourceReviewReviewer")
+  aiResourceUpdateLogsAsActor   AiResourceUpdateLog[]     @relation("AiResourceUpdateActor")
+  aiResourceUpdateLogsAsReviewer AiResourceUpdateLog[]    @relation("AiResourceUpdateReviewer")
+  aiResourceFavorites           AiResourceFavorite[]
+  aiResourceRoleAuditsAsSubject AiResourceRoleAudit[]     @relation("AiResourceRoleAuditSubject")
+  aiResourceRoleAuditsAsActor   AiResourceRoleAudit[]     @relation("AiResourceRoleAuditActor")
+  aiResourceMembershipUpdates   AiResourceMembership[]    @relation("AiResourceMembershipUpdater")
+  aiResourceMigrationRuns       AiResourceMigrationRun[]  @relation("AiResourceMigrationOperator")
+
+  @@unique([externalSource, externalId])
   @@index([username])
   @@index([role])
   @@index([status])
@@ -656,4 +670,180 @@ model ObservabilityEvent {
   @@index([eventType])
   @@index([timestamp])
   @@index([userId])
+}
+
+// ═══════════════════════════════════════════════
+// AI 资源库模块（独立域，合并自 260703-AI资源库）
+// ═══════════════════════════════════════════════
+
+model AiResourceModuleSettings {
+  id              String   @id @default("default")
+  maintenanceMode Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+}
+
+model AiResourceMigrationRun {
+  id           String   @id @default(cuid())
+  status       String   // STAGING | DB_COMMITTED | FILES_PROMOTED | COMPLETED | FAILED | ROLLED_BACK
+  reportPath   String?
+  operatorId   String?
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  errorMessage String?
+
+  operator User?                    @relation("AiResourceMigrationOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  items    AiResourceMigrationItem[]
+
+  @@index([status])
+  @@index([startedAt])
+}
+
+model AiResourceMigrationItem {
+  id         String  @id @default(cuid())
+  runId      String
+  entityType String  // Resource | ReviewRequest | UpdateLog | Favorite | Membership | User
+  legacyId   String
+  targetId   String
+  action     String  // CREATED | UPDATED
+  beforeData String? // JSON
+  afterHash  String?
+
+  run AiResourceMigrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, entityType, legacyId])
+  @@index([runId])
+  @@index([targetId])
+}
+
+model AiResource {
+  id                String   @id @default(cuid())
+  legacyId          String?  @unique
+  name              String
+  type              String   // APP | AGENT | SKILL | MCP | WEB_PAGE | CASE | PROMPT | STANDARD_DOC | WORKFLOW | OTHER
+  summary           String
+  tags              String   @default("")
+  ownerName         String
+  visibilityScope   String   @default("ALL") // ALL | DEPARTMENTS | MEMBERS
+  visibleDeptIds    String   @default("")
+  visibleUserIds    String   @default("")
+  status            String   @default("PUBLISHED") // DRAFT | PUBLISHED | ARCHIVED
+  archivedFromStatus String?
+  resourceUrl       String?
+  content           String
+  attachments       String?  // JSON
+  extension         String?  // JSON
+  extractedText     String?
+  currentVersion    Int      @default(1)
+  viewCount         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  createdById String
+  createdBy   User @relation("AiResourceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  reviewRequests AiResourceReviewRequest[]
+  updateLogs     AiResourceUpdateLog[]
+  favorites      AiResourceFavorite[]
+
+  @@index([type])
+  @@index([status])
+  @@index([createdById])
+  @@index([updatedAt])
+}
+
+model AiResourceReviewRequest {
+  id            String    @id @default(cuid())
+  legacyId      String?   @unique
+  type          String    // CREATE | UPDATE
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  resourceId    String?
+  proposedData  String    // JSON
+  updateSummary String
+  changedFields String    @default("")
+  rejectReason  String?
+  createdAt     DateTime  @default(now())
+  reviewedAt    DateTime?
+
+  requesterId String
+  requester   User @relation("AiResourceReviewRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+
+  reviewerId String?
+  reviewer   User? @relation("AiResourceReviewReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  resource AiResource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([requesterId])
+  @@index([resourceId])
+}
+
+model AiResourceUpdateLog {
+  id            String   @id @default(cuid())
+  legacyId      String?  @unique
+  resourceId    String
+  actorId       String
+  reviewerId    String?
+  reviewId      String?
+  action        String   // CREATE | UPDATE | ARCHIVE | RESTORE
+  result        String   // PENDING | APPROVED | REJECTED | DONE
+  updateSummary String
+  changedFields String   @default("")
+  createdAt     DateTime @default(now())
+
+  resource AiResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  actor    User       @relation("AiResourceUpdateActor", fields: [actorId], references: [id], onDelete: Restrict)
+  reviewer User?      @relation("AiResourceUpdateReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([resourceId])
+  @@index([createdAt])
+}
+
+model AiResourceFavorite {
+  id         String   @id @default(cuid())
+  legacyId   String?  @unique
+  userId     String
+  resourceId String
+  createdAt  DateTime @default(now())
+
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource AiResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resourceId])
+  @@index([userId])
+  @@index([resourceId])
+}
+
+model AiResourceMembership {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  role        String   // user | reviewer | admin
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("AiResourceMembershipUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  audits    AiResourceRoleAudit[]
+
+  @@index([role])
+}
+
+model AiResourceRoleAudit {
+  id                   String   @id @default(cuid())
+  membershipId         String?
+  subjectUserId        String?
+  subjectUserIdSnapshot String
+  subjectUsernameSnapshot String
+  actorId              String?
+  fromRole             String?
+  toRole               String?
+  action               String   // ASSIGN | UPDATE | ROLLBACK
+  createdAt            DateTime @default(now())
+
+  membership  AiResourceMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  subjectUser User?                 @relation("AiResourceRoleAuditSubject", fields: [subjectUserId], references: [id], onDelete: SetNull)
+  actor       User?                 @relation("AiResourceRoleAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([subjectUserId])
+  @@index([createdAt])
 }

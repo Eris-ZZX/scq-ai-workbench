@@ -72,6 +72,9 @@ export function AppShell({
                     {session.role === 'admin' ? '系统管理员' : session.role === 'manager' ? '业务管理者' : '项目成员'}
                   </div>
                 </div>
+                <Link href="/portal" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="返回应用选择">
+                  应用
+                </Link>
                 <Link href="/workbench" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="个人项目工作台">
                   首页
                 </Link>

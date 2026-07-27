@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createSession } from '@/platform/auth/auth.config';
+import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 import { getRequestUrl } from '@/platform/auth/request-url';
 import {
   findDingTalkUser,
@@ -179,7 +180,7 @@ export async function GET(request: Request) {
     // 第 4 步：签发 session
     await createSession({ id: user.id, username: user.username, role: user.role });
 
-    return NextResponse.redirect(getRequestUrl(request, '/workbench'), { status: 303 });
+    return NextResponse.redirect(getRequestUrl(request, DEFAULT_AFTER_LOGIN), { status: 303 });
   } catch (err) {
     console.error('[dingtalk] Unexpected callback error:', err);
     return loginErrorRedirect(request, 'dingtalk');

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 
 const TEST_ACCOUNTS = [
   'admin',
@@ -35,7 +36,7 @@ export function QuickLoginBar() {
       });
 
       if (res.ok) {
-        window.location.assign('/workbench');
+        window.location.assign(DEFAULT_AFTER_LOGIN);
         return;
       }
 
