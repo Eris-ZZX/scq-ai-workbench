@@ -87,7 +87,7 @@ export function AdminMembershipPanel() {
             <option value="admin">admin</option>
           </select>
         </label>
-        <button type="button" className="primary" onClick={save} disabled={pending || !userId}>
+        <button type="button" className="button primary" onClick={save} disabled={pending || !userId}>
           保存
         </button>
       </div>

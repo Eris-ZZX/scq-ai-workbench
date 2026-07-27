@@ -120,7 +120,6 @@ export default function AdminProjectsPage() {
     for (const r of projectRoles) map.set(r.code, r.name);
     return map;
   }, [projectRoles]);
-  const [projectActivityRoles, setProjectActivityRoles] = useState<string[]>([]);
   const [memberDialog, setMemberDialog] = useState<AddMemberDialog | null>(null);
   const [npqSearch, setNpqSearch] = useState('');
   const [npqDropdown, setNpqDropdown] = useState(false);
@@ -200,19 +199,6 @@ export default function AdminProjectsPage() {
     createForm.ownerId ? activeUsers.find((u) => u.id === createForm.ownerId)?.username ?? '' : '',
   [activeUsers, createForm.ownerId]);
 
-  // 加载选中项目的活动角色
-  useEffect(() => {
-    if (!selectedProjectId) { setProjectActivityRoles([]); return; }
-    let cancelled = false;
-    fetch(`/api/admin/projects/${encodeURIComponent(selectedProjectId)}/activities`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { activityRoles?: string[] } | null) => {
-        if (!cancelled && data?.activityRoles) setProjectActivityRoles(data.activityRoles);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [selectedProjectId]);
-
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
     [projects, selectedProjectId],
@@ -230,18 +216,25 @@ export default function AdminProjectsPage() {
   }, [selectedProject, basicForm]);
 
   const projectPanelRoles = useMemo(() => {
-    if (!selectedProject) return [] as { code: string; name: string }[];
-    const codes = new Set<string>();
-    for (const m of (selectedProject.members ?? [])) {
-      const roles = (m.assignedRole ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-      for (const r of roles) codes.add(r);
-    }
-    for (const r of projectActivityRoles) codes.add(r);
-    return Array.from(codes).sort().map((code) => ({
+    const fromCatalog = [...projectRoles]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((r) => ({ code: r.code, name: r.name }));
+    if (fromCatalog.length > 0) return fromCatalog;
+
+    const fallback = ['NPQ', 'PQE', 'SQE', 'FAE', 'RAM', 'QCM'];
+    return fallback.map((code) => ({
       code,
       name: roleNameMap.get(code) ?? code,
     }));
-  }, [selectedProject, roleNameMap, projectActivityRoles]);
+  }, [projectRoles, roleNameMap]);
+
+  const unassignedMembers = useMemo(() => {
+    if (!selectedProject) return [];
+    return (selectedProject.members ?? []).filter((member) => {
+      const roles = (member.assignedRole ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      return roles.length === 0;
+    });
+  }, [selectedProject]);
 
   async function requestJson(method: 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>, url = '/api/admin/projects') {
     setSaving(true);
@@ -556,6 +549,31 @@ export default function AdminProjectsPage() {
                         </div>
                       );
                     })}
+                    {unassignedMembers.length > 0 && (
+                      <div className="rounded border border-dashed border-amber-300 bg-amber-50/40">
+                        <div className="flex items-center justify-between px-2.5 py-1.5">
+                          <div>
+                            <span className="text-xs font-semibold text-amber-800">未分组</span>
+                            <span className="ml-1.5 text-[11px] text-muted-foreground">{unassignedMembers.length}</span>
+                          </div>
+                        </div>
+                        <div className="border-t border-amber-200 px-2.5 py-1">
+                          {unassignedMembers.map((member) => (
+                            <div key={member.id} className="flex items-center py-0.5 text-xs">
+                              <span className="min-w-0 flex-1 truncate">{displayUser(member.user)}</span>
+                              <button
+                                className="ml-1 shrink-0 rounded text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                                onClick={() => removeRoleMember('', member.userId)}
+                                disabled={saving}
+                                title="移出项目"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {projectPanelRoles.length === 0 && (
                       <div className="col-span-full py-8 text-center text-xs text-muted-foreground">暂无角色分组数据</div>
                     )}

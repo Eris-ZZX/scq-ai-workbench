@@ -275,15 +275,16 @@ export async function PATCH(request: Request) {
           });
         }
       } else {
-        const ownerCount = await prisma.projectMember.count({
-          where: { projectId, role: 'owner' },
-        });
-        if (ownerCount <= 1) {
-          return NextResponse.json({ error: '不能移除最后一位项目负责人' }, { status: 400 });
+        if (member.role === 'owner') {
+          const ownerCount = await prisma.projectMember.count({
+            where: { projectId, role: 'owner' },
+          });
+          if (ownerCount <= 1) {
+            return NextResponse.json({ error: '不能移除最后一位项目负责人' }, { status: 400 });
+          }
         }
+        await prisma.projectMember.delete({ where: { id: member.id } });
       }
-
-      await prisma.projectMember.delete({ where: { id: member.id } });
     }
 
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: projectSelect() });

@@ -35,7 +35,7 @@ export function AdminMaintenanceToggle({ initialEnabled }: { initialEnabled: boo
       </p>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
         <strong>当前：{enabled ? '开启' : '关闭'}</strong>
-        <button type="button" className={enabled ? 'danger' : 'primary'} onClick={toggle} disabled={pending}>
+        <button type="button" className={enabled ? 'button danger' : 'button primary'} onClick={toggle} disabled={pending}>
           {enabled ? '关闭维护模式' : '开启维护模式'}
         </button>
       </div>
