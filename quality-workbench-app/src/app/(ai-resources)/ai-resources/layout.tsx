@@ -1,10 +1,17 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { Inter } from 'next/font/google';
 import { FilePlus2, FolderKanban, Heart, LayoutGrid, LogOut, Settings, ShieldCheck } from 'lucide-react';
 import { getSession } from '@/platform/auth/auth.config';
 import { isAiResourcesEnabled } from '@/modules/ai-resources/config';
 import { requireAiResourceUser } from '@/modules/ai-resources/guards';
 import '@/modules/ai-resources/ui/styles.css';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
+});
 
 export default async function AiResourcesLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -12,7 +19,7 @@ export default async function AiResourcesLayout({ children }: { children: React.
 
   if (!isAiResourcesEnabled()) {
     return (
-      <div className="ai-resources-portal shell">
+      <div className={`ai-resources-portal shell ${inter.className}`}>
         <main className="main" style={{ textAlign: 'center', paddingTop: 80 }}>
           <h1>AI 资源库未启用</h1>
           <p className="subtle">请完成数据迁移并将 AI_RESOURCES_ENABLED 设为 true 后再访问。</p>
@@ -27,7 +34,7 @@ export default async function AiResourcesLayout({ children }: { children: React.
   const actor = await requireAiResourceUser();
 
   return (
-    <div className="ai-resources-portal shell">
+    <div className={`ai-resources-portal shell ${inter.className}`}>
       <header className="topbar">
         <Link className="brand" href="/ai-resources">
           <span className="brand-mark">AI</span>

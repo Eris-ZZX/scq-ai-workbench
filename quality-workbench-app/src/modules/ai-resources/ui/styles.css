@@ -1,4 +1,4 @@
-/* Scoped to AI resources portal — do not override workbench :root tokens */
+/* Scoped to AI resources portal — match original portal typography */
 .ai-resources-portal {
   --background: #f7f8fb;
   --foreground: #18202f;
@@ -18,7 +18,12 @@
   background: var(--background);
   color: var(--foreground);
   font-family:
-    "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .ai-resources-portal *,
