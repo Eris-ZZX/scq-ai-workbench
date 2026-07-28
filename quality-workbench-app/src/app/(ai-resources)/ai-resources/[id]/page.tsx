@@ -9,7 +9,10 @@ import { parseJsonForDisplay } from '@/modules/ai-resources/json';
 import { parseList } from '@/modules/ai-resources/list-fields';
 import { canEditResource, canViewResource, visibleResourceWhere } from '@/modules/ai-resources/policy';
 import { DownloadAttachment } from '@/modules/ai-resources/ui/download-attachment';
-import { FavoriteToggle } from '@/modules/ai-resources/ui/favorite-toggle';
+import {
+  ResourceEngagementProvider,
+  ResourceEngagementToggles,
+} from '@/modules/ai-resources/ui/resource-engagement';
 import { UpdateHistoryDialog } from '@/modules/ai-resources/ui/update-history-dialog';
 import { ViewTracker } from '@/modules/ai-resources/ui/view-tracker';
 
@@ -23,6 +26,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
     },
     include: {
       createdBy: { select: { username: true } },
+      _count: { select: { favorites: true, likes: true } },
       updateLogs: {
         orderBy: { createdAt: 'desc' },
         take: 10,
@@ -36,9 +40,14 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
 
   if (!resource || !canViewResource(actor, resource)) notFound();
 
-  const favorite = await prisma.aiResourceFavorite.findUnique({
-    where: { userId_resourceId: { userId: actor.userId, resourceId: id } },
-  });
+  const [favorite, like] = await Promise.all([
+    prisma.aiResourceFavorite.findUnique({
+      where: { userId_resourceId: { userId: actor.userId, resourceId: id } },
+    }),
+    prisma.aiResourceLike.findUnique({
+      where: { userId_resourceId: { userId: actor.userId, resourceId: id } },
+    }),
+  ]);
 
   const attachments = parseAttachments(resource.attachments);
   const resourceUrls = parseResourceUrls(resource.resourceUrl);
@@ -51,13 +60,22 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
   return (
     <main className="main">
       <ViewTracker resourceId={resource.id} />
+      <ResourceEngagementProvider
+        resourceId={resource.id}
+        initialLiked={!!like}
+        initialFavorited={!!favorite}
+        initialLikeCount={resource._count.likes}
+        initialFavoriteCount={resource._count.favorites}
+        viewCount={resource.viewCount}
+        currentVersion={resource.currentVersion}
+      >
       <section className="detail-head">
         <div>
           <p className="eyebrow">{resourceTypeLabel[resource.type as AiResourceType] ?? resource.type}</p>
           <h1>{resource.name}</h1>
         </div>
         <div className="meta">
-          <FavoriteToggle resourceId={resource.id} initialFavorited={!!favorite} />
+          <ResourceEngagementToggles />
           {canEditResource(actor, resource) ? (
             <Link className="button primary" href={`/ai-resources/${resource.id}/edit`}>
               <Edit3 size={16} />
@@ -169,6 +187,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
           </section>
         </aside>
       </div>
+      </ResourceEngagementProvider>
     </main>
   );
 }

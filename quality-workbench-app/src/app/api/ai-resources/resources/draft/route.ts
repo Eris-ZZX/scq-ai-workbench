@@ -4,7 +4,6 @@ import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { toJsonString } from '@/modules/ai-resources/json';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
-import { assertWritableInTransaction } from '@/modules/ai-resources/maintenance';
 import { reviewSubmissionSchema } from '@/modules/ai-resources/validation';
 
 export async function POST(request: NextRequest) {
@@ -17,7 +16,6 @@ export async function POST(request: NextRequest) {
     }
 
     const review = await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
       return tx.aiResourceReviewRequest.create({
         data: {
           type: 'CREATE',

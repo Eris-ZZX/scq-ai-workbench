@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
-import { assertWritableInTransaction } from '@/modules/ai-resources/maintenance';
 import { diffKeys } from '@/modules/ai-resources/policy';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
 import { archiveResourceSchema, reviewSubmissionSchema } from '@/modules/ai-resources/validation';
@@ -58,8 +57,6 @@ export async function PATCH(
     );
 
     const result = await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
-
       const resource = await tx.aiResource.update({
         where: { id },
         data: {
@@ -114,8 +111,6 @@ export async function DELETE(
     }
 
     const resource = await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
-
       const updated = await tx.aiResource.update({
         where: { id },
         data: {
@@ -163,8 +158,6 @@ export async function POST(
     }
 
     const resource = await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
-
       const updated = await tx.aiResource.update({
         where: { id },
         data: {

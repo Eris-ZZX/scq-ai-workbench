@@ -1,16 +1,13 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import type { Prisma } from '@/generated/prisma/client';
-import { Clock, Eye, Tags } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
 import { isAiResourceType } from '@/modules/ai-resources/constants';
 import { requireAiResourceUser } from '@/modules/ai-resources/guards';
-import { resourceTypeLabel } from '@/modules/ai-resources/labels';
 import { parseList } from '@/modules/ai-resources/list-fields';
 import { visibleResourceWhere } from '@/modules/ai-resources/policy';
-import { FavoriteToggle } from '@/modules/ai-resources/ui/favorite-toggle';
-import { QuickLinks } from '@/modules/ai-resources/ui/quick-links';
+import { ResourceCard } from '@/modules/ai-resources/ui/resource-card';
 import { ResourceSearch } from '@/modules/ai-resources/ui/resource-search';
 import { ResourceSidebar } from '@/modules/ai-resources/ui/resource-sidebar';
 
@@ -26,11 +23,14 @@ export default async function AiResourcesHomePage({
   const page = Math.max(1, Number(params.page) || 1);
   const where = buildWhere(actor, params);
 
-  const [total, resources, allPublished, favorites] = await Promise.all([
+  const [total, resources, allPublished, favorites, likes] = await Promise.all([
     prisma.aiResource.count({ where }),
     prisma.aiResource.findMany({
       where,
-      include: { createdBy: { select: { username: true } } },
+      include: {
+        createdBy: { select: { username: true } },
+        _count: { select: { favorites: true, likes: true } },
+      },
       orderBy: { updatedAt: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
@@ -40,6 +40,10 @@ export default async function AiResourcesHomePage({
       select: { type: true, tags: true },
     }),
     prisma.aiResourceFavorite.findMany({
+      where: { userId: actor.userId },
+      select: { resourceId: true },
+    }),
+    prisma.aiResourceLike.findMany({
       where: { userId: actor.userId },
       select: { resourceId: true },
     }),
@@ -54,6 +58,7 @@ export default async function AiResourcesHomePage({
     left.localeCompare(right, 'zh-CN'),
   );
   const favoriteIds = new Set(favorites.map((f) => f.resourceId));
+  const likedIds = new Set(likes.map((item) => item.resourceId));
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
@@ -68,44 +73,14 @@ export default async function AiResourcesHomePage({
           <section className="resource-list">
             {resources.length ? (
               resources.map((resource) => (
-                <Link
-                  className="resource-card resource-card-link"
-                  href={`/ai-resources/${resource.id}`}
+                <ResourceCard
                   key={resource.id}
-                >
-                  <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                    <div>
-                      <h2>
-                        <span className="badge primary">
-                          {resourceTypeLabel[resource.type as AiResourceType] ?? resource.type}
-                        </span>
-                        {resource.name}
-                        <QuickLinks resourceUrl={resource.resourceUrl} />
-                      </h2>
-                      <p className="subtle">{resource.summary}</p>
-                    </div>
-                    <FavoriteToggle resourceId={resource.id} initialFavorited={favoriteIds.has(resource.id)} />
-                  </header>
-                  <div className="meta">
-                    <span className="badge">
-                      <Clock size={13} />
-                      v{resource.currentVersion}
-                    </span>
-                    <span className="badge">
-                      <Eye size={13} />
-                      {resource.viewCount}
-                    </span>
-                    <span className="badge">负责人：{resource.ownerName}</span>
-                    {parseList(resource.tags)
-                      .slice(0, 5)
-                      .map((tag) => (
-                        <span className="badge" key={tag}>
-                          <Tags size={13} />
-                          {tag}
-                        </span>
-                      ))}
-                  </div>
-                </Link>
+                  resource={resource}
+                  favorited={favoriteIds.has(resource.id)}
+                  liked={likedIds.has(resource.id)}
+                  likeCount={resource._count.likes}
+                  favoriteCount={resource._count.favorites}
+                />
               ))
             ) : (
               <div className="empty">没有找到匹配的资源。</div>

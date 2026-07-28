@@ -3,7 +3,7 @@ import { prisma } from '../src/lib/prisma';
 async function main() {
   await prisma.aiResourceModuleSettings.upsert({
     where: { id: 'default' },
-    create: { id: 'default', maintenanceMode: false },
+    create: { id: 'default' },
     update: {},
   });
   console.log('AiResourceModuleSettings ready');

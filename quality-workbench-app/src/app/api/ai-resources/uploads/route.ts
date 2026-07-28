@@ -4,7 +4,6 @@ import { extname, join } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
-import { assertWritableInTransaction } from '@/modules/ai-resources/maintenance';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
@@ -31,7 +30,6 @@ export async function POST(request: NextRequest) {
     await mkdir(uploadDir, { recursive: true });
 
     const attachments = await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
 
       const uploaded = [];
       for (const file of files) {

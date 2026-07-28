@@ -53,6 +53,7 @@ model User {
   aiResourceUpdateLogsAsActor   AiResourceUpdateLog[]     @relation("AiResourceUpdateActor")
   aiResourceUpdateLogsAsReviewer AiResourceUpdateLog[]    @relation("AiResourceUpdateReviewer")
   aiResourceFavorites           AiResourceFavorite[]
+  aiResourceLikes               AiResourceLike[]
   aiResourceRoleAuditsAsSubject AiResourceRoleAudit[]     @relation("AiResourceRoleAuditSubject")
   aiResourceRoleAuditsAsActor   AiResourceRoleAudit[]     @relation("AiResourceRoleAuditActor")
   aiResourceMembershipUpdates   AiResourceMembership[]    @relation("AiResourceMembershipUpdater")
@@ -677,9 +678,8 @@ model ObservabilityEvent {
 // ═══════════════════════════════════════════════
 
 model AiResourceModuleSettings {
-  id              String   @id @default("default")
-  maintenanceMode Boolean  @default(false)
-  updatedAt       DateTime @updatedAt
+  id        String   @id @default("default")
+  updatedAt DateTime @updatedAt
 }
 
 model AiResourceMigrationRun {
@@ -744,6 +744,7 @@ model AiResource {
   reviewRequests AiResourceReviewRequest[]
   updateLogs     AiResourceUpdateLog[]
   favorites      AiResourceFavorite[]
+  likes          AiResourceLike[]
 
   @@index([type])
   @@index([status])
@@ -801,6 +802,22 @@ model AiResourceUpdateLog {
 model AiResourceFavorite {
   id         String   @id @default(cuid())
   legacyId   String?  @unique
+  userId     String
+  resourceId String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource AiResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resourceId])
+  @@index([userId])
+  @@index([userId, sortOrder])
+  @@index([resourceId])
+}
+
+model AiResourceLike {
+  id         String   @id @default(cuid())
   userId     String
   resourceId String
   createdAt  DateTime @default(now())

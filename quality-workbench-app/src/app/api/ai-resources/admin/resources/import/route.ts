@@ -5,7 +5,6 @@ import { prisma } from '@/lib/prisma';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
-import { assertWritableInTransaction } from '@/modules/ai-resources/maintenance';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
 import { resourcePayloadSchema } from '@/modules/ai-resources/validation';
 
@@ -44,8 +43,6 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
-
       const created = [];
       for (const row of parsedRows) {
         const resource = await tx.aiResource.create({

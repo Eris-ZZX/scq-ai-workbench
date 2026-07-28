@@ -31,7 +31,7 @@ export type UserIdMap = Map<string, string>;
 export async function ensureModuleSettingsRow() {
   await prisma.aiResourceModuleSettings.upsert({
     where: { id: 'default' },
-    create: { id: 'default', maintenanceMode: false },
+    create: { id: 'default' },
     update: {},
   });
 }

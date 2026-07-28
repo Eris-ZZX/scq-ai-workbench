@@ -2,8 +2,11 @@ import 'dotenv/config';
 import { PrismaClient } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
+const PRISMA_CLIENT_REVISION = 3;
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  prismaRevision?: number;
 };
 
 function createPrismaClient() {
@@ -19,11 +22,33 @@ function createPrismaClient() {
   return new PrismaClient({ adapter } as never);
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
+function isCompatibleClient(client: PrismaClient) {
+  return typeof (client as { aiResourceLike?: { findMany?: unknown } }).aiResourceLike?.findMany === 'function';
 }
+
+function getPrismaClient() {
+  const existing = globalForPrisma.prisma;
+  if (
+    existing &&
+    globalForPrisma.prismaRevision === PRISMA_CLIENT_REVISION &&
+    isCompatibleClient(existing)
+  ) {
+    return existing;
+  }
+
+  if (existing) {
+    void existing.$disconnect().catch(() => undefined);
+  }
+
+  const client = createPrismaClient();
+  if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.prisma = client;
+    globalForPrisma.prismaRevision = PRISMA_CLIENT_REVISION;
+  }
+  return client;
+}
+
+export const prisma = getPrismaClient();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {

@@ -42,35 +42,35 @@ export default async function AiResourcesLayout({ children }: { children: React.
         </Link>
         <nav className="nav">
           <Link href="/ai-resources/favorites">
-            <Heart size={16} />
+            <Heart size={14} />
             我的收藏
           </Link>
           <Link href="/ai-resources">
-            <FolderKanban size={16} />
+            <FolderKanban size={14} />
             资源库
           </Link>
           <Link href="/ai-resources/new">
-            <FilePlus2 size={16} />
+            <FilePlus2 size={14} />
             上传资源
           </Link>
           <Link href="/ai-resources/review">
-            <ShieldCheck size={16} />
+            <ShieldCheck size={14} />
             审批
           </Link>
           {actor.isEffectiveAdmin ? (
             <Link href="/ai-resources/admin">
-              <Settings size={16} />
+              <Settings size={14} />
               管理后台
             </Link>
           ) : null}
           <span className="nav-user">{session.username}</span>
           <Link href="/portal">
-            <LayoutGrid size={16} />
+            <LayoutGrid size={14} />
             应用选择
           </Link>
           <form action="/api/auth/logout" method="POST">
             <button type="submit">
-              <LogOut size={16} />
+              <LogOut size={14} />
               退出登录
             </button>
           </form>

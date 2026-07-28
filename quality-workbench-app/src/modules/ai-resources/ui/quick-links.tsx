@@ -1,21 +1,26 @@
 'use client';
 
 import { ExternalLink } from 'lucide-react';
+import { parseResourceLinks, type ResourceLinkItem } from '@/modules/ai-resources/resource-links';
 
-type NamedUrl = { url: string; label: string };
-
-export function QuickLinks({ resourceUrl }: { resourceUrl?: string | null }) {
-  const links = parseUrls(resourceUrl);
-  if (!links.length) return null;
+export function QuickLinks({
+  resourceUrl,
+  links,
+}: {
+  resourceUrl?: string | null;
+  links?: ResourceLinkItem[];
+}) {
+  const items = links ?? parseResourceLinks(resourceUrl);
+  if (!items.length) return null;
 
   return (
     <div className="quick-links">
-      {links.map((link) => (
+      {items.map((link) => (
         <span
           className="link-pill"
           role="link"
           tabIndex={0}
-          key={link.url}
+          key={`${link.label}-${link.url}`}
           title={`打开 ${link.label}`}
           onClick={(e) => {
             e.preventDefault();
@@ -31,34 +36,9 @@ export function QuickLinks({ resourceUrl }: { resourceUrl?: string | null }) {
           }}
         >
           <ExternalLink size={12} />
-          {link.label}
+          <span className="link-pill-label">{link.label}</span>
         </span>
       ))}
     </div>
   );
-}
-
-function parseUrls(value?: string | null): NamedUrl[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item, index) => {
-        if (typeof item === 'string') {
-          return { url: item.trim(), label: `链接${index + 1}` };
-        }
-        if (item && typeof item === 'object' && 'url' in item) {
-          const url = String(item.url).trim();
-          if (!url) return null;
-          const rawLabel = String((item as Record<string, unknown>).label ?? '');
-          const label = rawLabel.trim() || `链接${index + 1}`;
-          return { url, label };
-        }
-        return null;
-      })
-      .filter((item): item is NamedUrl => !!item && !!item.url);
-  } catch {
-    return [];
-  }
 }

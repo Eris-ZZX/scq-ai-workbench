@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
-import { assertWritableInTransaction } from '@/modules/ai-resources/maintenance';
 import { canReview } from '@/modules/ai-resources/policy';
 import { rejectSchema } from '@/modules/ai-resources/validation';
 
@@ -32,8 +31,6 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
-
       const claimed = await tx.aiResourceReviewRequest.updateMany({
         where: { id, status: 'PENDING' },
         data: {

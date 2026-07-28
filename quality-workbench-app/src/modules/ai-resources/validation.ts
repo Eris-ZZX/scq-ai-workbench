@@ -39,7 +39,3 @@ export const membershipRoleSchema = z.object({
   userId: z.string().trim().min(1),
   role: z.enum(['user', 'reviewer', 'admin']),
 });
-
-export const maintenanceModeSchema = z.object({
-  enabled: z.boolean(),
-});

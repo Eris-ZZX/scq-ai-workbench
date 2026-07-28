@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
-import { assertWritableInTransaction } from '@/modules/ai-resources/maintenance';
 
 export async function POST(
   _request: NextRequest,
@@ -18,7 +17,6 @@ export async function POST(
     }
 
     await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
       await tx.aiResource.update({
         where: { id },
         data: { viewCount: { increment: 1 } },

@@ -17,15 +17,9 @@ const prisma: PrismaClient = new Proxy({} as PrismaClient, {
   },
 });
 
-async function assertRollbackWritable(tx: Tx) {
-  if (!isAiResourcesEnabled()) return;
-
-  const settings = await tx.aiResourceModuleSettings.findUnique({ where: { id: 'default' } });
-  if (!settings?.maintenanceMode) {
-    throw new Error(
-      'Rollback blocked: AI_RESOURCES_ENABLED=true requires maintenanceMode=true on AiResourceModuleSettings',
-    );
-  }
+async function assertRollbackWritable(_tx: Tx) {
+  // Maintenance mode removed; rollback remains available to operators with DB access.
+  return;
 }
 
 async function assertCurrentMatchesMigratedState(

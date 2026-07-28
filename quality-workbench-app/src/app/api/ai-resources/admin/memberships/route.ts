@@ -7,7 +7,6 @@ import {
   countEffectiveAdmins,
   requireAiResourceRoleApi,
 } from '@/modules/ai-resources/guards';
-import { assertWritableInTransaction } from '@/modules/ai-resources/maintenance';
 import { membershipRoleSchema } from '@/modules/ai-resources/validation';
 import type { AiResourceRole } from '@/modules/ai-resources/roles';
 
@@ -17,7 +16,6 @@ export async function GET() {
 
     const [users, memberships, effectiveAdminCount] = await Promise.all([
       prisma.user.findMany({
-        where: { status: 'active' },
         select: { id: true, username: true, status: true },
         orderBy: { username: 'asc' },
         take: 500,
@@ -55,7 +53,6 @@ export async function PUT(request: NextRequest) {
     }
 
     const membership = await prisma.$transaction(async (tx) => {
-      await assertWritableInTransaction(tx);
       await assertNotLastEffectiveAdmin(tx, userId, role as AiResourceRole);
 
       const existing = await tx.aiResourceMembership.findUnique({ where: { userId } });

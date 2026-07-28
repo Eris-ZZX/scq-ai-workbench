@@ -1,6 +1,5 @@
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
-import { getMaintenanceMode } from '@/modules/ai-resources/maintenance';
 import { isAiResourcesEnabled } from '@/modules/ai-resources/config';
 
 export async function GET() {
@@ -13,11 +12,9 @@ export async function GET() {
     }
 
     const actor = await requireAiResourceUserApi();
-    const maintenanceMode = await getMaintenanceMode();
 
     return Response.json({
       enabled: true,
-      maintenanceMode,
       actor: {
         userId: actor.userId,
         username: actor.username,
