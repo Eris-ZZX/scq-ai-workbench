@@ -38,7 +38,9 @@ export function CardLinksRow({ links }: { links: ResourceLinkItem[] }) {
           count -= 1;
           used = 0;
           for (let i = 0; i < count; i += 1) {
-            const width = pills[i].getBoundingClientRect().width;
+            const pill = pills[i];
+            if (!pill) break;
+            const width = pill.getBoundingClientRect().width;
             used = i === 0 ? width : used + GAP + width;
           }
         }

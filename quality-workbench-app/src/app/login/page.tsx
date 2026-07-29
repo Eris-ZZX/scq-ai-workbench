@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/platform/auth/auth.config';
 import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
-import { QuickLoginBar } from './quick-login-bar';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -90,8 +89,6 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
           </svg>
           钉钉扫码登录
         </a>
-
-        <QuickLoginBar />
       </div>
     </div>
   );

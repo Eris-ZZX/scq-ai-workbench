@@ -1,11 +1,8 @@
 /**
- * AI resource library feature gate.
- * Keep false until migration Run is COMPLETED (or explicit empty bootstrap).
+ * AI resource library helpers.
+ * The module is always part of the product surface (no feature flag).
  * Server-only: do not import from client components.
  */
-export function isAiResourcesEnabled() {
-  return process.env.AI_RESOURCES_ENABLED === 'true';
-}
 
 /** PostgreSQL row locks (FOR SHARE / FOR UPDATE). Local SQLite skips locks. */
 export function supportsAiResourceRowLocks() {

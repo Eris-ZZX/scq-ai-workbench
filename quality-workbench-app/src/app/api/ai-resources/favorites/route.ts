@@ -121,7 +121,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error && typeof error === 'object' && 'status' in error && (error as { status: number }).status === 400) {
-      return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+      const message = error instanceof Error ? error.message : '请求无效';
+      return NextResponse.json({ error: message }, { status: 400 });
     }
     return aiResourceErrorResponse(error);
   }

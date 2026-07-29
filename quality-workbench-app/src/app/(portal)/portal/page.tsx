@@ -2,13 +2,10 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { FolderKanban, Library } from 'lucide-react';
 import { getSession } from '@/platform/auth/auth.config';
-import { isAiResourcesEnabled } from '@/modules/ai-resources/config';
 
 export default async function PortalPage() {
   const session = await getSession();
   if (!session) redirect('/login');
-
-  const resourcesEnabled = isAiResourcesEnabled();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ws-content-bg px-4">
@@ -32,28 +29,16 @@ export default async function PortalPage() {
             <p className="mt-2 text-sm text-muted-foreground">项目活动、待办与 NPQ 流程管理</p>
           </Link>
 
-          {resourcesEnabled ? (
-            <Link
-              href="/ai-resources"
-              className="rounded-lg border border-border bg-white p-6 shadow-sm transition hover:border-primary"
-            >
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <Library className="h-5 w-5" />
-              </div>
-              <div className="text-lg font-semibold text-foreground">AI 资源库</div>
-              <p className="mt-2 text-sm text-muted-foreground">部门 AI 应用、Agent、Skill、Prompt 与规范目录</p>
-            </Link>
-          ) : (
-            <div className="rounded-lg border border-dashed border-border bg-white/60 p-6 opacity-70">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <Library className="h-5 w-5" />
-              </div>
-              <div className="text-lg font-semibold text-foreground">AI 资源库</div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                尚未启用（需迁移完成并将 AI_RESOURCES_ENABLED=true）
-              </p>
+          <Link
+            href="/ai-resources"
+            className="rounded-lg border border-border bg-white p-6 shadow-sm transition hover:border-primary"
+          >
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <Library className="h-5 w-5" />
             </div>
-          )}
+            <div className="text-lg font-semibold text-foreground">AI 资源库</div>
+            <p className="mt-2 text-sm text-muted-foreground">部门 AI 应用、Agent、Skill、Prompt 与规范目录</p>
+          </Link>
         </div>
 
         <form action="/api/auth/logout" method="POST" className="mt-8 text-center">

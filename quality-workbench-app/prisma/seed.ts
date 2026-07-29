@@ -8,7 +8,10 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter } as never);
 
 const templatePath = path.resolve(process.cwd(), 'prisma', 'quality-activity-template.json');
-const TEST_PASSWORD_HASH = '$2b$10$zvMa9qFDxYK1MsTOaKbR6e6Kl6rRhV7L1lY6Zz0zxbDL17yWzCZK6';
+/** Seed-only demo accounts (not shown on login page). */
+const TEST_PASSWORD_HASH = '$2b$10$zvMa9qFDxYK1MsTOaKbR6e6Kl6rRhV7L1lY6Zz0zxbDL17yWzCZK6'; // qe123456
+/** Default admin account for seed: username admin / password zx123456. */
+const ADMIN_PASSWORD_HASH = '$2b$10$JzlWMbyJ/uamA9DAAepZUedQGn5cdF7hrq4tnhQOnoYy8lwkVFn2S'; // zx123456
 const SOURCE_BATCH_ID = 'quality-activity-template-20260611';
 
 const positionRoleSeeds = [
@@ -187,11 +190,11 @@ async function main() {
   // ── F2 示例项目活动实例 ──
   const admin = await prisma.user.upsert({
     where: { username: 'admin' },
-    update: { passwordHash: TEST_PASSWORD_HASH, role: 'admin', status: 'active' },
+    update: { passwordHash: ADMIN_PASSWORD_HASH, role: 'admin', status: 'active' },
     create: {
       id: 'seed-admin',
       username: 'admin',
-      passwordHash: TEST_PASSWORD_HASH,
+      passwordHash: ADMIN_PASSWORD_HASH,
       email: 'admin@example.com',
       role: 'admin',
       status: 'active',

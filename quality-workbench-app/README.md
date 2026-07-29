@@ -135,6 +135,10 @@ POSTGRES_DB="qe"
 | `DINGTALK_REDIRECT_URI` | 否 | 钉钉 OAuth 回调地址。启用钉钉登录时需要。 |
 | `ALLOWED_DEV_ORIGINS` | 否 | 开发环境跨主机访问白名单，生产环境通常不需要。 |
 
+说明：AI 资源库为产品内置模块，默认启用，无需额外开关。
+
+全新库执行 `npm run db:seed` 后默认管理员为 `admin` / `zx123456`，生产环境请尽快修改密码。
+
 部署红线：
 
 - 生产环境 `DATABASE_URL` 必须指向服务器上运行的 PostgreSQL,凭据与 `docker-compose.yml` 一致。

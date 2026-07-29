@@ -1,16 +1,8 @@
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
-import { isAiResourcesEnabled } from '@/modules/ai-resources/config';
 
 export async function GET() {
   try {
-    if (!isAiResourcesEnabled()) {
-      return Response.json(
-        { enabled: false, error: 'AI 资源库未启用', code: 'DISABLED' },
-        { status: 503 },
-      );
-    }
-
     const actor = await requireAiResourceUserApi();
 
     return Response.json({

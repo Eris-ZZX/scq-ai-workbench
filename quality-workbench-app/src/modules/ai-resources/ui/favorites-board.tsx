@@ -200,7 +200,8 @@ export function FavoritesBoard({
     const fromIndex = tags.findIndex((tag) => tag.id === fromId);
     if (fromIndex < 0) return;
     const next = [...tags];
-    const [moved] = next.splice(fromIndex, 1);
+    const moved = next.splice(fromIndex, 1)[0];
+    if (!moved) return;
     let toIndex = next.length;
     if (beforeId) {
       const idx = next.findIndex((tag) => tag.id === beforeId);

@@ -3,7 +3,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
 import { AiResourceError } from './errors';
-import { isAiResourcesEnabled, supportsAiResourceRowLocks } from './config';
+import { supportsAiResourceRowLocks } from './config';
 import {
   hasAiResourceRole,
   isAiResourceRole,
@@ -50,12 +50,8 @@ async function loadActor(userId: string, username: string, workbenchRole: string
   };
 }
 
-/** Page/layout guard: redirect to login / portal when unavailable. */
+/** Page/layout guard: redirect to login when unavailable. */
 export async function requireAiResourceUser(): Promise<AiResourceActor> {
-  if (!isAiResourcesEnabled()) {
-    redirect('/portal');
-  }
-
   const session = await getSession();
   if (!session) redirect('/login');
 
@@ -79,10 +75,6 @@ export async function requireAiResourceRole(minimum: AiResourceRole): Promise<Ai
 
 /** API guard: throws AiResourceError instead of redirecting. */
 export async function requireAiResourceUserApi(): Promise<AiResourceActor> {
-  if (!isAiResourcesEnabled()) {
-    throw new AiResourceError('AI 资源库未启用', 503, 'DISABLED');
-  }
-
   const session = await getSession();
   if (!session) {
     throw new AiResourceError('未登录', 401, 'UNAUTHORIZED');
