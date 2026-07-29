@@ -77,5 +77,5 @@ function buildHref(type: string, q?: string, tag?: string) {
   if (q?.trim()) next.set('q', q.trim());
   if (tag?.trim()) next.set('tag', tag.trim());
   const query = next.toString();
-  return query ? `/ai-resources?${query}` : '/ai-resources';
+  return query ? `/ai-resources/library?${query}` : '/ai-resources/library';
 }

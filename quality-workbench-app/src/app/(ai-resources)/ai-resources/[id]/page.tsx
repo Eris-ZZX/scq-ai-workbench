@@ -142,7 +142,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
             <h2>存储路径/链接</h2>
             {resourceUrls.length ? (
               <div className="path-list">
-                {resourceUrls.map((resourceUrl) =>
+                {resourceUrls.map((resourceUrl, index) =>
                   isOpenableLink(resourceUrl.url) ? (
                     <a
                       className="resource-link-button"
@@ -150,13 +150,17 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
                       target="_blank"
                       rel="noreferrer"
                       title={resourceUrl.url}
-                      key={resourceUrl.url}
+                      key={`${index}-${resourceUrl.label}-${resourceUrl.url}`}
                     >
                       <FolderOpen size={14} />
                       <span>{resourceUrl.label}</span>
                     </a>
                   ) : (
-                    <span className="resource-link-button" title={resourceUrl.url} key={resourceUrl.url}>
+                    <span
+                      className="resource-link-button"
+                      title={resourceUrl.url}
+                      key={`${index}-${resourceUrl.label}-${resourceUrl.url}`}
+                    >
                       <FolderOpen size={14} />
                       <span>{resourceUrl.label}</span>
                     </span>

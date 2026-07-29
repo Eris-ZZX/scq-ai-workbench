@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-const PRISMA_CLIENT_REVISION = 3;
+const PRISMA_CLIENT_REVISION = 5;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -23,7 +23,14 @@ function createPrismaClient() {
 }
 
 function isCompatibleClient(client: PrismaClient) {
-  return typeof (client as { aiResourceLike?: { findMany?: unknown } }).aiResourceLike?.findMany === 'function';
+  const c = client as {
+    aiResourceLike?: { findMany?: unknown };
+    aiResourceFavoriteTag?: { findMany?: unknown };
+  };
+  return (
+    typeof c.aiResourceLike?.findMany === 'function' &&
+    typeof c.aiResourceFavoriteTag?.findMany === 'function'
+  );
 }
 
 function getPrismaClient() {

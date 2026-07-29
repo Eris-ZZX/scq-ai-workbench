@@ -53,6 +53,7 @@ model User {
   aiResourceUpdateLogsAsActor   AiResourceUpdateLog[]     @relation("AiResourceUpdateActor")
   aiResourceUpdateLogsAsReviewer AiResourceUpdateLog[]    @relation("AiResourceUpdateReviewer")
   aiResourceFavorites           AiResourceFavorite[]
+  aiResourceFavoriteTags        AiResourceFavoriteTag[]
   aiResourceLikes               AiResourceLike[]
   aiResourceRoleAuditsAsSubject AiResourceRoleAudit[]     @relation("AiResourceRoleAuditSubject")
   aiResourceRoleAuditsAsActor   AiResourceRoleAudit[]     @relation("AiResourceRoleAuditActor")
@@ -799,21 +800,38 @@ model AiResourceUpdateLog {
   @@index([createdAt])
 }
 
+model AiResourceFavoriteTag {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  favorites AiResourceFavorite[]
+
+  @@unique([userId, name])
+  @@index([userId, sortOrder])
+}
+
 model AiResourceFavorite {
   id         String   @id @default(cuid())
   legacyId   String?  @unique
   userId     String
   resourceId String
+  tagId      String?
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
 
-  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  resource AiResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource AiResource             @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  tag      AiResourceFavoriteTag? @relation(fields: [tagId], references: [id], onDelete: SetNull)
 
   @@unique([userId, resourceId])
   @@index([userId])
   @@index([userId, sortOrder])
   @@index([resourceId])
+  @@index([tagId])
 }
 
 model AiResourceLike {

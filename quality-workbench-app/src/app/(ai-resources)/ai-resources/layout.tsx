@@ -36,7 +36,7 @@ export default async function AiResourcesLayout({ children }: { children: React.
   return (
     <div className={`ai-resources-portal shell ${inter.className}`}>
       <header className="topbar">
-        <Link className="brand" href="/ai-resources">
+        <Link className="brand" href="/ai-resources/favorites">
           <span className="brand-mark">AI</span>
           <span>供应链质量部AI资源库</span>
         </Link>
@@ -45,7 +45,7 @@ export default async function AiResourcesLayout({ children }: { children: React.
             <Heart size={14} />
             我的收藏
           </Link>
-          <Link href="/ai-resources">
+          <Link href="/ai-resources/library">
             <FolderKanban size={14} />
             资源库
           </Link>

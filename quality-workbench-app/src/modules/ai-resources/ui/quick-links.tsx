@@ -15,13 +15,17 @@ export function QuickLinks({
 
   return (
     <div className="quick-links">
-      {items.map((link) => (
+      {items.map((link, index) => (
         <span
           className="link-pill"
           role="link"
           tabIndex={0}
-          key={`${link.label}-${link.url}`}
+          key={`${index}-${link.label}-${link.url}`}
           title={`打开 ${link.label}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();

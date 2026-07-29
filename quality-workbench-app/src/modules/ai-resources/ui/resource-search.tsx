@@ -17,7 +17,7 @@ export function ResourceSearch({ tags }: { tags: string[] }) {
     if (type) next.set('type', type);
     if (nextQ.trim()) next.set('q', nextQ.trim());
     if (nextTag.trim()) next.set('tag', nextTag.trim());
-    router.push(`/ai-resources?${next.toString()}`);
+    router.push(`/ai-resources/library?${next.toString()}`);
   }
 
   useEffect(() => {

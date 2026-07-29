@@ -5,22 +5,29 @@ import { FavoritesBoard } from '@/modules/ai-resources/ui/favorites-board';
 export default async function FavoritesPage() {
   const actor = await requireAiResourceUser();
 
-  const favorites = await prisma.aiResourceFavorite.findMany({
-    where: { userId: actor.userId },
-    include: {
-      resource: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          summary: true,
-          resourceUrl: true,
-          status: true,
+  const [favorites, tags] = await Promise.all([
+    prisma.aiResourceFavorite.findMany({
+      where: { userId: actor.userId },
+      include: {
+        resource: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            summary: true,
+            resourceUrl: true,
+            status: true,
+          },
         },
       },
-    },
-    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
-  });
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+    }),
+    prisma.aiResourceFavoriteTag.findMany({
+      where: { userId: actor.userId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, name: true, sortOrder: true },
+    }),
+  ]);
 
   const items = favorites
     .filter((favorite) => favorite.resource.status === 'PUBLISHED')
@@ -31,11 +38,12 @@ export default async function FavoritesPage() {
       type: favorite.resource.type,
       summary: favorite.resource.summary,
       resourceUrl: favorite.resource.resourceUrl,
+      tagId: favorite.tagId,
     }));
 
   return (
     <main className="main favorites-page">
-      <FavoritesBoard initialItems={items} />
+      <FavoritesBoard initialItems={items} initialTags={tags} />
     </main>
   );
 }

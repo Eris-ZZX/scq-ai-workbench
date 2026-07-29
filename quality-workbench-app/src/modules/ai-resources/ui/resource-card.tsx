@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Paperclip } from 'lucide-react';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
 import { parseJsonForDisplay } from '@/modules/ai-resources/json';
 import { resourceTypeLabel } from '@/modules/ai-resources/labels';
@@ -10,7 +9,7 @@ import {
   ResourceEngagementStats,
   ResourceEngagementToggles,
 } from '@/modules/ai-resources/ui/resource-engagement';
-import { QuickLinks } from '@/modules/ai-resources/ui/quick-links';
+import { CardLinksRow } from '@/modules/ai-resources/ui/card-links-row';
 
 type ResourceAttachment = {
   name: string;
@@ -47,6 +46,7 @@ export function ResourceCard({
   const tags = parseList(resource.tags).slice(0, 5);
   const links = parseResourceLinks(resource.resourceUrl);
   const attachments = parseAttachments(resource.attachments);
+  const attachmentText = attachments.map((item) => item.name).join('、');
 
   return (
     <ResourceEngagementProvider
@@ -98,25 +98,13 @@ export function ResourceCard({
           <section className="resource-card-col resource-card-col-assets">
             <div className="resource-card-block">
               <span className="resource-card-label">链接</span>
-              {links.length ? (
-                <QuickLinks links={links} />
-              ) : (
-                <span className="resource-card-muted">无链接</span>
-              )}
+              {links.length ? <CardLinksRow links={links} /> : <span className="resource-card-muted">无链接</span>}
             </div>
             <div className="resource-card-block">
               <span className="resource-card-label">附件</span>
               {attachments.length ? (
-                <span className="resource-card-attachment" title={attachments.map((a) => a.name).join('、')}>
-                  <Paperclip size={13} />
-                  <span className="resource-card-attachment-count">{attachments.length} 个附件</span>
-                  <span className="resource-card-attachment-names">
-                    {attachments
-                      .slice(0, 2)
-                      .map((a) => a.name)
-                      .join('、')}
-                    {attachments.length > 2 ? ' 等' : ''}
-                  </span>
+                <span className="resource-card-clip" title={attachmentText}>
+                  {attachments.length} 个 · {attachmentText}
                 </span>
               ) : (
                 <span className="resource-card-muted">无附件</span>

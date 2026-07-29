@@ -12,6 +12,17 @@ const favoriteReorderSchema = z.object({
   orderedResourceIds: z.array(z.string().min(1)).min(1),
 });
 
+const favoriteGroupsSchema = z.object({
+  groups: z
+    .array(
+      z.object({
+        tagId: z.string().min(1).nullable(),
+        resourceIds: z.array(z.string().min(1)),
+      }),
+    )
+    .min(1),
+});
+
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireAiResourceUserApi();
@@ -62,12 +73,19 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const actor = await requireAiResourceUserApi();
-    const payload = favoriteReorderSchema.safeParse(await request.json().catch(() => null));
-    if (!payload.success) {
+    const body = await request.json().catch(() => null);
+
+    const groupsPayload = favoriteGroupsSchema.safeParse(body);
+    if (groupsPayload.success) {
+      return persistFavoriteGroups(actor.userId, groupsPayload.data.groups);
+    }
+
+    const reorderPayload = favoriteReorderSchema.safeParse(body);
+    if (!reorderPayload.success) {
       return NextResponse.json({ error: '参数不正确。' }, { status: 400 });
     }
 
-    const { orderedResourceIds } = payload.data;
+    const { orderedResourceIds } = reorderPayload.data;
     const uniqueIds = Array.from(new Set(orderedResourceIds));
     if (uniqueIds.length !== orderedResourceIds.length) {
       return NextResponse.json({ error: '排序列表包含重复项。' }, { status: 400 });
@@ -107,4 +125,58 @@ export async function PATCH(request: NextRequest) {
     }
     return aiResourceErrorResponse(error);
   }
+}
+
+async function persistFavoriteGroups(
+  userId: string,
+  groups: Array<{ tagId: string | null; resourceIds: string[] }>,
+) {
+  const flatIds = groups.flatMap((group) => group.resourceIds);
+  const uniqueIds = Array.from(new Set(flatIds));
+  if (uniqueIds.length !== flatIds.length) {
+    return NextResponse.json({ error: '分组列表包含重复资源。' }, { status: 400 });
+  }
+
+  const tagIds = groups.map((group) => group.tagId).filter((id): id is string => !!id);
+  const uniqueTagIds = Array.from(new Set(tagIds));
+
+  await prisma.$transaction(async (tx) => {
+    const favorites = await tx.aiResourceFavorite.findMany({
+      where: { userId },
+      select: { id: true, resourceId: true },
+    });
+    if (favorites.length !== uniqueIds.length) {
+      throw Object.assign(new Error('分组列表与收藏不一致'), { status: 400 });
+    }
+
+    const favoriteByResource = new Map(favorites.map((item) => [item.resourceId, item.id]));
+    for (const resourceId of uniqueIds) {
+      if (!favoriteByResource.has(resourceId)) {
+        throw Object.assign(new Error('分组列表包含无效资源'), { status: 400 });
+      }
+    }
+
+    if (uniqueTagIds.length) {
+      const ownedTags = await tx.aiResourceFavoriteTag.findMany({
+        where: { userId, id: { in: uniqueTagIds } },
+        select: { id: true },
+      });
+      if (ownedTags.length !== uniqueTagIds.length) {
+        throw Object.assign(new Error('分组列表包含无效标签'), { status: 400 });
+      }
+    }
+
+    let sortOrder = 0;
+    for (const group of groups) {
+      for (const resourceId of group.resourceIds) {
+        await tx.aiResourceFavorite.update({
+          where: { id: favoriteByResource.get(resourceId)! },
+          data: { tagId: group.tagId, sortOrder },
+        });
+        sortOrder += 1;
+      }
+    }
+  });
+
+  return NextResponse.json({ ok: true });
 }
