@@ -1,32 +1,10 @@
-import { access, readFile, stat } from 'fs/promises';
-import { join } from 'path';
+import { readFile, stat } from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
+import { isSafeStoredFileName, resolveAiResourceUploadPath } from '@/modules/ai-resources/upload-files';
 
 export const runtime = 'nodejs';
-
-function isSafeFileName(name: string) {
-  return Boolean(name) && !name.includes('..') && !name.includes('/') && !name.includes('\\');
-}
-
-async function resolveFilePath(storedName: string) {
-  const candidates = [
-    join(process.cwd(), 'storage', 'ai-resources', 'uploads', storedName),
-    join(process.cwd(), 'storage', 'uploads', storedName),
-    join(process.cwd(), 'public', 'uploads', storedName),
-  ];
-
-  for (const path of candidates) {
-    try {
-      await access(path);
-      return path;
-    } catch {
-      // try next
-    }
-  }
-  return null;
-}
 
 export async function GET(
   request: NextRequest,
@@ -37,11 +15,11 @@ export async function GET(
 
     const { name } = await context.params;
     const storedName = decodeURIComponent(name);
-    if (!isSafeFileName(storedName)) {
+    if (!isSafeStoredFileName(storedName)) {
       return NextResponse.json({ error: '非法文件名。' }, { status: 400 });
     }
 
-    const filePath = await resolveFilePath(storedName);
+    const filePath = await resolveAiResourceUploadPath(storedName);
     if (!filePath) {
       return NextResponse.json({ error: '文件不存在。' }, { status: 404 });
     }

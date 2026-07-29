@@ -10,6 +10,16 @@ export function canReview(actor: AiResourceActor) {
   return hasAiResourceRole(actor.moduleRole, 'reviewer');
 }
 
+/** 审批人可审他人；管理员还可自审自己的待审单。 */
+export function canActOnReviewRequest(
+  actor: AiResourceActor,
+  request: { status: string; requesterId: string },
+) {
+  if (!canReview(actor) || request.status !== 'PENDING') return false;
+  if (request.requesterId === actor.userId) return canAdmin(actor);
+  return true;
+}
+
 export function canEditResource(
   actor: AiResourceActor,
   resource: Pick<{ createdById: string }, 'createdById'>,

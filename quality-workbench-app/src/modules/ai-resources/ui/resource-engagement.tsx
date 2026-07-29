@@ -180,26 +180,22 @@ export function ResourceEngagementStats() {
 
   return (
     <div className="resource-card-stats">
-      <div className="resource-card-stat-row">
-        <span className="badge resource-card-stat" title="版本">
-          <Clock size={13} />
-          <span className="resource-card-stat-num">{formatStat(`v${currentVersion}`)}</span>
-        </span>
-        <span className="badge resource-card-stat" title="浏览量">
-          <Eye size={13} />
-          <span className="resource-card-stat-num">{formatStat(viewCount)}</span>
-        </span>
-      </div>
-      <div className="resource-card-stat-row">
-        <span className="badge resource-card-stat" title="点赞数">
-          <ThumbsUp size={13} />
-          <span className="resource-card-stat-num">{formatStat(likeCount)}</span>
-        </span>
-        <span className="badge resource-card-stat" title="收藏数">
-          <Heart size={13} />
-          <span className="resource-card-stat-num">{formatStat(favoriteCount)}</span>
-        </span>
-      </div>
+      <span className="badge resource-card-stat" title="版本">
+        <Clock size={13} />
+        <span className="resource-card-stat-num">{formatStat(`v${currentVersion}`)}</span>
+      </span>
+      <span className="badge resource-card-stat" title="浏览量">
+        <Eye size={13} />
+        <span className="resource-card-stat-num">{formatStat(viewCount)}</span>
+      </span>
+      <span className="badge resource-card-stat" title="点赞数">
+        <ThumbsUp size={13} />
+        <span className="resource-card-stat-num">{formatStat(likeCount)}</span>
+      </span>
+      <span className="badge resource-card-stat" title="收藏数">
+        <Heart size={13} />
+        <span className="resource-card-stat-num">{formatStat(favoriteCount)}</span>
+      </span>
     </div>
   );
 }

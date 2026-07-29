@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { fromPrismaJsonObject } from '@/modules/ai-resources/json';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
-import { canReview } from '@/modules/ai-resources/policy';
+import { canActOnReviewRequest, canReview } from '@/modules/ai-resources/policy';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
 
 export async function POST(
@@ -21,8 +21,11 @@ export async function POST(
     if (!review) {
       return NextResponse.json({ error: '审批单不存在。' }, { status: 404 });
     }
-    if (review.requesterId === actor.userId) {
-      return NextResponse.json({ error: '不能审批自己提交的申请。' }, { status: 403 });
+    if (!canActOnReviewRequest(actor, review)) {
+      return NextResponse.json(
+        { error: '不能审批自己提交的申请（仅管理员可自审）。' },
+        { status: 403 },
+      );
     }
 
     const result = await prisma.$transaction(async (tx) => {

@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { CalendarDays, Edit3, FolderOpen, UserRound } from 'lucide-react';
+import { CalendarDays, Edit3, ExternalLink, FolderOpen, UserRound } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
 import { requireAiResourceUser } from '@/modules/ai-resources/guards';
+import { hostedHtmlOpenPath, parseHostedHtml } from '@/modules/ai-resources/hosted-html';
 import { resourceTypeLabel } from '@/modules/ai-resources/labels';
 import { parseJsonForDisplay } from '@/modules/ai-resources/json';
 import { parseList } from '@/modules/ai-resources/list-fields';
@@ -51,6 +52,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
 
   const attachments = parseAttachments(resource.attachments);
   const resourceUrls = parseResourceUrls(resource.resourceUrl);
+  const hostedHtml = parseHostedHtml(resource.extension);
   const updateHistory = resource.updateLogs.map((log) => ({
     id: log.id,
     time: formatDate(log.createdAt),
@@ -76,8 +78,19 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
         </div>
         <div className="meta">
           <ResourceEngagementToggles />
+          {hostedHtml ? (
+            <a
+              className="button primary"
+              href={hostedHtmlOpenPath(resource.id)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <ExternalLink size={16} />
+              打开页面
+            </a>
+          ) : null}
           {canEditResource(actor, resource) ? (
-            <Link className="button primary" href={`/ai-resources/${resource.id}/edit`}>
+            <Link className={hostedHtml ? 'button' : 'button primary'} href={`/ai-resources/${resource.id}/edit`}>
               <Edit3 size={16} />
               提交修改
             </Link>
@@ -138,6 +151,24 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
         </article>
 
         <aside className="detail-aside">
+          {hostedHtml ? (
+            <section className="panel detail-panel">
+              <h2>托管 HTML</h2>
+              <p className="subtle" style={{ margin: 0 }}>
+                {hostedHtml.originalName}
+              </p>
+              <a
+                className="button primary"
+                href={hostedHtmlOpenPath(resource.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink size={16} />
+                打开页面
+              </a>
+            </section>
+          ) : null}
+
           <section className="panel detail-panel">
             <h2>存储路径/链接</h2>
             {resourceUrls.length ? (

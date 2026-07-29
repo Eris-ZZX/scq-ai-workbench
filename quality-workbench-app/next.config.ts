@@ -25,7 +25,17 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        // 托管 HTML 可被同站 iframe 嵌入，不设置 X-Frame-Options
+        source: '/api/ai-resources/resources/:id/html',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-XSS-Protection', value: '0' },
+        ],
+      },
+      {
+        // 排除 resources API（含 HTML 预览），避免与上面规则合并出 DENY
+        source: '/((?!api/ai-resources/resources/).*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },

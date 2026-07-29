@@ -4,7 +4,7 @@ import { extname, join } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
-import { prisma } from '@/lib/prisma';
+import { isHtmlFileName } from '@/modules/ai-resources/hosted-html';
 
 export const runtime = 'nodejs';
 
@@ -15,38 +15,44 @@ export async function POST(request: NextRequest) {
     await requireAiResourceUserApi();
 
     const formData = await request.formData();
+    const purpose = String(formData.get('purpose') ?? '').trim();
+    const htmlOnly = purpose === 'hosted-html';
     const files = formData.getAll('files').filter((file): file is File => file instanceof File);
     if (!files.length) {
       return NextResponse.json({ error: '请选择要上传的附件。' }, { status: 400 });
+    }
+
+    if (htmlOnly && files.length !== 1) {
+      return NextResponse.json({ error: '托管 HTML 只能上传一个文件。' }, { status: 400 });
     }
 
     for (const file of files) {
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json({ error: `${file.name} 超过 20MB，无法上传。` }, { status: 413 });
       }
+      if (htmlOnly && !isHtmlFileName(file.name)) {
+        return NextResponse.json({ error: '仅支持上传 .html / .htm 文件。' }, { status: 400 });
+      }
     }
 
     const uploadDir = join(process.cwd(), 'storage', 'ai-resources', 'uploads');
     await mkdir(uploadDir, { recursive: true });
 
-    const attachments = await prisma.$transaction(async (tx) => {
+    const attachments = [];
+    for (const file of files) {
+      const extension = extname(file.name) || (htmlOnly ? '.html' : '');
+      const storedName = `${randomUUID()}${extension}`;
+      const bytes = Buffer.from(await file.arrayBuffer());
+      await writeFile(join(uploadDir, storedName), bytes);
 
-      const uploaded = [];
-      for (const file of files) {
-        const extension = extname(file.name);
-        const storedName = `${randomUUID()}${extension}`;
-        const bytes = Buffer.from(await file.arrayBuffer());
-        await writeFile(join(uploadDir, storedName), bytes);
-
-        uploaded.push({
-          name: file.name,
-          url: `/api/ai-resources/files/${storedName}`,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-        });
-      }
-      return uploaded;
-    });
+      attachments.push({
+        name: file.name,
+        url: `/api/ai-resources/files/${storedName}`,
+        size: file.size,
+        type: file.type || (htmlOnly ? 'text/html' : 'application/octet-stream'),
+        storedName,
+      });
+    }
 
     return NextResponse.json({ attachments });
   } catch (error) {

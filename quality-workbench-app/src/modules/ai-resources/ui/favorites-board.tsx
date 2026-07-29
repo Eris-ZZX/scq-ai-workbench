@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
-import { Folders, GripVertical, Heart, ListOrdered, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ExternalLink, Folders, GripVertical, Heart, ListOrdered, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
 import { AI_RESOURCE_TYPES, isAiResourceType } from '@/modules/ai-resources/constants';
+import { hostedHtmlOpenPath, parseHostedHtml } from '@/modules/ai-resources/hosted-html';
 import { resourceTypeLabel } from '@/modules/ai-resources/labels';
 import { parseResourceLinks } from '@/modules/ai-resources/resource-links';
 import { QuickLinks } from '@/modules/ai-resources/ui/quick-links';
@@ -16,6 +17,7 @@ export type FavoriteCardItem = {
   type: string;
   summary: string;
   resourceUrl?: string | null;
+  extension?: unknown;
   tagId?: string | null;
 };
 
@@ -702,6 +704,7 @@ function FavoriteCard({
   const hasMoreLinks = allLinks.length > 2;
   const summary = item.summary.trim();
   const typeLabel = resourceTypeLabel[item.type as AiResourceType] ?? item.type;
+  const openHref = parseHostedHtml(item.extension) ? hostedHtmlOpenPath(item.id) : null;
 
   return (
     <article
@@ -754,6 +757,25 @@ function FavoriteCard({
         <span className="favorite-card-type">{typeLabel}</span>
 
         <div className="favorite-card-links">
+          {openHref ? (
+            <button
+              type="button"
+              className="link-pill favorite-card-open"
+              title="打开托管 HTML 页面"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                window.open(openHref, '_blank', 'noopener,noreferrer');
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            >
+              <ExternalLink size={12} />
+              <span className="link-pill-label">打开</span>
+            </button>
+          ) : null}
           {links.length ? (
             <>
               <div className="favorite-card-links-actions">

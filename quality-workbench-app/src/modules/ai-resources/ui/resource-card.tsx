@@ -1,5 +1,9 @@
+'use client';
+
 import Link from 'next/link';
+import { ExternalLink } from 'lucide-react';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
+import { hostedHtmlOpenPath, parseHostedHtml } from '@/modules/ai-resources/hosted-html';
 import { parseJsonForDisplay } from '@/modules/ai-resources/json';
 import { resourceTypeLabel } from '@/modules/ai-resources/labels';
 import { parseList } from '@/modules/ai-resources/list-fields';
@@ -25,6 +29,7 @@ type ResourceCardData = {
   ownerName: string;
   resourceUrl?: string | null;
   attachments?: unknown;
+  extension?: unknown;
   currentVersion: number;
   viewCount: number;
 };
@@ -47,6 +52,8 @@ export function ResourceCard({
   const links = parseResourceLinks(resource.resourceUrl);
   const attachments = parseAttachments(resource.attachments);
   const attachmentText = attachments.map((item) => item.name).join('、');
+  const hostedHtml = parseHostedHtml(resource.extension);
+  const openHref = hostedHtml ? hostedHtmlOpenPath(resource.id) : null;
 
   return (
     <ResourceEngagementProvider
@@ -61,36 +68,36 @@ export function ResourceCard({
       <Link className="resource-card resource-card-link" href={`/ai-resources/${resource.id}`}>
         <div className="resource-card-body">
           <section className="resource-card-col resource-card-col-main">
-            <div className="resource-card-title-row">
-              <div className="resource-card-heading">
-                <span className="badge primary">
-                  {resourceTypeLabel[resource.type as AiResourceType] ?? resource.type}
-                </span>
-                <h2>{resource.name}</h2>
-              </div>
+            <div className="resource-card-heading">
+              <span className="badge primary">
+                {resourceTypeLabel[resource.type as AiResourceType] ?? resource.type}
+              </span>
+              <h2>{resource.name}</h2>
+            </div>
+            <div className="resource-card-toggles-slot">
               <ResourceEngagementToggles />
             </div>
-            <div className="resource-card-main-row">
-              <div className="resource-card-facts">
-                <div className="resource-card-fact">
-                  <span className="resource-card-fact-label">负责人</span>
-                  <span className="resource-card-plain">{resource.ownerName || '未填写'}</span>
-                </div>
-                <div className="resource-card-fact">
-                  <span className="resource-card-fact-label">适用小组</span>
-                  <div className="resource-card-fact-value">
-                    {tags.length ? (
-                      tags.map((tag) => (
-                        <span className="badge" key={tag}>
-                          {tag}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="resource-card-muted">未设置</span>
-                    )}
-                  </div>
+            <div className="resource-card-facts">
+              <div className="resource-card-fact">
+                <span className="resource-card-fact-label">负责人</span>
+                <span className="resource-card-plain">{resource.ownerName || '未填写'}</span>
+              </div>
+              <div className="resource-card-fact">
+                <span className="resource-card-fact-label">适用小组</span>
+                <div className="resource-card-fact-value">
+                  {tags.length ? (
+                    tags.map((tag) => (
+                      <span className="badge" key={tag}>
+                        {tag}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="resource-card-muted">未设置</span>
+                  )}
                 </div>
               </div>
+            </div>
+            <div className="resource-card-stats-slot">
               <ResourceEngagementStats />
             </div>
           </section>
@@ -98,7 +105,40 @@ export function ResourceCard({
           <section className="resource-card-col resource-card-col-assets">
             <div className="resource-card-block">
               <span className="resource-card-label">链接</span>
-              {links.length ? <CardLinksRow links={links} /> : <span className="resource-card-muted">无链接</span>}
+              {openHref || links.length ? (
+                <div className="resource-card-links-stack">
+                  {openHref ? (
+                    <span
+                      className="link-pill"
+                      role="link"
+                      tabIndex={0}
+                      title="打开托管 HTML 页面"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.open(openHref, '_blank', 'noopener,noreferrer');
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.open(openHref, '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                    >
+                      <ExternalLink size={12} />
+                      <span className="link-pill-label">打开页面</span>
+                    </span>
+                  ) : null}
+                  {links.length ? <CardLinksRow links={links} /> : null}
+                </div>
+              ) : (
+                <span className="resource-card-muted">无链接</span>
+              )}
             </div>
             <div className="resource-card-block">
               <span className="resource-card-label">附件</span>

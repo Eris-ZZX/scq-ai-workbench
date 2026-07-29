@@ -4,10 +4,27 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Check, X } from 'lucide-react';
 
-export function ReviewActions({ reviewId }: { reviewId: string }) {
+export function ReviewActions({
+  reviewId,
+  redirectTo,
+  stacked = false,
+}: {
+  reviewId: string;
+  redirectTo?: string;
+  stacked?: boolean;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function finishOk() {
+    if (redirectTo) {
+      router.push(redirectTo);
+      router.refresh();
+      return;
+    }
+    router.refresh();
+  }
 
   async function approve() {
     setBusy(true);
@@ -20,7 +37,7 @@ export function ReviewActions({ reviewId }: { reviewId: string }) {
       setError('审批通过失败。');
       return;
     }
-    router.refresh();
+    await finishOk();
   }
 
   async function reject() {
@@ -39,11 +56,11 @@ export function ReviewActions({ reviewId }: { reviewId: string }) {
       setError('驳回失败。');
       return;
     }
-    router.refresh();
+    await finishOk();
   }
 
   return (
-    <div className="meta">
+    <div className={stacked ? 'review-actions stacked' : 'review-actions'}>
       <button className="button primary" onClick={approve} disabled={busy} type="button">
         <Check size={16} />
         通过

@@ -16,6 +16,7 @@ export default async function FavoritesPage() {
             type: true,
             summary: true,
             resourceUrl: true,
+            extension: true,
             status: true,
           },
         },
@@ -38,6 +39,7 @@ export default async function FavoritesPage() {
       type: favorite.resource.type,
       summary: favorite.resource.summary,
       resourceUrl: favorite.resource.resourceUrl,
+      extension: favorite.resource.extension,
       tagId: favorite.tagId,
     }));
 

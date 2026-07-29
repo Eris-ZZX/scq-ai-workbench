@@ -3,9 +3,16 @@
 import type { AiResource } from '@/generated/prisma/client';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ChevronDown, Paperclip, Plus, Send, Trash2 } from 'lucide-react';
+import { ChevronDown, FileCode2, Paperclip, Plus, Send, Trash2 } from 'lucide-react';
 import { getErrorMessage } from '@/modules/ai-resources/api-errors';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
+import {
+  buildExtensionWithHostedHtml,
+  isHtmlFileName,
+  parseHostedHtml,
+  storedNameFromUploadUrl,
+  type HostedHtmlMeta,
+} from '@/modules/ai-resources/hosted-html';
 import { parseJsonForDisplay } from '@/modules/ai-resources/json';
 
 type ResourceFormProps = {
@@ -18,6 +25,7 @@ type ResourceAttachment = {
   url: string;
   size: number;
   type: string;
+  storedName?: string;
 };
 
 type ResourcePath = {
@@ -50,6 +58,10 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
     parseAttachments(resource?.attachments),
   );
   const [files, setFiles] = useState<File[]>([]);
+  const [hostedHtml, setHostedHtml] = useState<HostedHtmlMeta | null>(() =>
+    parseHostedHtml(resource?.extension),
+  );
+  const [hostedHtmlFile, setHostedHtmlFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     name: resource?.name ?? '',
     type: (resource?.type ?? 'AGENT') as AiResourceType,
@@ -68,6 +80,7 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
     : '/api/ai-resources/resources/draft';
   const submitMethod = directUpdate ? 'PATCH' : 'POST';
   const title = resource ? (directUpdate ? '保存资源' : '提交修改审批') : '提交新资源审批';
+  const isWebPage = form.type === 'WEB_PAGE';
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,6 +89,11 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
     setMessage(null);
     try {
       const uploadedAttachments = await uploadSelectedFiles();
+      const nextHostedHtml = isWebPage ? await uploadHostedHtmlIfNeeded() : null;
+      const extension = isWebPage
+        ? buildExtensionWithHostedHtml(resource?.extension, nextHostedHtml)
+        : buildExtensionWithHostedHtml(resource?.extension, null);
+
       const response = await fetch(endpoint, {
         method: submitMethod,
         headers: { 'content-type': 'application/json' },
@@ -91,7 +109,7 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
             resourceUrl: serializeResourceUrls(form.resourceUrls),
             content: form.content,
             attachments: uploadedAttachments,
-            extension: null,
+            extension,
             extractedText: form.content,
           },
         }),
@@ -172,6 +190,42 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
     setAttachments(nextAttachments);
     setFiles([]);
     return nextAttachments;
+  }
+
+  async function uploadHostedHtmlIfNeeded(): Promise<HostedHtmlMeta | null> {
+    if (!hostedHtmlFile) return hostedHtml;
+    if (!isHtmlFileName(hostedHtmlFile.name)) {
+      throw new Error('仅支持上传 .html / .htm 文件。');
+    }
+
+    const formData = new FormData();
+    formData.append('purpose', 'hosted-html');
+    formData.append('files', hostedHtmlFile);
+    const response = await fetch('/api/ai-resources/uploads', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(getErrorMessage(error, '托管 HTML 上传失败。'));
+    }
+
+    const payload = (await response.json()) as {
+      attachments?: Array<ResourceAttachment & { storedName?: string }>;
+    };
+    const uploaded = payload.attachments?.[0];
+    if (!uploaded) throw new Error('托管 HTML 上传失败。');
+
+    const storedName = uploaded.storedName || storedNameFromUploadUrl(uploaded.url);
+    const next: HostedHtmlMeta = {
+      storedName,
+      originalName: uploaded.name,
+      size: uploaded.size,
+    };
+    setHostedHtml(next);
+    setHostedHtmlFile(null);
+    return next;
   }
 
   return (
@@ -255,6 +309,46 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
           </div>
         </div>
       </div>
+
+      {isWebPage ? (
+        <div className="field">
+          <label>托管 HTML（单文件）</label>
+          <p className="subtle" style={{ margin: '0 0 8px' }}>
+            仅支持一个 .html / .htm 文件；样式与脚本请内联，或引用公网地址。
+          </p>
+          <label className="file-picker">
+            <input
+              type="file"
+              accept=".html,.htm,text/html"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0] ?? null;
+                setHostedHtmlFile(file);
+              }}
+            />
+            <FileCode2 size={16} />
+            选择 HTML 文件
+          </label>
+          {hostedHtml || hostedHtmlFile ? (
+            <div className="attachment-list">
+              {hostedHtmlFile ? (
+                <span title={hostedHtmlFile.name}>{hostedHtmlFile.name}（待上传）</span>
+              ) : hostedHtml ? (
+                <span title={hostedHtml.originalName}>{hostedHtml.originalName}</span>
+              ) : null}
+              {hostedHtml && !hostedHtmlFile ? (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => setHostedHtml(null)}
+                >
+                  清除托管文件
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="field">
         <label>附件</label>
         <label className="file-picker">
