@@ -32,9 +32,15 @@ pnpm-debug.log*
 01-prototypes/
 AGENTS.md
 CLAUDE.md
+.codegraph/
+start.bat
+scripts/
+quality-workbench-app/scripts/
 quality-workbench-app/src/__tests__/
 quality-workbench-app/vitest.config.ts
 quality-workbench-app/vitest.setup.ts
+quality-workbench-app/.prettierrc
+quality-workbench-app/components.json
 
 # AI/tool local config that is machine-specific
 .claude/
