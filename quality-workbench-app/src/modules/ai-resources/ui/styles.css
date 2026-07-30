@@ -292,8 +292,8 @@ h3 {
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 8px 12px;
+  gap: 12px;
+  padding: 8px 0 12px;
   background: var(--background);
   border-bottom: 1px solid var(--line);
 }
@@ -303,7 +303,6 @@ h3 {
   min-height: 34px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 0 10px;
   background: #fff;
   font-size: 13px;
 }
@@ -311,6 +310,28 @@ h3 {
 .toolbar input {
   flex: 1;
   min-width: 180px;
+  padding: 0 12px;
+}
+
+.toolbar select {
+  flex: 0 0 auto;
+  min-width: 124px;
+  padding: 0 32px 0 12px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+}
+
+.toolbar-sort {
+  min-width: 128px;
+}
+
+.toolbar > svg {
+  flex-shrink: 0;
+  margin-left: 2px;
+  color: var(--muted);
 }
 
 .resource-list {
@@ -1434,6 +1455,24 @@ h3 {
   font-weight: 700;
 }
 
+.field-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-label-row > label {
+  margin: 0;
+}
+
+.field-limit-hint {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .field input,
 .field select,
 .field textarea {
@@ -1593,6 +1632,35 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.attachment-list .attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: visible;
+  white-space: normal;
+}
+
+.attachment-list .attachment-chip a {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.attachment-list .attachment-chip .icon-button {
+  flex-shrink: 0;
 }
 
 .file-picker {

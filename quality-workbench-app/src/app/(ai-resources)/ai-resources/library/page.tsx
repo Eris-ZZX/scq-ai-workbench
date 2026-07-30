@@ -12,14 +12,26 @@ import { ResourceSidebar } from '@/modules/ai-resources/ui/resource-sidebar';
 
 const PAGE_SIZE = 20;
 
+const SORT_OPTIONS = ['views', 'likes', 'favorites'] as const;
+type LibrarySort = (typeof SORT_OPTIONS)[number];
+
+type LibraryParams = {
+  q?: string;
+  type?: string;
+  tag?: string;
+  page?: string;
+  sort?: string;
+};
+
 export default async function AiResourcesLibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; type?: string; tag?: string; page?: string }>;
+  searchParams: Promise<LibraryParams>;
 }) {
   const actor = await requireAiResourceUser();
   const params = await searchParams;
   const page = Math.max(1, Number(params.page) || 1);
+  const sort = parseSort(params.sort);
   const where = buildWhere(actor, params);
 
   const [total, resources, facets, favorites, likes] = await Promise.all([
@@ -30,7 +42,7 @@ export default async function AiResourcesLibraryPage({
         createdBy: { select: { username: true } },
         _count: { select: { favorites: true, likes: true } },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: buildOrderBy(sort),
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -53,7 +65,13 @@ export default async function AiResourcesLibraryPage({
   return (
     <main className="main home">
       <div className="catalog-layout">
-        <ResourceSidebar currentType={params.type} counts={typeCounts} q={params.q} tag={params.tag} />
+        <ResourceSidebar
+          currentType={params.type}
+          counts={typeCounts}
+          q={params.q}
+          tag={params.tag}
+          sort={sort}
+        />
         <div className="catalog-content">
           <Suspense fallback={<div className="toolbar" />}>
             <ResourceSearch tags={quickTags} />
@@ -83,12 +101,12 @@ export default async function AiResourcesLibraryPage({
               </span>
               <div className="meta">
                 {page > 1 ? (
-                  <Link className="button" href={pageHref(params, page - 1)}>
+                  <Link className="button" href={pageHref(params, page - 1, sort)}>
                     上一页
                   </Link>
                 ) : null}
                 {page < totalPages ? (
-                  <Link className="button" href={pageHref(params, page + 1)}>
+                  <Link className="button" href={pageHref(params, page + 1, sort)}>
                     下一页
                   </Link>
                 ) : null}
@@ -101,11 +119,29 @@ export default async function AiResourcesLibraryPage({
   );
 }
 
-function pageHref(params: { q?: string; type?: string; tag?: string }, page: number) {
+function parseSort(value?: string): LibrarySort {
+  if (value && (SORT_OPTIONS as readonly string[]).includes(value)) {
+    return value as LibrarySort;
+  }
+  return 'views';
+}
+
+function buildOrderBy(sort: LibrarySort): Prisma.AiResourceOrderByWithRelationInput[] {
+  if (sort === 'likes') {
+    return [{ likes: { _count: 'desc' } }, { updatedAt: 'desc' }];
+  }
+  if (sort === 'favorites') {
+    return [{ favorites: { _count: 'desc' } }, { updatedAt: 'desc' }];
+  }
+  return [{ viewCount: 'desc' }, { updatedAt: 'desc' }];
+}
+
+function pageHref(params: LibraryParams, page: number, sort: LibrarySort) {
   const next = new URLSearchParams();
   if (params.type) next.set('type', params.type);
   if (params.q?.trim()) next.set('q', params.q.trim());
   if (params.tag?.trim()) next.set('tag', params.tag.trim());
+  if (sort !== 'views') next.set('sort', sort);
   if (page > 1) next.set('page', String(page));
   const query = next.toString();
   return query ? `/ai-resources/library?${query}` : '/ai-resources/library';

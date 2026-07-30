@@ -776,6 +776,7 @@ model AiResourceReviewRequest {
 
   @@index([status])
   @@index([requesterId])
+  @@index([reviewerId])
   @@index([resourceId])
 }
 

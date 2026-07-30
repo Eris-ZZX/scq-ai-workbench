@@ -5,6 +5,7 @@ import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { toJsonString } from '@/modules/ai-resources/json';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { canEditResource, diffKeys } from '@/modules/ai-resources/policy';
+import { assertAssignableReviewer } from '@/modules/ai-resources/reviewers';
 import { reviewSubmissionSchema } from '@/modules/ai-resources/validation';
 
 export async function POST(
@@ -27,6 +28,8 @@ export async function POST(
     if (!payload.success) {
       return NextResponse.json({ error: formatZodError(payload.error) }, { status: 400 });
     }
+
+    await assertAssignableReviewer(actor, payload.data.reviewerId);
 
     const proposedData = {
       name: payload.data.resource.name,
@@ -64,6 +67,7 @@ export async function POST(
         data: {
           type: 'UPDATE',
           requesterId: actor.userId,
+          reviewerId: payload.data.reviewerId,
           resourceId: id,
           proposedData: toJsonString(proposedData),
           updateSummary: payload.data.updateSummary,

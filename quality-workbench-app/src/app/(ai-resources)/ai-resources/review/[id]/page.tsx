@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, FolderOpen } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
-import type { AiResourceType, AiReviewStatus } from '@/modules/ai-resources/constants';
+import type { AiResourceType, AiReviewStatus, AiReviewType } from '@/modules/ai-resources/constants';
 import { requireAiResourceUser } from '@/modules/ai-resources/guards';
 import { hostedHtmlOpenPath, parseHostedHtml } from '@/modules/ai-resources/hosted-html';
 import { fromPrismaJsonObject, parseJsonForDisplay } from '@/modules/ai-resources/json';
@@ -13,7 +13,7 @@ import {
   reviewTypeLabel,
 } from '@/modules/ai-resources/labels';
 import { parseList } from '@/modules/ai-resources/list-fields';
-import { canActOnReviewRequest, canReview } from '@/modules/ai-resources/policy';
+import { canActOnReviewRequest, canAdmin, canReview } from '@/modules/ai-resources/policy';
 import { DownloadAttachment } from '@/modules/ai-resources/ui/download-attachment';
 import { ReviewActions } from '@/modules/ai-resources/ui/review-actions';
 
@@ -46,8 +46,18 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
   if (!request) notFound();
 
   const isRequester = request.requesterId === actor.userId;
-  const isParticipantReviewer = request.reviewerId === actor.userId;
-  if (!isRequester && !canReview(actor) && !isParticipantReviewer) {
+  const isAssignee = request.reviewerId === actor.userId;
+  const isAdmin = canAdmin(actor);
+  if (!isRequester && !canReview(actor) && !isAssignee) {
+    notFound();
+  }
+  if (
+    request.status === 'PENDING' &&
+    request.reviewerId &&
+    !isRequester &&
+    !isAssignee &&
+    !isAdmin
+  ) {
     notFound();
   }
 
@@ -74,7 +84,7 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
             返回审批列表
           </Link>
           <p className="eyebrow">
-            {reviewTypeLabel[request.type as 'CREATE' | 'UPDATE']} ·{' '}
+            {reviewTypeLabel[request.type as AiReviewType]} ·{' '}
             {type ? resourceTypeLabel[type] ?? type : '资源'}
           </p>
           <h1>{title}</h1>
@@ -212,6 +222,15 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
               </div>
             </section>
           ) : null}
+
+          {request.type === 'ARCHIVE' ? (
+            <section className="panel detail-panel">
+              <h2>删除说明</h2>
+              <p className="detail-text">
+                通过后资源将归档下线，不再出现在资源库中。管理员仍可在后台恢复。
+              </p>
+            </section>
+          ) : null}
         </article>
 
         <aside className="detail-aside review-detail-aside">
@@ -220,7 +239,7 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
             <div className="review-aside-meta">
               <div>
                 <span className="subtle">类型</span>
-                <strong>{reviewTypeLabel[request.type as 'CREATE' | 'UPDATE']}</strong>
+                <strong>{reviewTypeLabel[request.type as AiReviewType]}</strong>
               </div>
               <div>
                 <span className="subtle">状态</span>
@@ -232,7 +251,9 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
               </div>
               {request.reviewer ? (
                 <div>
-                  <span className="subtle">审批人</span>
+                  <span className="subtle">
+                    {request.status === 'PENDING' ? '指定审批人' : '审批人'}
+                  </span>
                   <strong>{request.reviewer.username}</strong>
                 </div>
               ) : null}

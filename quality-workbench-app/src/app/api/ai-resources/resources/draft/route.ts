@@ -4,6 +4,7 @@ import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { toJsonString } from '@/modules/ai-resources/json';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
+import { assertAssignableReviewer } from '@/modules/ai-resources/reviewers';
 import { reviewSubmissionSchema } from '@/modules/ai-resources/validation';
 
 export async function POST(request: NextRequest) {
@@ -15,11 +16,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: formatZodError(payload.error) }, { status: 400 });
     }
 
+    await assertAssignableReviewer(actor, payload.data.reviewerId);
+
     const review = await prisma.$transaction(async (tx) => {
       return tx.aiResourceReviewRequest.create({
         data: {
           type: 'CREATE',
           requesterId: actor.userId,
+          reviewerId: payload.data.reviewerId,
           proposedData: toJsonString(normalizeResourceData(payload.data.resource)),
           updateSummary: payload.data.updateSummary,
           changedFields: Object.keys(payload.data.resource).join(','),

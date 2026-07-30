@@ -2,13 +2,18 @@ import { randomUUID } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import { extname, join } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  AI_UPLOAD_MAX_ATTACHMENTS,
+  AI_UPLOAD_MAX_FILE_SIZE_BYTES,
+  AI_UPLOAD_MAX_FILE_SIZE_LABEL,
+  AI_HOSTED_HTML_MAX_FILE_SIZE_BYTES,
+  AI_HOSTED_HTML_MAX_FILE_SIZE_LABEL,
+} from '@/modules/ai-resources/constants';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { isHtmlFileName } from '@/modules/ai-resources/hosted-html';
 
 export const runtime = 'nodejs';
-
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,9 +31,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '托管 HTML 只能上传一个文件。' }, { status: 400 });
     }
 
+    if (!htmlOnly && files.length > AI_UPLOAD_MAX_ATTACHMENTS) {
+      return NextResponse.json(
+        { error: `一次最多上传 ${AI_UPLOAD_MAX_ATTACHMENTS} 个附件。` },
+        { status: 400 },
+      );
+    }
+
     for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json({ error: `${file.name} 超过 20MB，无法上传。` }, { status: 413 });
+      const maxBytes = htmlOnly ? AI_HOSTED_HTML_MAX_FILE_SIZE_BYTES : AI_UPLOAD_MAX_FILE_SIZE_BYTES;
+      const maxLabel = htmlOnly ? AI_HOSTED_HTML_MAX_FILE_SIZE_LABEL : AI_UPLOAD_MAX_FILE_SIZE_LABEL;
+      if (file.size > maxBytes) {
+        return NextResponse.json(
+          { error: `${file.name} 超过 ${maxLabel}，无法上传。` },
+          { status: 413 },
+        );
       }
       if (htmlOnly && !isHtmlFileName(file.name)) {
         return NextResponse.json({ error: '仅支持上传 .html / .htm 文件。' }, { status: 400 });

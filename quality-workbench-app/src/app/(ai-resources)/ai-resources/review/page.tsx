@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import type { AiResourceType, AiReviewStatus } from '@/modules/ai-resources/constants';
+import type { AiResourceType, AiReviewStatus, AiReviewType } from '@/modules/ai-resources/constants';
 import { requireAiResourceUser } from '@/modules/ai-resources/guards';
 import {
   resourceTypeLabel,
@@ -8,7 +8,7 @@ import {
   reviewTypeLabel,
 } from '@/modules/ai-resources/labels';
 import { fromPrismaJsonObject } from '@/modules/ai-resources/json';
-import { canAdmin, canReview } from '@/modules/ai-resources/policy';
+import { canReview, pendingReviewWhere } from '@/modules/ai-resources/policy';
 
 type TabKey = 'pending' | 'mine' | 'done';
 
@@ -19,12 +19,11 @@ export default async function ReviewPage({
 }) {
   const actor = await requireAiResourceUser();
   const isReviewer = canReview(actor);
-  const isAdmin = canAdmin(actor);
   const params = await searchParams;
   const tab = resolveTab(params.tab, isReviewer);
 
   const requests = await prisma.aiResourceReviewRequest.findMany({
-    where: buildWhere(actor.userId, isReviewer, isAdmin, tab),
+    where: buildWhere(actor, isReviewer, tab),
     orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     take: 100,
     include: {
@@ -43,10 +42,7 @@ export default async function ReviewPage({
   const [pendingCount, mineCount, doneCount] = await Promise.all([
     isReviewer
       ? prisma.aiResourceReviewRequest.count({
-          where: {
-            status: 'PENDING',
-            ...(isAdmin ? {} : { requesterId: { not: actor.userId } }),
-          },
+          where: pendingReviewWhere(actor),
         })
       : Promise.resolve(0),
     prisma.aiResourceReviewRequest.count({ where: { requesterId: actor.userId } }),
@@ -94,6 +90,7 @@ export default async function ReviewPage({
             const title = String(proposed.name ?? request.resource?.name ?? '未命名资源');
             const summary = String(proposed.summary ?? request.resource?.summary ?? '');
             const type = (proposed.type as AiResourceType | undefined) ?? undefined;
+            const reviewerLabel = request.status === 'PENDING' ? '指定审批人' : '审批人';
 
             return (
               <Link className="review-list-card" href={`/ai-resources/review/${request.id}`} key={request.id}>
@@ -101,13 +98,15 @@ export default async function ReviewPage({
                   <h2>{title}</h2>
                   {summary ? <p className="subtle">{summary}</p> : null}
                   <div className="meta">
-                    <span className="badge primary">{reviewTypeLabel[request.type as 'CREATE' | 'UPDATE']}</span>
+                    <span className="badge primary">{reviewTypeLabel[request.type as AiReviewType]}</span>
                     {type ? (
                       <span className="badge">{resourceTypeLabel[type] ?? type}</span>
                     ) : null}
                     <span className="badge">提交人：{request.requester.username}</span>
                     {request.reviewer ? (
-                      <span className="badge">审批人：{request.reviewer.username}</span>
+                      <span className="badge">
+                        {reviewerLabel}：{request.reviewer.username}
+                      </span>
                     ) : null}
                   </div>
                 </div>
@@ -138,22 +137,19 @@ function resolveTab(tab: string | undefined, isReviewer: boolean): TabKey {
   return isReviewer ? 'pending' : 'mine';
 }
 
-function buildWhere(userId: string, isReviewer: boolean, isAdmin: boolean, tab: TabKey) {
+function buildWhere(
+  actor: Parameters<typeof pendingReviewWhere>[0],
+  isReviewer: boolean,
+  tab: TabKey,
+) {
   if (tab === 'pending') {
-    return {
-      status: 'PENDING',
-      ...(isReviewer
-        ? isAdmin
-          ? {}
-          : { requesterId: { not: userId } }
-        : { requesterId: userId }),
-    };
+    return pendingReviewWhere(actor);
   }
   if (tab === 'mine') {
-    return { requesterId: userId };
+    return { requesterId: actor.userId };
   }
   return {
     status: { in: ['APPROVED', 'REJECTED'] },
-    ...(isReviewer ? { OR: [{ reviewerId: userId }, { requesterId: userId }] } : { requesterId: userId }),
+    ...(isReviewer ? { OR: [{ reviewerId: actor.userId }, { requesterId: actor.userId }] } : { requesterId: actor.userId }),
   };
 }

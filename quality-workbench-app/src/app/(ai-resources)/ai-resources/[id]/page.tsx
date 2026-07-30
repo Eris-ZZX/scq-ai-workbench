@@ -8,7 +8,8 @@ import { hostedHtmlOpenPath, parseHostedHtml } from '@/modules/ai-resources/host
 import { resourceTypeLabel } from '@/modules/ai-resources/labels';
 import { parseJsonForDisplay } from '@/modules/ai-resources/json';
 import { parseList } from '@/modules/ai-resources/list-fields';
-import { canEditResource, canViewResource, visibleResourceWhere } from '@/modules/ai-resources/policy';
+import { canEditResource, canRequestArchive, canViewResource, visibleResourceWhere } from '@/modules/ai-resources/policy';
+import { ArchiveRequestButton } from '@/modules/ai-resources/ui/archive-request-button';
 import { DownloadAttachment } from '@/modules/ai-resources/ui/download-attachment';
 import {
   ResourceEngagementProvider,
@@ -94,6 +95,9 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
               <Edit3 size={16} />
               提交修改
             </Link>
+          ) : null}
+          {canRequestArchive(actor, resource) ? (
+            <ArchiveRequestButton resourceId={resource.id} resourceName={resource.name} />
           ) : null}
         </div>
       </section>

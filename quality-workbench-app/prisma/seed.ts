@@ -8,8 +8,6 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter } as never);
 
 const templatePath = path.resolve(process.cwd(), 'prisma', 'quality-activity-template.json');
-/** Seed-only demo accounts (not shown on login page). */
-const TEST_PASSWORD_HASH = '$2b$10$zvMa9qFDxYK1MsTOaKbR6e6Kl6rRhV7L1lY6Zz0zxbDL17yWzCZK6'; // qe123456
 /** Default admin account for seed: username admin / password zx123456. */
 const ADMIN_PASSWORD_HASH = '$2b$10$JzlWMbyJ/uamA9DAAepZUedQGn5cdF7hrq4tnhQOnoYy8lwkVFn2S'; // zx123456
 const SOURCE_BATCH_ID = 'quality-activity-template-20260611';
@@ -187,7 +185,7 @@ async function main() {
   await seedStructuredActivityTemplate(activityTemplates);
   console.log('  F3 structured activity template: default v1 published');
 
-  // ── F2 示例项目活动实例 ──
+  // ── 仅保留管理员账号；示例项目挂在 admin 名下 ──
   const admin = await prisma.user.upsert({
     where: { username: 'admin' },
     update: { passwordHash: ADMIN_PASSWORD_HASH, role: 'admin', status: 'active' },
@@ -229,76 +227,16 @@ async function main() {
     create: { id: 'seed-admin-position', userId: adminUserId, positionRoleId: 'pos-npq-engineer' },
   });
 
-  // 固定角色测试账号。email 用 null 而非 '' 以避开唯一约束冲突。
-  const fixedUsers: [string, string, string | null, string, string][] = [
-    ['seed-user-manager', 'manager', 'manager@example.com', 'pos-manager', 'observer'],
-    ['seed-test-npq1', '测试NPQ1', null, 'pos-npq-engineer', 'owner'],
-    ['seed-test-npq2', '测试NPQ2', null, 'pos-npq-engineer', 'member'],
-    ['seed-test-pqe1', '测试PQE1', null, 'pos-pqe-engineer', 'member'],
-    ['seed-test-pqe2', '测试PQE2', null, 'pos-pqe-engineer', 'member'],
-    ['seed-test-sqe1', '测试SQE1', null, 'pos-sqe-engineer', 'member'],
-    ['seed-test-sqe2', '测试SQE2', null, 'pos-sqe-engineer', 'member'],
-    ['seed-test-ems1', '测试EMS1', null, 'pos-ems-engineer', 'member'],
-    ['seed-test-ems2', '测试EMS2', null, 'pos-ems-engineer', 'member'],
-    ['seed-test-fae1', '测试FAE1', null, 'pos-fae-engineer', 'member'],
-    ['seed-test-fae2', '测试FAE2', null, 'pos-fae-engineer', 'member'],
-    ['seed-test-ram1', '测试RAM1', null, 'pos-ram-engineer', 'member'],
-    ['seed-test-ram2', '测试RAM2', null, 'pos-ram-engineer', 'member'],
-    ['seed-test-qcm1', '测试QCM1', null, 'pos-qc', 'member'],
-    ['seed-test-qcm2', '测试QCM2', null, 'pos-qc', 'member'],
-  ];
-  const seedUserIds: Record<string, string> = { admin: adminUserId };
-
-  for (const [seedId, username, email, positionRoleId, projectRole] of fixedUsers) {
-    const user = await prisma.user.upsert({
-      where: { username },
-      update: { passwordHash: TEST_PASSWORD_HASH, role: 'user', status: 'active' },
-      create: {
-        id: seedId,
-        username,
-        passwordHash: TEST_PASSWORD_HASH,
-        email,
-        role: 'user',
-        status: 'active',
-      },
-    });
-    seedUserIds[username] = user.id;
-
-    await prisma.userPosition.upsert({
-      where: { userId: user.id },
-      update: { positionRoleId },
-      create: { id: `seed-${username}-position`, userId: user.id, positionRoleId },
-    });
-
-    await prisma.projectMember.upsert({
-      where: { projectId_userId: { projectId: 'seed-f2-project', userId: user.id } },
-      update: { role: projectRole },
-      create: { id: `seed-f2-member-${username}`, projectId: 'seed-f2-project', userId: user.id, role: projectRole },
-    });
-  }
-
-  const assignmentSeeds: [string, string, string, string][] = [
-    ['seed-f2-project-npq', '测试NPQ1', 'pos-npq-engineer', 'Seed NPQ owner'],
-    ['seed-f2-project-测试PQE1', '测试PQE1', 'pos-pqe-engineer', 'Seed PQE owner'],
-    ['seed-f2-project-测试SQE1', '测试SQE1', 'pos-sqe-engineer', 'Seed SQE owner'],
-    ['seed-f2-project-测试FAE1', '测试FAE1', 'pos-fae-engineer', 'Seed FAE owner'],
-    ['seed-f2-project-测试RAM1', '测试RAM1', 'pos-ram-engineer', 'Seed RAM owner'],
-    ['seed-f2-project-测试QCM1', '测试QCM1', 'pos-qc', 'Seed QCM owner'],
-  ];
-  for (const [id, username, positionRoleId, note] of assignmentSeeds) {
-    await prisma.projectPositionAssignment.upsert({
-      where: { projectId_positionRoleId: { projectId: 'seed-f2-project', positionRoleId } },
-      update: { userId: seedUserIds[username], appointedById: adminUserId, note },
-      create: {
-        id,
-        projectId: 'seed-f2-project',
-        positionRoleId,
-        userId: seedUserIds[username],
-        appointedById: adminUserId,
-        note,
-      },
-    });
-  }
+  // Clear legacy seed demo members / role appointments on the sample project.
+  await prisma.projectMember.deleteMany({
+    where: {
+      projectId: 'seed-f2-project',
+      userId: { not: adminUserId },
+    },
+  });
+  await prisma.projectPositionAssignment.deleteMany({
+    where: { projectId: 'seed-f2-project' },
+  });
 
   await prisma.projectActivitySnapshotMeta.upsert({
     where: { projectId: 'seed-f2-project' },
@@ -320,7 +258,7 @@ async function main() {
 
   await seedProjectActivities('seed-f2-project', activityTemplates);
   await seedStageGateRecords('seed-f2-project', activityTemplates);
-  console.log('  ✓ F2 sample project activity instance: seed-f2-project');
+  console.log('  ✓ Admin user + F2 sample project (admin only)');
 
   console.log('\n✅ Seed complete.');
 }

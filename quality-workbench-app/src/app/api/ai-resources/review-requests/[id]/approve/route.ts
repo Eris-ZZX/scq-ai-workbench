@@ -23,7 +23,11 @@ export async function POST(
     }
     if (!canActOnReviewRequest(actor, review)) {
       return NextResponse.json(
-        { error: '不能审批自己提交的申请（仅管理员可自审）。' },
+        {
+          error: review.requesterId === actor.userId
+            ? '不能审批自己提交的申请（仅管理员可自审）。'
+            : '该审批单已指定其他审批人。',
+        },
         { status: 403 },
       );
     }
@@ -40,6 +44,43 @@ export async function POST(
 
       if (claimed.count === 0) {
         throw new AiResourceError('该审批单已经处理过。', 409, 'ALREADY_HANDLED');
+      }
+
+      if (review.type === 'ARCHIVE') {
+        if (!review.resourceId) {
+          throw new AiResourceError('删除审批缺少资源。', 409, 'MISSING_RESOURCE');
+        }
+        const existing = await tx.aiResource.findUnique({ where: { id: review.resourceId } });
+        if (!existing) {
+          throw new AiResourceError('资源不存在。', 404, 'NOT_FOUND');
+        }
+        if (existing.status === 'ARCHIVED') {
+          throw new AiResourceError('资源已归档。', 409, 'ALREADY_ARCHIVED');
+        }
+
+        const resource = await tx.aiResource.update({
+          where: { id: existing.id },
+          data: {
+            archivedFromStatus: existing.status,
+            status: 'ARCHIVED',
+          },
+        });
+
+        await tx.aiResourceUpdateLog.create({
+          data: {
+            resourceId: resource.id,
+            actorId: review.requesterId,
+            reviewerId: actor.userId,
+            reviewId: review.id,
+            action: 'ARCHIVE',
+            result: 'APPROVED',
+            updateSummary: review.updateSummary,
+            changedFields: 'status',
+          },
+        });
+
+        const handled = await tx.aiResourceReviewRequest.findUniqueOrThrow({ where: { id: review.id } });
+        return { resource, review: handled };
       }
 
       const proposedData = toDbResourceData(fromPrismaJsonObject(review.proposedData));

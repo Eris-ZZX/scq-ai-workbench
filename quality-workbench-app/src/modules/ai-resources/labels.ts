@@ -27,6 +27,7 @@ export const visibilityLabel: Record<AiVisibilityScope, string> = {
 export const reviewTypeLabel: Record<AiReviewType, string> = {
   CREATE: '新建',
   UPDATE: '修改',
+  ARCHIVE: '删除',
 };
 
 export const reviewStatusLabel: Record<AiReviewStatus, string> = {

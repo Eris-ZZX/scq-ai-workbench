@@ -2,10 +2,19 @@
 
 import type { AiResource } from '@/generated/prisma/client';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, FileCode2, Paperclip, Plus, Send, Trash2 } from 'lucide-react';
 import { getErrorMessage } from '@/modules/ai-resources/api-errors';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
+import {
+  AI_CONTENT_MAX_LENGTH,
+  AI_SUMMARY_MAX_LENGTH,
+  AI_UPLOAD_MAX_ATTACHMENTS,
+  AI_UPLOAD_MAX_FILE_SIZE_BYTES,
+  AI_UPLOAD_MAX_FILE_SIZE_LABEL,
+  AI_HOSTED_HTML_MAX_FILE_SIZE_BYTES,
+  AI_HOSTED_HTML_MAX_FILE_SIZE_LABEL,
+} from '@/modules/ai-resources/constants';
 import {
   buildExtensionWithHostedHtml,
   isHtmlFileName,
@@ -58,6 +67,8 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
     parseAttachments(resource?.attachments),
   );
   const [files, setFiles] = useState<File[]>([]);
+  const [reviewers, setReviewers] = useState<Array<{ id: string; username: string; role: string }>>([]);
+  const [reviewerId, setReviewerId] = useState('');
   const [hostedHtml, setHostedHtml] = useState<HostedHtmlMeta | null>(() =>
     parseHostedHtml(resource?.extension),
   );
@@ -81,6 +92,30 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
   const submitMethod = directUpdate ? 'PATCH' : 'POST';
   const title = resource ? (directUpdate ? '保存资源' : '提交修改审批') : '提交新资源审批';
   const isWebPage = form.type === 'WEB_PAGE';
+  const needsReviewer = !directUpdate;
+
+  useEffect(() => {
+    if (!needsReviewer) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch('/api/ai-resources/reviewers');
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          reviewers?: Array<{ id: string; username: string; role: string }>;
+        };
+        if (cancelled) return;
+        const list = data.reviewers ?? [];
+        setReviewers(list);
+        setReviewerId((current) => current || list[0]?.id || '');
+      } catch {
+        // keep empty; submit will surface validation error
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [needsReviewer]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,6 +123,19 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
     setSubmitting(true);
     setMessage(null);
     try {
+      if (needsReviewer && !reviewerId) {
+        setMessage('请选择审批人。');
+        return;
+      }
+      if (form.summary.length > AI_SUMMARY_MAX_LENGTH) {
+        setMessage(`面向用户/使用说明不能超过 ${AI_SUMMARY_MAX_LENGTH.toLocaleString('zh-CN')} 字。`);
+        return;
+      }
+      if (form.content.length > AI_CONTENT_MAX_LENGTH) {
+        setMessage(`实现方法简述不能超过 ${AI_CONTENT_MAX_LENGTH.toLocaleString('zh-CN')} 字。`);
+        return;
+      }
+
       const uploadedAttachments = await uploadSelectedFiles();
       const nextHostedHtml = isWebPage ? await uploadHostedHtmlIfNeeded() : null;
       const extension = isWebPage
@@ -99,6 +147,7 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           updateSummary: resource ? form.updateSummary : '首次上传',
+          ...(needsReviewer ? { reviewerId } : {}),
           resource: {
             name: form.name,
             type: form.type,
@@ -173,6 +222,14 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
   async function uploadSelectedFiles() {
     if (!files.length) return attachments;
 
+    if (attachments.length + files.length > AI_UPLOAD_MAX_ATTACHMENTS) {
+      throw new Error(`每个资源最多 ${AI_UPLOAD_MAX_ATTACHMENTS} 个附件。`);
+    }
+    const oversized = files.find((file) => file.size > AI_UPLOAD_MAX_FILE_SIZE_BYTES);
+    if (oversized) {
+      throw new Error(`${oversized.name} 超过 ${AI_UPLOAD_MAX_FILE_SIZE_LABEL}，无法上传。`);
+    }
+
     const formData = new FormData();
     files.forEach((file) => formData.append('files', file));
     const response = await fetch('/api/ai-resources/uploads', {
@@ -196,6 +253,9 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
     if (!hostedHtmlFile) return hostedHtml;
     if (!isHtmlFileName(hostedHtmlFile.name)) {
       throw new Error('仅支持上传 .html / .htm 文件。');
+    }
+    if (hostedHtmlFile.size > AI_HOSTED_HTML_MAX_FILE_SIZE_BYTES) {
+      throw new Error(`托管 HTML 超过 ${AI_HOSTED_HTML_MAX_FILE_SIZE_LABEL}，无法上传。`);
     }
 
     const formData = new FormData();
@@ -314,7 +374,7 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
         <div className="field">
           <label>托管 HTML（单文件）</label>
           <p className="subtle" style={{ margin: '0 0 8px' }}>
-            仅支持一个 .html / .htm 文件；样式与脚本请内联，或引用公网地址。
+            仅支持一个 .html / .htm 文件（不超过 {AI_HOSTED_HTML_MAX_FILE_SIZE_LABEL}）；样式与脚本请内联，或引用公网地址。
           </p>
           <label className="file-picker">
             <input
@@ -322,6 +382,12 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
               accept=".html,.htm,text/html"
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0] ?? null;
+                event.currentTarget.value = '';
+                if (file && file.size > AI_HOSTED_HTML_MAX_FILE_SIZE_BYTES) {
+                  setMessage(`托管 HTML 超过 ${AI_HOSTED_HTML_MAX_FILE_SIZE_LABEL}，无法上传。`);
+                  return;
+                }
+                setMessage(null);
                 setHostedHtmlFile(file);
               }}
             />
@@ -350,12 +416,35 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
       ) : null}
 
       <div className="field">
-        <label>附件</label>
+        <div className="field-label-row">
+          <label>附件</label>
+          <span className="field-limit-hint">
+            最多 {AI_UPLOAD_MAX_ATTACHMENTS} 个，单个不超过 {AI_UPLOAD_MAX_FILE_SIZE_LABEL}
+          </span>
+        </div>
         <label className="file-picker">
           <input
             type="file"
             multiple
-            onChange={(event) => setFiles(Array.from(event.currentTarget.files ?? []))}
+            disabled={attachments.length >= AI_UPLOAD_MAX_ATTACHMENTS}
+            onChange={(event) => {
+              const selected = Array.from(event.currentTarget.files ?? []);
+              event.currentTarget.value = '';
+              if (!selected.length) return;
+
+              const remaining = AI_UPLOAD_MAX_ATTACHMENTS - attachments.length;
+              if (selected.length > remaining) {
+                setMessage(`每个资源最多 ${AI_UPLOAD_MAX_ATTACHMENTS} 个附件。`);
+                return;
+              }
+              const oversized = selected.find((file) => file.size > AI_UPLOAD_MAX_FILE_SIZE_BYTES);
+              if (oversized) {
+                setMessage(`${oversized.name} 超过 ${AI_UPLOAD_MAX_FILE_SIZE_LABEL}，无法上传。`);
+                return;
+              }
+              setMessage(null);
+              setFiles(selected);
+            }}
           />
           <Paperclip size={16} />
           选择附件
@@ -363,25 +452,57 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
         {attachments.length || files.length ? (
           <div className="attachment-list">
             {attachments.map((attachment) => (
-              <a href={attachment.url} download key={attachment.url} title={attachment.name}>
-                {attachment.name}
-              </a>
+              <span key={attachment.url} className="attachment-chip">
+                <a href={attachment.url} download title={attachment.name}>
+                  {attachment.name}
+                </a>
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="移除附件"
+                  onClick={() =>
+                    setAttachments((current) => current.filter((item) => item.url !== attachment.url))
+                  }
+                >
+                  <Trash2 size={14} />
+                </button>
+              </span>
             ))}
             {files.map((file) => (
               <span key={`${file.name}-${file.size}`} title={file.name}>
-                {file.name}
+                {file.name}（待上传）
               </span>
             ))}
           </div>
         ) : null}
       </div>
       <div className="field">
-        <label>面向用户/使用说明</label>
-        <textarea value={form.summary} onChange={(event) => update('summary', event.target.value)} required />
+        <div className="field-label-row">
+          <label>面向用户/使用说明</label>
+          <span className="field-limit-hint">
+            {form.summary.length.toLocaleString('zh-CN')} / {AI_SUMMARY_MAX_LENGTH.toLocaleString('zh-CN')} 字
+          </span>
+        </div>
+        <textarea
+          value={form.summary}
+          maxLength={AI_SUMMARY_MAX_LENGTH}
+          onChange={(event) => update('summary', event.target.value)}
+          required
+        />
       </div>
       <div className="field">
-        <label>实现方法简述</label>
-        <textarea value={form.content} onChange={(event) => update('content', event.target.value)} required />
+        <div className="field-label-row">
+          <label>实现方法简述</label>
+          <span className="field-limit-hint">
+            {form.content.length.toLocaleString('zh-CN')} / {AI_CONTENT_MAX_LENGTH.toLocaleString('zh-CN')} 字
+          </span>
+        </div>
+        <textarea
+          value={form.content}
+          maxLength={AI_CONTENT_MAX_LENGTH}
+          onChange={(event) => update('content', event.target.value)}
+          required
+        />
       </div>
       {resource ? (
         <div className="field">
@@ -392,6 +513,29 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
             required
             placeholder="说明本次修改的原因和内容"
           />
+        </div>
+      ) : null}
+      {needsReviewer ? (
+        <div className="field">
+          <div className="field-label-row">
+            <label>审批人</label>
+            <span className="field-limit-hint">仅指定的人会收到待审</span>
+          </div>
+          <select
+            value={reviewerId}
+            onChange={(event) => setReviewerId(event.target.value)}
+            required
+          >
+            <option value="" disabled>
+              {reviewers.length ? '请选择审批人' : '暂无可选审批人'}
+            </option>
+            {reviewers.map((reviewer) => (
+              <option key={reviewer.id} value={reviewer.id}>
+                {reviewer.username}
+                {reviewer.role === 'admin' ? '（管理员）' : ''}
+              </option>
+            ))}
+          </select>
         </div>
       ) : null}
       <button className="button primary" type="submit" disabled={submitting}>

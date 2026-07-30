@@ -38,11 +38,13 @@ export function ResourceSidebar({
   counts,
   q,
   tag,
+  sort,
 }: {
   currentType?: string;
   counts: Partial<Record<AiResourceType, number>>;
   q?: string;
   tag?: string;
+  sort?: string;
 }) {
   return (
     <aside className="resource-sidebar" aria-label="资源专区">
@@ -51,7 +53,7 @@ export function ResourceSidebar({
         {items.map((item) => {
           const Icon = item.icon;
           const active = (currentType ?? '') === item.type;
-          const href = buildHref(item.type, q, tag);
+          const href = buildHref(item.type, q, tag, sort);
           const count = item.type
             ? (counts[item.type] ?? 0)
             : Object.values(counts).reduce((sum, value) => sum + (value ?? 0), 0);
@@ -71,11 +73,12 @@ export function ResourceSidebar({
   );
 }
 
-function buildHref(type: string, q?: string, tag?: string) {
+function buildHref(type: string, q?: string, tag?: string, sort?: string) {
   const next = new URLSearchParams();
   if (type) next.set('type', type);
   if (q?.trim()) next.set('q', q.trim());
   if (tag?.trim()) next.set('tag', tag.trim());
+  if (sort && sort !== 'views') next.set('sort', sort);
   const query = next.toString();
   return query ? `/ai-resources/library?${query}` : '/ai-resources/library';
 }

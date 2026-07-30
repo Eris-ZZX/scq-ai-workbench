@@ -28,7 +28,11 @@ export async function POST(
     }
     if (!canActOnReviewRequest(actor, review)) {
       return NextResponse.json(
-        { error: '不能审批自己提交的申请（仅管理员可自审）。' },
+        {
+          error: review.requesterId === actor.userId
+            ? '不能审批自己提交的申请（仅管理员可自审）。'
+            : '该审批单已指定其他审批人。',
+        },
         { status: 403 },
       );
     }
@@ -57,7 +61,7 @@ export async function POST(
             actorId: review.requesterId,
             reviewerId: actor.userId,
             reviewId: review.id,
-            action: review.type === 'CREATE' ? 'CREATE' : 'UPDATE',
+            action: review.type === 'CREATE' ? 'CREATE' : review.type === 'ARCHIVE' ? 'ARCHIVE' : 'UPDATE',
             result: 'REJECTED',
             updateSummary: `驳回：${payload.data.reason}`,
             changedFields: review.changedFields,
