@@ -6,5 +6,5 @@ export function middleware(request: import('next/server').NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next|favicon.ico|login|register|api/auth).*)'],
+  matcher: ['/((?!_next|favicon.ico|login|api/auth).*)'],
 };

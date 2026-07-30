@@ -144,6 +144,7 @@ POSTGRES_DB="qe"
 - 生产环境 `DATABASE_URL` 必须指向服务器上运行的 PostgreSQL,凭据与 `docker-compose.yml` 一致。
 - 数据库端口只绑 `127.0.0.1`,不要对公网暴露 `5432`。
 - 重新部署代码不会自动删除数据库;数据存放在 Docker 命名卷 `qe_pgdata`,需单独做备份。
+- AI 资源附件在磁盘目录 `storage/ai-resources/uploads/`（不进 Git），升级代码时勿清空该目录；备份与容灾需一并覆盖。
 - `JWT_SECRET` 变更后，已有登录会话会失效。
 
 注意：
@@ -236,6 +237,8 @@ npm run start
 
 如果使用 PM2、systemd、Docker 或其他进程管理工具，请在 `npm run build` 后重启对应服务。
 
+常规版本更新（`git pull` → `npm ci` → 迁移 → `build` → 重启）只更新代码与构建产物，**不会删除** `storage/` 下的用户上传附件。
+
 ## 7. 启动方式建议
 
 开发调试：
@@ -311,7 +314,46 @@ prisma/schema.prisma   数据库模型
 prisma/migrations/     数据库迁移
 prisma/seed.ts         初始化数据脚本
 public/                静态资源
+storage/ai-resources/uploads/   AI 资源附件（运行时生成，不进 Git）
 ```
+
+### 9.1 AI 资源附件持久化（IT 必读）
+
+AI 资源库上传的 HTML / 附件等文件保存在应用工作目录：
+
+```text
+quality-workbench-app/storage/ai-resources/uploads/
+```
+
+该目录**不在 Git 中**，数据库只保存文件名等引用；真正文件在服务器磁盘上。
+
+**正常版本更新不会丢文件。** 例如：
+
+```text
+git pull → npm ci → prisma migrate deploy → npm run build → 重启进程
+```
+
+只会更新代码、`node_modules/`、`.next/`，不会动 `storage/`。
+
+**会丢失附件的场景：**
+
+| 场景 | 是否丢失 |
+| --- | --- |
+| `git pull` / 发版重启 | 否 |
+| 只删除 `.next/`、`node_modules/` 后重装 | 否 |
+| 清空或删除整个应用目录后重装 | **是** |
+| 换机器未拷贝 `storage/` | **是** |
+| 容器无挂卷、每次重建容器 | **是** |
+| 误删 `storage/` | **是** |
+
+**运维要求：**
+
+1. 使用固定部署目录，升级时覆盖代码，不要整目录清空重装。
+2. 备份策略需同时备份 PostgreSQL 与 `storage/ai-resources/`（至少包含 `uploads/`）。
+3. 若用 Docker / 容器运行应用进程，请为 `storage/ai-resources` 挂载持久卷（volume / bind mount）。
+4. 迁移到新服务器时，除数据库外，需同步拷贝 `storage/ai-resources/uploads/`。
+
+附件丢失后的表现：库中资源记录仍在，但打开/下载附件失败。
 
 ## 10. 不应上传或部署的本地文件
 
@@ -331,6 +373,7 @@ node_modules/
 - `.next/` 由 `npm run build` 生成。
 - 数据库数据存放在 Docker 命名卷 `qe_pgdata`,不在仓库目录内。
 - `.env` 包含环境变量和密钥，应由服务器单独配置。
+- `storage/ai-resources/` 为运行时附件目录，不进 Git，但**服务器上必须保留并纳入备份**，不要当作可随意清理的缓存。
 
 ## 11. 常见问题
 

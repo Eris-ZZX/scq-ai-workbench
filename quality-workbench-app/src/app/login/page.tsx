@@ -22,7 +22,6 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
   if (session) redirect(DEFAULT_AFTER_LOGIN);
 
   const params = (await searchParams) ?? {};
-  const registered = hasParam(params, 'registered', '1');
   const loginError = hasParam(params, 'error', '1');
   const dtError = dingtalkErrorMessage(params);
 
@@ -33,9 +32,6 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
           <h1 className="mb-1 text-2xl font-semibold text-foreground">登录</h1>
           <p className="mb-6 text-sm text-muted-foreground">进入质量项目工作台</p>
 
-          {registered && (
-            <div className="mb-4 rounded bg-green-50 p-3 text-sm text-green-700">注册成功，请登录。</div>
-          )}
           {loginError && (
             <div className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">登录失败，请检查用户名和密码。</div>
           )}

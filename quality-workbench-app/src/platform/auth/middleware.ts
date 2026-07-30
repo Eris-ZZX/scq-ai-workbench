@@ -6,7 +6,7 @@ import { AUTH_CONFIG, COOKIE_NAME, getSecretKey } from './auth.jwt';
 import { getRequestUrl } from './request-url';
 
 // 无需认证即可访问的路径前缀
-const PUBLIC_PATHS = ['/login', '/register', '/api/auth'];
+const PUBLIC_PATHS = ['/login', '/api/auth'];
 
 export async function authMiddleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
