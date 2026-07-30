@@ -79,11 +79,33 @@ npx prisma generate
 npx prisma migrate deploy
 ```
 
+`migrate deploy` 只会执行库里尚未应用的迁移，可重复执行、安全增量升级。`git pull` / 发版**不会**自动改库结构，每次上线代码后都必须跑一遍。
+
+近期与 AI 资源库相关、生产上需确认已打上的迁移包括：
+
+| 迁移 | 作用 |
+| --- | --- |
+| `20260730120000_ai_resource_search_trgm` | 启用 `pg_trgm`，为名称/说明/正文等建立搜索索引 |
+| `20260730140000_ai_review_assignee_index` | 为审批单 `reviewerId` 建索引（指定审批人列表） |
+
+检查是否已应用：
+
+```bash
+npx prisma migrate status
+```
+
 如是全新数据库，需要初始化基础数据：
 
 ```bash
 npm run db:seed
 ```
+
+seed 仅创建超级管理员 `admin` / `zx123456`：
+
+- 系统角色：`User.role = admin`（工作台 / NPQ / 系统后台全开）
+- AI 资源模块：`AiResourceMembership.role = admin`（资源库后台、直改/归档、审批管理）
+
+生产环境请尽快修改该密码。不包含演示测试账号。
 
 构建应用：
 
@@ -137,7 +159,7 @@ POSTGRES_DB="qe"
 
 说明：AI 资源库为产品内置模块，默认启用，无需额外开关。
 
-全新库执行 `npm run db:seed` 后仅创建管理员 `admin` / `zx123456`，生产环境请尽快修改密码。不包含演示测试账号。
+全新库执行 `npm run db:seed` 后仅创建超级管理员 `admin` / `zx123456`（系统管理员 + AI 资源模块管理员），生产环境请尽快修改密码。不包含演示测试账号。
 
 部署红线：
 
@@ -146,6 +168,8 @@ POSTGRES_DB="qe"
 - 重新部署代码不会自动删除数据库;数据存放在 Docker 命名卷 `qe_pgdata`,需单独做备份。
 - AI 资源附件在磁盘目录 `storage/ai-resources/uploads/`（不进 Git），升级代码时勿清空该目录；备份与容灾需一并覆盖。
 - `JWT_SECRET` 变更后，已有登录会话会失效。
+- 若 Nginx 等反向代理托管上传，请将 `client_max_body_size` 调到至少 **100m**（单附件上限 100MB；托管 HTML 上限 5MB）。
+- 服务器执行 `prisma migrate deploy` / `db:seed` 时需能使用 `prisma` 与 `tsx`（二者在 `devDependencies`；勿在 `npm ci --omit=dev` 之后才迁库，或临时安装后再迁）。
 
 注意：
 
@@ -232,12 +256,15 @@ npm ci
 npx prisma generate
 npx prisma migrate deploy
 npm run build
-npm run start
+# 然后重启进程（npm run start / PM2 / systemd 等）
 ```
 
-如果使用 PM2、systemd、Docker 或其他进程管理工具，请在 `npm run build` 后重启对应服务。
+说明：
 
-常规版本更新（`git pull` → `npm ci` → 迁移 → `build` → 重启）只更新代码与构建产物，**不会删除** `storage/` 下的用户上传附件。
+1. **`npx prisma migrate deploy` 不可省略。** 只 pull + build 不会应用新索引/表结构。本次版本尤其确认 `ai_resource_search_trgm` 与 `ai_review_assignee_index` 已在 `migrate status` 中显示为 Applied。
+2. **已有生产库不要重复 `db:seed`**，否则会把 `admin` 密码重置回 `zx123456`。仅全新空库需要 seed。
+3. 如果使用 PM2、systemd、Docker 或其他进程管理工具，请在 `npm run build` 后重启对应服务。
+4. 常规版本更新只更新代码与构建产物，**不会删除** `storage/` 下的用户上传附件。
 
 ## 7. 启动方式建议
 

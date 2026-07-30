@@ -200,6 +200,18 @@ async function main() {
   });
   const adminUserId = admin.id;
 
+  await prisma.aiResourceMembership.upsert({
+    where: { userId: adminUserId },
+    update: { role: 'admin', updatedById: adminUserId },
+    create: {
+      id: 'seed-admin-ai-membership',
+      userId: adminUserId,
+      role: 'admin',
+      updatedById: adminUserId,
+    },
+  });
+  console.log('  ✓ Admin is system + AI resource module admin');
+
   await prisma.project.upsert({
     where: { id: 'seed-f2-project' },
     update: {
