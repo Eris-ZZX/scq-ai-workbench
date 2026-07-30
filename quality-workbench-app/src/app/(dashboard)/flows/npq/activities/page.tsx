@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { fetchAllPaginatedItems } from '@/lib/client/fetch-paginated';
 import { ProjectTimelineCard, type StageNode, type TrialPhase } from './ProjectTimelineCard';
 
 type Project = { id: string; name: string; status: string; currentStage?: string | null };
@@ -162,17 +163,14 @@ export default function ActivityTrackingPage() {
   useEffect(() => {
     (async () => {
       try {
-      const res = await fetch('/api/npq/projects');
-      if (res.ok) {
-        const data = await res.json();
-        const requestedProjectId = new URLSearchParams(window.location.search).get('projectId') ?? '';
-        setProjects(data);
-        const selectedId = data.some((project: Project) => project.id === requestedProjectId)
-          ? requestedProjectId
-          : data[0]?.id ?? '';
-        setProjectId(selectedId);
-        if (selectedId) await loadActivities(selectedId);
-      }
+      const data = await fetchAllPaginatedItems<Project>('/api/npq/projects');
+      const requestedProjectId = new URLSearchParams(window.location.search).get('projectId') ?? '';
+      setProjects(data);
+      const selectedId = data.some((project) => project.id === requestedProjectId)
+        ? requestedProjectId
+        : data[0]?.id ?? '';
+      setProjectId(selectedId);
+      if (selectedId) await loadActivities(selectedId);
       } catch (err) {
         setError(err instanceof Error ? err.message : '项目列表加载失败');
       } finally {

@@ -134,7 +134,7 @@ export async function assertNotLastEffectiveAdmin(
   const stillAdmin = nextRole === 'admin';
   if (stillAdmin) return;
 
-  const remaining = await countEffectiveAdmins(tx);
+  const remaining = await countEffectiveAdmins(tx, true);
   // subject still counted in remaining; after demotion/delete one fewer
   if (remaining <= 1) {
     throw new AiResourceError('不能移除末位有效模块管理员', 409, 'LAST_ADMIN');

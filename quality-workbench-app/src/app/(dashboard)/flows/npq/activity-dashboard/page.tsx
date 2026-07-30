@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, ChevronDown, ChevronRight, Clock3, Flag, Layers3, RefreshCw, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { fetchAllPaginatedItems } from '@/lib/client/fetch-paginated';
 
 type Project = { id: string; name: string };
 type StageMetric = { stage: string; total: number; closed: number; rate: number };
@@ -51,14 +52,11 @@ export default function ActivityDashboardPage() {
   useEffect(() => {
     (async () => {
       try {
-      const res = await fetch('/api/npq/projects');
-      if (res.ok) {
-        const list = await res.json();
-        setProjects(list);
-        const firstId = list[0]?.id ?? '';
-        setProjectId(firstId);
-        if (firstId) await loadDashboard(firstId);
-      }
+      const list = await fetchAllPaginatedItems<Project>('/api/npq/projects');
+      setProjects(list);
+      const firstId = list[0]?.id ?? '';
+      setProjectId(firstId);
+      if (firstId) await loadDashboard(firstId);
       } catch (err) {
         setError(err instanceof Error ? err.message : '项目列表加载失败');
       } finally {

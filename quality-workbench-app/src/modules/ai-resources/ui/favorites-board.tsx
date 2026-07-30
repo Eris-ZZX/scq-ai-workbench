@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ExternalLink, Folders, GripVertical, Heart, ListOrdered, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
 import { AI_RESOURCE_TYPES, isAiResourceType } from '@/modules/ai-resources/constants';
@@ -44,6 +44,7 @@ type DragState = DragCard | DragTag | null;
 
 const VIEW_STORAGE_KEY = 'ai-resources-favorites-view';
 const UNGROUPED_KEY = '__ungrouped__';
+const PERSIST_DEBOUNCE_MS = 400;
 
 export function FavoritesBoard({
   initialItems,
@@ -64,10 +65,23 @@ export function FavoritesBoard({
   const [newTagName, setNewTagName] = useState('');
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editingTagName, setEditingTagName] = useState('');
+  const groupsPersistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tagsPersistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingGroupsPayload = useRef<{
+    groups: Array<{ tagId: string | null; resourceIds: string[] }>;
+  } | null>(null);
+  const pendingTagOrder = useRef<string[] | null>(null);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
     if (saved === 'custom' || saved === 'category') setViewMode(saved);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (groupsPersistTimer.current) clearTimeout(groupsPersistTimer.current);
+      if (tagsPersistTimer.current) clearTimeout(tagsPersistTimer.current);
+    };
   }, []);
 
   function switchView(mode: ViewMode) {
@@ -114,44 +128,55 @@ export function FavoritesBoard({
     }));
   }, [items]);
 
-  const persistGroups = useCallback(
-    (nextItems: FavoriteCardItem[], nextTags: FavoriteTagItem[]) => {
-      const groups = [
-        ...nextTags.map((tag) => ({
-          tagId: tag.id as string | null,
-          resourceIds: nextItems.filter((item) => item.tagId === tag.id).map((item) => item.id),
-        })),
-        {
-          tagId: null,
-          resourceIds: nextItems
-            .filter((item) => !item.tagId || !nextTags.some((tag) => tag.id === item.tagId))
-            .map((item) => item.id),
-        },
-      ];
+  const persistGroups = useCallback((nextItems: FavoriteCardItem[], nextTags: FavoriteTagItem[]) => {
+    const groups = [
+      ...nextTags.map((tag) => ({
+        tagId: tag.id as string | null,
+        resourceIds: nextItems.filter((item) => item.tagId === tag.id).map((item) => item.id),
+      })),
+      {
+        tagId: null,
+        resourceIds: nextItems
+          .filter((item) => !item.tagId || !nextTags.some((tag) => tag.id === item.tagId))
+          .map((item) => item.id),
+      },
+    ];
 
+    pendingGroupsPayload.current = { groups };
+    if (groupsPersistTimer.current) clearTimeout(groupsPersistTimer.current);
+    groupsPersistTimer.current = setTimeout(() => {
+      const payload = pendingGroupsPayload.current;
+      pendingGroupsPayload.current = null;
+      if (!payload) return;
       startTransition(async () => {
         setMessage('');
         const res = await fetch('/api/ai-resources/favorites', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groups }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) setMessage('分组保存失败，请刷新后重试');
       });
-    },
-    [],
-  );
+    }, PERSIST_DEBOUNCE_MS);
+  }, []);
 
   const persistTagOrder = useCallback((nextTags: FavoriteTagItem[]) => {
-    startTransition(async () => {
-      setMessage('');
-      const res = await fetch('/api/ai-resources/favorite-tags', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderedTagIds: nextTags.map((tag) => tag.id) }),
+    pendingTagOrder.current = nextTags.map((tag) => tag.id);
+    if (tagsPersistTimer.current) clearTimeout(tagsPersistTimer.current);
+    tagsPersistTimer.current = setTimeout(() => {
+      const orderedTagIds = pendingTagOrder.current;
+      pendingTagOrder.current = null;
+      if (!orderedTagIds) return;
+      startTransition(async () => {
+        setMessage('');
+        const res = await fetch('/api/ai-resources/favorite-tags', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderedTagIds }),
+        });
+        if (!res.ok) setMessage('标签排序保存失败，请刷新后重试');
       });
-      if (!res.ok) setMessage('标签排序保存失败，请刷新后重试');
-    });
+    }, PERSIST_DEBOUNCE_MS);
   }, []);
 
   function buildItemsAfterCardMove(

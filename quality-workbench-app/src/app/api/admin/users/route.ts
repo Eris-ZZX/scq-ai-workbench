@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@/generated/prisma/client';
+import { paginatedResponse, parsePagination } from '@/lib/pagination';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
 import bcrypt from 'bcryptjs';
@@ -17,20 +18,44 @@ async function checkAdmin(writeOp = false) {
   return { ok: true, session };
 }
 
-export async function GET() {
+const userSelect = {
+  id: true, username: true, role: true, status: true, email: true, createdAt: true,
+  positionBinding: {
+    select: { positionRoleId: true, positionRole: { select: { id: true, name: true, roleName: true } } },
+  },
+} as const;
+
+export async function GET(request: NextRequest) {
   const r = await checkAdmin();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
 
-  const users = await prisma.user.findMany({
-    select: {
-      id: true, username: true, role: true, status: true, email: true, createdAt: true,
-      positionBinding: {
-        select: { positionRoleId: true, positionRole: { select: { id: true, name: true, roleName: true } } },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-  return NextResponse.json(users);
+  const params = request.nextUrl.searchParams;
+  if (params.get('stats') === '1') {
+    const [total, active, disabled] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { status: 'active' } }),
+      prisma.user.count({ where: { status: 'disabled' } }),
+    ]);
+    return NextResponse.json({ total, active, disabled });
+  }
+
+  const status = params.get('status');
+  const where =
+    status === 'active' || status === 'disabled' ? { status } : undefined;
+  const { page, pageSize, skip } = parsePagination(params);
+
+  const [total, items] = await Promise.all([
+    prisma.user.count({ where }),
+    prisma.user.findMany({
+      where,
+      select: userSelect,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: pageSize,
+    }),
+  ]);
+
+  return NextResponse.json(paginatedResponse(items, total, page, pageSize));
 }
 
 export async function POST(request: Request) {

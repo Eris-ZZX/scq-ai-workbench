@@ -290,13 +290,6 @@ export async function activateProjectStageActivities(
 
 export async function getProjectActivityView(projectId: string, options?: { attachmentMode?: 'summary' | 'detail' }) {
   await ensureProjectActivities(projectId);
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { currentStage: true, status: true, stageGateStatus: true },
-  });
-  if (project && project.status !== 'completed' && project.stageGateStatus !== 'completed') {
-    await activateProjectStageActivities(projectId, project.currentStage);
-  }
   return prisma.projectActivityParent.findMany({
     where: { projectId },
     include: {

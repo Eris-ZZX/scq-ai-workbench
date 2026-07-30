@@ -1,23 +1,41 @@
 // GET/POST /api/npq/projects — 项目列表 + 创建
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/platform/auth/auth.config';
-import { getProjectsByUser, createProject } from '@/lib/db/projects';
+import { createProject } from '@/lib/db/projects';
+import { paginatedResponse, parsePagination } from '@/lib/pagination';
 import { prisma } from '@/lib/prisma';
 
-export async function GET() {
+const listSelect = {
+  id: true,
+  name: true,
+  status: true,
+  currentStage: true,
+  startDate: true,
+  expectedEndDate: true,
+} as const;
+
+export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
-  // admin/manager 可查看所有项目
-  if (session.role === 'admin' || session.role === 'manager') {
-    return NextResponse.json(
-      await prisma.project.findMany({
-        orderBy: { updatedAt: 'desc' },
-        select: { id: true, name: true, status: true, currentStage: true, startDate: true, expectedEndDate: true },
-      }),
-    );
-  }
-  const projects = await getProjectsByUser(session.sub);
-  return NextResponse.json(projects);
+
+  const { page, pageSize, skip } = parsePagination(request.nextUrl.searchParams);
+  const where =
+    session.role === 'admin' || session.role === 'manager'
+      ? undefined
+      : { members: { some: { userId: session.sub } } };
+
+  const [total, items] = await Promise.all([
+    prisma.project.count({ where }),
+    prisma.project.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      skip,
+      take: pageSize,
+      select: listSelect,
+    }),
+  ]);
+
+  return NextResponse.json(paginatedResponse(items, total, page, pageSize));
 }
 
 export async function POST(request: Request) {

@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, ShieldCheck, UserCog, UsersRound } from 'lucide-react';
 
-type User = {
-  id: string;
-  status: string;
+type UserStats = {
+  total: number;
+  active: number;
+  disabled: number;
 };
 
 export default function AdminUsersDashboardPage() {
-  const [users, setUsers] = useState<User[]>([]);
+  const [stats, setStats] = useState<UserStats>({ total: 0, active: 0, disabled: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -20,9 +21,9 @@ export default function AdminUsersDashboardPage() {
     async function load() {
       setError('');
       try {
-        const usersRes = await fetch('/api/admin/users');
+        const usersRes = await fetch('/api/admin/users?stats=1');
         if (cancelled) return;
-        if (usersRes.ok) setUsers(await usersRes.json());
+        if (usersRes.ok) setStats(await usersRes.json());
         else setError('加载用户数据失败，请刷新后重试。');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : '加载用户数据失败');
@@ -33,8 +34,6 @@ export default function AdminUsersDashboardPage() {
     load();
     return () => { cancelled = true; };
   }, []);
-
-  const activeUsers = useMemo(() => users.filter((user) => user.status === 'active').length, [users]);
 
   if (loading) return <div className="p-8 text-sm text-muted-foreground">加载中...</div>;
 
@@ -64,7 +63,7 @@ export default function AdminUsersDashboardPage() {
             icon={<UserCog className="h-5 w-5" />}
             title="用户管理"
             desc="维护账号状态、系统权限。岗位由钉钉登录自动获取，无需手动分配。"
-            meta={`${users.length} 个账号，${activeUsers} 个启用`}
+            meta={`${stats.total} 个账号，${stats.active} 个启用`}
           />
         </section>
       </div>

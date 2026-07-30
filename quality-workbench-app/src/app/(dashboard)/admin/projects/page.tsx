@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
+import { ClientPager } from '@/components/ui/pager';
 import { ProjectActivityEditor } from './project-activity-editor';
 
 type PositionBinding = null | {
@@ -106,9 +107,13 @@ function toDateInput(value: string | null | undefined): string {
 
 export default function AdminProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectPage, setProjectPage] = useState(1);
+  const [projectTotal, setProjectTotal] = useState(0);
+  const [projectTotalPages, setProjectTotalPages] = useState(1);
   const [users, setUsers] = useState<User[]>([]);
   const [templates, setTemplates] = useState<ActivityTemplate[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -127,7 +132,7 @@ export default function AdminProjectsPage() {
   const [createForm, setCreateForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: '', startDate: '', expectedEndDate: '' });
   const [basicForm, setBasicForm] = useState({ name: '', description: '', status: 'active', currentStage: 'TR1', startDate: '', expectedEndDate: '' });
 
-  function syncBasicForm(project?: Project) {
+  function syncBasicForm(project?: Project | null) {
     if (!project) return;
     setBasicForm({
       name: project.name,
@@ -141,14 +146,15 @@ export default function AdminProjectsPage() {
 
   function selectProject(project: Project) {
     setSelectedProjectId(project.id);
+    setSelectedProject(project);
     syncBasicForm(project);
   }
 
-  async function load(preferredProjectId = selectedProjectId) {
+  async function load(preferredProjectId = selectedProjectId, page = projectPage) {
     setError('');
     try {
     const [projectsRes, usersRes, templatesRes, meRes, rolesRes] = await Promise.all([
-      fetch('/api/admin/projects'),
+      fetch(`/api/admin/projects?page=${page}&pageSize=50`),
       fetch('/api/npq/users'),
       fetch('/api/npq/activity-templates'),
       fetch('/api/auth/me'),
@@ -159,12 +165,21 @@ export default function AdminProjectsPage() {
       setLoading(false);
       return;
     }
-    const nextProjects = (await projectsRes.json()) as Project[];
+    const projectsPayload = await projectsRes.json() as {
+      items?: Project[];
+      total?: number;
+      page?: number;
+      totalPages?: number;
+    };
+    const nextProjects = projectsPayload.items ?? [];
     const nextUsers = (await usersRes.json()) as User[];
     const nextTemplates = (await templatesRes.json()) as ActivityTemplate[];
     const currentUser = (await meRes.json()) as SessionUser;
     setIsAdmin(currentUser.role === 'admin');
     setProjects(nextProjects);
+    setProjectTotal(projectsPayload.total ?? nextProjects.length);
+    setProjectPage(projectsPayload.page ?? page);
+    setProjectTotalPages(projectsPayload.totalPages ?? 1);
     setUsers(nextUsers);
     setTemplates(nextTemplates);
     if (rolesRes.ok) setProjectRoles(await rolesRes.json());
@@ -172,9 +187,20 @@ export default function AdminProjectsPage() {
       ...current,
       activityTemplateSetId: current.activityTemplateSetId || nextTemplates[0]?.id || '',
     }));
-    const nextSelected = nextProjects.find((project) => project.id === preferredProjectId) ?? nextProjects[0];
-    setSelectedProjectId(nextSelected?.id ?? '');
-    syncBasicForm(nextSelected);
+    const preferred = preferredProjectId
+      ? nextProjects.find((project) => project.id === preferredProjectId)
+      : undefined;
+    if (preferred) {
+      setSelectedProjectId(preferred.id);
+      setSelectedProject(preferred);
+      syncBasicForm(preferred);
+    } else if (!preferredProjectId) {
+      const fallback = nextProjects[0] ?? null;
+      setSelectedProjectId(fallback?.id ?? '');
+      setSelectedProject(fallback);
+      syncBasicForm(fallback);
+    }
+    // else: keep current selection when paging away from its page
     setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : '项目管理加载失败');
@@ -212,11 +238,6 @@ export default function AdminProjectsPage() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [selectedProjectId]);
-
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
-    [projects, selectedProjectId],
-  );
 
   const hasUnsaved = useMemo(() => {
     if (!selectedProject) return false;
@@ -263,7 +284,13 @@ export default function AdminProjectsPage() {
   function replaceProject(project: Project) {
     setProjects((current) => current.map((item) => (item.id === project.id ? project : item)));
     setSelectedProjectId(project.id);
+    setSelectedProject(project);
     syncBasicForm(project);
+  }
+
+  async function changeProjectPage(nextPage: number) {
+    setProjectPage(nextPage);
+    await load(selectedProjectId, nextPage);
   }
 
   async function createProject() {
@@ -289,7 +316,8 @@ export default function AdminProjectsPage() {
     if (created?.id) {
       setCreateOpen(false);
       setCreateForm({ name: '', description: '', status: 'active', currentStage: 'TR1', ownerId: '', activityTemplateSetId: templates[0]?.id ?? '', startDate: '', expectedEndDate: '' });
-      await load(created.id);
+      setProjectPage(1);
+      await load(created.id, 1);
     }
   }
 
@@ -309,7 +337,10 @@ export default function AdminProjectsPage() {
   async function deleteProject(project: Project) {
     if (!window.confirm(`删除项目"${project.name}"？项目活动、任务、人员关系会一并删除。`)) return;
     const deleted = await requestJson('DELETE', undefined, `/api/admin/projects?id=${encodeURIComponent(project.id)}`);
-    if (deleted?.ok) await load('');
+    if (deleted?.ok) {
+      setProjectPage(1);
+      await load('', 1);
+    }
   }
 
   function memberHasRole(member: ProjectMember, roleCode: string): boolean {
@@ -400,7 +431,7 @@ export default function AdminProjectsPage() {
         <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="rounded-lg border border-border bg-white">
             <div className="border-b border-border px-4 py-3 text-sm font-semibold">项目列表</div>
-            <div className="max-h-[calc(100vh-190px)] overflow-auto p-2">
+            <div className="max-h-[calc(100vh-230px)] overflow-auto p-2">
               {projects.map((project) => (
                 <button
                   key={project.id}
@@ -418,6 +449,15 @@ export default function AdminProjectsPage() {
                 </button>
               ))}
               {projects.length === 0 && <div className="px-3 py-8 text-center text-sm text-muted-foreground">暂无项目</div>}
+            </div>
+            <div className="border-t border-border px-3 py-3">
+              <ClientPager
+                page={projectPage}
+                totalPages={projectTotalPages}
+                total={projectTotal}
+                disabled={loading || saving}
+                onPageChange={(next) => { void changeProjectPage(next); }}
+              />
             </div>
           </aside>
 

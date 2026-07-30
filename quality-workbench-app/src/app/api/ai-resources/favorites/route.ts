@@ -168,15 +168,19 @@ async function persistFavoriteGroups(
     }
 
     let sortOrder = 0;
+    const updates: Array<Promise<unknown>> = [];
     for (const group of groups) {
       for (const resourceId of group.resourceIds) {
-        await tx.aiResourceFavorite.update({
-          where: { id: favoriteByResource.get(resourceId)! },
-          data: { tagId: group.tagId, sortOrder },
-        });
+        updates.push(
+          tx.aiResourceFavorite.update({
+            where: { id: favoriteByResource.get(resourceId)! },
+            data: { tagId: group.tagId, sortOrder },
+          }),
+        );
         sortOrder += 1;
       }
     }
+    await Promise.all(updates);
   });
 
   return NextResponse.json({ ok: true });

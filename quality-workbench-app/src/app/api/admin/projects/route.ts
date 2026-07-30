@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@/generated/prisma/client';
 import { ensureProjectActivities } from '@/lib/db/activities';
 import { canManageProject, getProjectAdminAccess, projectScopeWhere, type ProjectAdminAccess } from '@/lib/db/project-admin-access';
+import { paginatedResponse, parsePagination } from '@/lib/pagination';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/platform/auth/auth.config';
 
@@ -74,18 +75,30 @@ function projectSelect() {
   };
 }
 
-async function getProjects(access: ProjectAdminAccess) {
-  return prisma.project.findMany({
-    where: projectScopeWhere(access),
-    orderBy: { updatedAt: 'desc' },
-    select: projectSelect(),
-  });
+async function getProjects(
+  access: ProjectAdminAccess,
+  options: { skip: number; take: number },
+) {
+  const where = projectScopeWhere(access);
+  const [total, items] = await Promise.all([
+    prisma.project.count({ where }),
+    prisma.project.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      skip: options.skip,
+      take: options.take,
+      select: projectSelect(),
+    }),
+  ]);
+  return { total, items };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const r = await checkProjectManager();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
-  return NextResponse.json(await getProjects(r.access));
+  const { page, pageSize, skip } = parsePagination(request.nextUrl.searchParams);
+  const { total, items } = await getProjects(r.access, { skip, take: pageSize });
+  return NextResponse.json(paginatedResponse(items, total, page, pageSize));
 }
 
 export async function POST(request: Request) {

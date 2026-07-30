@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma';
-import { activateProjectStageActivities } from '@/lib/db/activities';
 
 type SessionLike = {
   sub: string;
@@ -72,11 +71,6 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
     },
     orderBy: { updatedAt: 'desc' },
   });
-  await Promise.all(
-    projects
-      .filter((project) => project.status !== 'completed')
-      .map((project) => activateProjectStageActivities(project.id, project.currentStage)),
-  );
   const currentStageParents = projects.length > 0
     ? await prisma.projectActivityParent.findMany({
         where: {

@@ -2,10 +2,9 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
-import type { AiResourceType } from '@/modules/ai-resources/constants';
 import { isAiResourceType } from '@/modules/ai-resources/constants';
 import { requireAiResourceUser } from '@/modules/ai-resources/guards';
-import { parseList } from '@/modules/ai-resources/list-fields';
+import { getPublishedCatalogFacets } from '@/modules/ai-resources/catalog-facets';
 import { visibleResourceWhere } from '@/modules/ai-resources/policy';
 import { ResourceCard } from '@/modules/ai-resources/ui/resource-card';
 import { ResourceSearch } from '@/modules/ai-resources/ui/resource-search';
@@ -23,7 +22,7 @@ export default async function AiResourcesLibraryPage({
   const page = Math.max(1, Number(params.page) || 1);
   const where = buildWhere(actor, params);
 
-  const [total, resources, allPublished, favorites, likes] = await Promise.all([
+  const [total, resources, facets, favorites, likes] = await Promise.all([
     prisma.aiResource.count({ where }),
     prisma.aiResource.findMany({
       where,
@@ -35,10 +34,7 @@ export default async function AiResourcesLibraryPage({
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
-    prisma.aiResource.findMany({
-      where: { status: 'PUBLISHED' },
-      select: { type: true, tags: true },
-    }),
+    getPublishedCatalogFacets(),
     prisma.aiResourceFavorite.findMany({
       where: { userId: actor.userId },
       select: { resourceId: true },
@@ -49,14 +45,7 @@ export default async function AiResourcesLibraryPage({
     }),
   ]);
 
-  const typeCounts = allPublished.reduce<Partial<Record<AiResourceType, number>>>((counts, resource) => {
-    const type = resource.type as AiResourceType;
-    counts[type] = (counts[type] ?? 0) + 1;
-    return counts;
-  }, {});
-  const quickTags = Array.from(new Set(allPublished.flatMap((r) => parseList(r.tags)))).sort((left, right) =>
-    left.localeCompare(right, 'zh-CN'),
-  );
+  const { typeCounts, quickTags } = facets;
   const favoriteIds = new Set(favorites.map((f) => f.resourceId));
   const likedIds = new Set(likes.map((item) => item.resourceId));
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

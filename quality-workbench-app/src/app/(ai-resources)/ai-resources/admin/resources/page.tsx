@@ -6,19 +6,35 @@ import { requireAiResourceRole } from '@/modules/ai-resources/guards';
 import { resourceTypeLabel } from '@/modules/ai-resources/labels';
 import { parseList } from '@/modules/ai-resources/list-fields';
 import { AdminResourceActions } from '@/modules/ai-resources/ui/admin-resource-actions';
+import { paginationMeta, parsePagination } from '@/lib/pagination';
 
-export default async function AdminResourcesPage() {
+const PAGE_SIZE = 50;
+
+export default async function AdminResourcesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   try {
     await requireAiResourceRole('admin');
   } catch {
     notFound();
   }
 
-  const resources = await prisma.aiResource.findMany({
-    include: { createdBy: { select: { username: true } } },
-    orderBy: { updatedAt: 'desc' },
-    take: 200,
-  });
+  const params = await searchParams;
+  const { page, pageSize, skip } = parsePagination(params, { pageSize: PAGE_SIZE });
+
+  const [total, resources] = await Promise.all([
+    prisma.aiResource.count(),
+    prisma.aiResource.findMany({
+      include: { createdBy: { select: { username: true } } },
+      orderBy: { updatedAt: 'desc' },
+      skip,
+      take: pageSize,
+    }),
+  ]);
+
+  const { totalPages } = paginationMeta(total, page, pageSize);
 
   return (
     <main className="main">
@@ -72,12 +88,43 @@ export default async function AdminResourcesPage() {
                   </td>
                 </tr>
               ))}
+              {resources.length === 0 ? (
+                <tr>
+                  <td colSpan={8}>
+                    <div className="empty">暂无资源。</div>
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
+
+        {total > 0 ? (
+          <div className="pagination">
+            <span className="subtle">
+              共 {total} 条 · 第 {page}/{totalPages} 页
+            </span>
+            <div className="meta">
+              {page > 1 ? (
+                <Link className="button" href={pageHref(page - 1)}>
+                  上一页
+                </Link>
+              ) : null}
+              {page < totalPages ? (
+                <Link className="button" href={pageHref(page + 1)}>
+                  下一页
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );
+}
+
+function pageHref(page: number) {
+  return page > 1 ? `/ai-resources/admin/resources?page=${page}` : '/ai-resources/admin/resources';
 }
 
 function formatDate(value: Date) {

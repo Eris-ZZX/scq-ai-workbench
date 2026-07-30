@@ -7,21 +7,22 @@ import { getErrorMessage } from '@/modules/ai-resources/api-errors';
 
 export function AdminImportForm() {
   const router = useRouter();
-  const [content, setContent] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   async function importResources(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!content) return;
+    if (!file) return;
     setBusy(true);
     setMessage(null);
 
+    const body = new FormData();
+    body.append('file', file);
+
     const response = await fetch('/api/ai-resources/admin/resources/import', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body,
     });
     const payload = await response.json().catch(() => null);
     setBusy(false);
@@ -31,17 +32,10 @@ export function AdminImportForm() {
       return;
     }
 
-    setMessage(`已导入 ${payload?.count ?? 0} 条资源。`);
+    setMessage(
+      `已导入 ${payload?.count ?? 0} 条资源${payload?.batches > 1 ? `（分 ${payload.batches} 批）` : ''}。`,
+    );
     router.refresh();
-  }
-
-  async function readFile(file?: File) {
-    if (!file) return;
-    setFileName(file.name);
-    const arrayBuffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
-    setContent(btoa(binary));
   }
 
   async function downloadTemplate() {
@@ -72,7 +66,8 @@ export function AdminImportForm() {
         <div>
           <h2>批量导入</h2>
           <p className="subtle">
-            支持 Excel (.xlsx / .xls) 文件，第一行为表头，字段可使用中文列名。点击“下载模板”获取带示例的导入模板。
+            支持 Excel (.xlsx / .xls) 文件，第一行为表头，字段可使用中文列名。大文件会在服务端自动分批排队写入，不限制行数。
+            点击“下载模板”获取带示例的导入模板。
           </p>
         </div>
         <div className="meta">
@@ -84,7 +79,7 @@ export function AdminImportForm() {
             <input
               type="file"
               accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              onChange={(event) => readFile(event.currentTarget.files?.[0])}
+              onChange={(event) => setFile(event.currentTarget.files?.[0] ?? null)}
             />
             <FileUp size={16} />
             选择文件
@@ -92,18 +87,18 @@ export function AdminImportForm() {
         </div>
       </header>
 
-      {fileName ? (
+      {file ? (
         <div className="file-selected">
           <FileSpreadsheet size={18} />
-          <span>{fileName}</span>
+          <span>{file.name}</span>
         </div>
       ) : (
         <div className="empty-hint">请选择要导入的 Excel 文件</div>
       )}
 
       <div className="meta">
-        <button className="button primary" type="submit" disabled={busy || !content}>
-          {busy ? '导入中...' : '开始导入'}
+        <button className="button primary" type="submit" disabled={busy || !file}>
+          {busy ? '分批导入中，请稍候…' : '开始导入'}
         </button>
         {message ? (
           <span className={message.includes('失败') ? 'badge danger' : 'badge primary'}>{message}</span>

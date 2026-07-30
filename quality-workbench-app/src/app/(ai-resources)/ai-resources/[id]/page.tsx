@@ -30,7 +30,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
       _count: { select: { favorites: true, likes: true } },
       updateLogs: {
         orderBy: { createdAt: 'desc' },
-        take: 10,
+        take: 3,
         include: {
           actor: { select: { username: true } },
           reviewer: { select: { username: true } },
@@ -218,7 +218,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
 
           <section className="panel detail-panel">
             <h2>更新记录</h2>
-            <UpdateHistoryDialog items={updateHistory} />
+            <UpdateHistoryDialog resourceId={resource.id} initialItems={updateHistory} />
           </section>
         </aside>
       </div>

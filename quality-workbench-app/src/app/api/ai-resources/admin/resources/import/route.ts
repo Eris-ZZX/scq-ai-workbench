@@ -8,22 +8,26 @@ import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
 import { resourcePayloadSchema } from '@/modules/ai-resources/validation';
 
-const importSchema = z.object({
-  content: z.string().trim().min(2, '导入内容不能为空。'),
-});
+/** Rows per DB transaction. Large imports are queued as sequential batches (no user-facing caps). */
+const IMPORT_BATCH_SIZE = 40;
+
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireAiResourceRoleApi('admin');
 
-    const payload = importSchema.safeParse(await request.json().catch(() => null));
-    if (!payload.success) {
-      return NextResponse.json({ error: formatZodError(payload.error) }, { status: 400 });
+    const formData = await request.formData().catch(() => null);
+    const file = formData?.get('file');
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: '请上传 Excel 文件。' }, { status: 400 });
     }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
 
     let parsedRows: Array<z.infer<typeof resourcePayloadSchema>>;
     try {
-      const rawRows = parseExcelRows(payload.data.content);
+      const rawRows = parseExcelRows(buffer);
       if (!rawRows.length) {
         return NextResponse.json({ error: '没有解析到可导入的资源。' }, { status: 400 });
       }
@@ -42,44 +46,72 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const created = [];
-      for (const row of parsedRows) {
-        const resource = await tx.aiResource.create({
-          data: {
-            ...toDbResourceData(row),
-            createdById: actor.userId,
-          },
-        });
-        await tx.aiResourceUpdateLog.create({
-          data: {
-            resourceId: resource.id,
-            actorId: actor.userId,
-            reviewerId: actor.userId,
-            action: 'CREATE',
-            result: 'APPROVED',
-            updateSummary: '管理员批量导入',
-            changedFields: Object.keys(row).join(','),
-          },
-        });
-        created.push(resource);
-      }
-      return created;
-    });
+    const count = await importRowsInBatches(parsedRows, actor.userId);
 
-    return NextResponse.json({ count: result.length });
+    return NextResponse.json({
+      count,
+      batches: Math.ceil(count / IMPORT_BATCH_SIZE),
+      batchSize: IMPORT_BATCH_SIZE,
+    });
   } catch (error) {
     return aiResourceErrorResponse(error);
   }
 }
 
-function parseExcelRows(content: string): Array<Record<string, unknown>> {
-  let buffer: Buffer;
-  try {
-    buffer = Buffer.from(content, 'base64');
-  } catch {
-    throw new ImportError('Excel 文件内容无法解码。');
+async function importRowsInBatches(
+  rows: Array<z.infer<typeof resourcePayloadSchema>>,
+  userId: string,
+) {
+  let imported = 0;
+
+  for (let offset = 0; offset < rows.length; offset += IMPORT_BATCH_SIZE) {
+    const batch = rows.slice(offset, offset + IMPORT_BATCH_SIZE);
+
+    await prisma.$transaction(
+      async (tx) => {
+        const created = await tx.aiResource.createManyAndReturn({
+          data: batch.map((row) => ({
+            ...toDbResourceData(row),
+            createdById: userId,
+          })),
+        });
+
+        await tx.aiResourceUpdateLog.createMany({
+          data: created.map((resource, index) => {
+            const row = batch[index]!;
+            return {
+              resourceId: resource.id,
+              actorId: userId,
+              reviewerId: userId,
+              action: 'CREATE',
+              result: 'APPROVED',
+              updateSummary: '管理员批量导入',
+              changedFields: Object.keys(row).join(','),
+            };
+          }),
+        });
+      },
+      {
+        maxWait: 15_000,
+        timeout: 120_000,
+      },
+    );
+
+    imported += batch.length;
+    // Yield between batches so other requests can progress (in-process queue).
+    await yieldEventLoop();
   }
+
+  return imported;
+}
+
+function yieldEventLoop() {
+  return new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+}
+
+function parseExcelRows(buffer: Buffer): Array<Record<string, unknown>> {
   if (buffer.length < 8) throw new ImportError('Excel 文件内容为空。');
 
   let workbook: XLSX.WorkBook;

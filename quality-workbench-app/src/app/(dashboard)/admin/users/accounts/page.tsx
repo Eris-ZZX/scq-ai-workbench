@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Plus, UserCog, X } from 'lucide-react';
+import { ClientPager } from '@/components/ui/pager';
 
 type User = {
   id: string;
@@ -23,6 +24,8 @@ type NewUserForm = {
   status: string;
 };
 
+type StatusFilter = 'active' | 'disabled';
+
 const emptyNewUser: NewUserForm = {
   username: '',
   email: '',
@@ -31,31 +34,51 @@ const emptyNewUser: NewUserForm = {
   status: 'active',
 };
 
+const PAGE_SIZE = 50;
+
 export default function AdminUserAccountsPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [newUser, setNewUser] = useState<NewUserForm>(emptyNewUser);
 
-  async function load() {
+  const load = useCallback(async (nextPage: number, nextStatus: StatusFilter) => {
     setError('');
     try {
-      const res = await fetch('/api/admin/users');
-      if (res.ok) setUsers(await res.json());
-      if (!res.ok) setError('加载用户失败，请刷新后重试。');
+      const res = await fetch(
+        `/api/admin/users?page=${nextPage}&pageSize=${PAGE_SIZE}&status=${nextStatus}`,
+      );
+      if (!res.ok) {
+        setError('加载用户失败，请刷新后重试。');
+        return;
+      }
+      const data = await res.json() as {
+        items: User[];
+        total: number;
+        page: number;
+        totalPages: number;
+      };
+      setUsers(data.items ?? []);
+      setTotal(data.total ?? 0);
+      setPage(data.page ?? nextPage);
+      setTotalPages(data.totalPages ?? 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载用户失败');
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
-
-  const activeUsers = useMemo(() => users.filter((user) => user.status === 'active'), [users]);
-  const disabledUsers = useMemo(() => users.filter((user) => user.status === 'disabled'), [users]);
+  useEffect(() => {
+    setLoading(true);
+    void load(page, statusFilter);
+  }, [load, page, statusFilter]);
 
   async function updateUser(id: string, data: Record<string, string | null>) {
     setError('');
@@ -72,7 +95,12 @@ export default function AdminUserAccountsPage() {
       return;
     }
     setError('');
-    await load();
+    // Status change may move the row out of current filter.
+    if (data.status && data.status !== statusFilter) {
+      await load(page, statusFilter);
+      return;
+    }
+    await load(page, statusFilter);
   }
 
   async function createUser() {
@@ -111,14 +139,24 @@ export default function AdminUserAccountsPage() {
     }
     setShowCreate(false);
     setNewUser(emptyNewUser);
-    await load();
+    const nextStatus = (newUser.status === 'disabled' ? 'disabled' : 'active') as StatusFilter;
+    setStatusFilter(nextStatus);
+    setPage(1);
+    await load(1, nextStatus);
   }
 
   function positionLabel(user: User) {
     return user.positionBinding?.positionRole?.name || '—';
   }
 
-  if (loading) return <div className="p-8 text-sm text-muted-foreground">加载中...</div>;
+  function changeStatusFilter(next: StatusFilter) {
+    setStatusFilter(next);
+    setPage(1);
+  }
+
+  if (loading && users.length === 0) {
+    return <div className="p-8 text-sm text-muted-foreground">加载中...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-ws-content-bg">
@@ -155,73 +193,104 @@ export default function AdminUserAccountsPage() {
           </div>
         )}
 
-        <section>
-          {[
-            { name: '启用', users: activeUsers },
-            { name: '禁用', users: disabledUsers },
-          ].map((group) => (
-            group.users.length > 0 && (
-              <div key={group.name} className="mb-6 overflow-hidden rounded-lg border border-border bg-white">
-                <div className="border-b border-border px-4 py-3">
-                  <h2 className="text-sm font-semibold text-foreground">{group.name}</h2>
-                  <div className="mt-0.5 text-xs text-muted-foreground">{group.users.length} 人</div>
-                </div>
-                <div className="overflow-auto">
-                  <table className="w-full text-sm table-fixed">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
-                        <th className="w-2/5 px-3 py-2 text-left">用户</th>
-                        <th className="w-[18%] px-3 py-2 text-left">岗位</th>
-                        <th className="w-[18%] px-3 py-2 text-left">系统权限</th>
-                        <th className="w-[18%] px-3 py-2 text-left">状态</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.users.map((user) => {
-                        const isSuperAdmin = user.username === 'admin';
-                        return (
-                          <tr key={user.id} className="border-b border-border transition hover:bg-muted/20">
-                            <td className="px-3 py-3">
-                              <div className="text-sm font-medium">{user.username}</div>
-                              {user.email && (
-                                <div className="text-xs text-muted-foreground">{user.email}</div>
-                              )}
-                            </td>
-                            <td className="px-3 py-3">
-                              <span className="text-xs text-muted-foreground">{positionLabel(user)}</span>
-                            </td>
-                            <td className="px-3 py-3">
-                              <select
-                                value={user.role}
-                                onChange={(event) => updateUser(user.id, { role: event.target.value })}
-                                disabled={saving || isSuperAdmin}
-                                className="h-8 w-full rounded border border-border px-2 text-xs disabled:bg-muted disabled:text-muted-foreground"
-                              >
-                                <option value="user">用户</option>
-                                <option value="manager">业务管理者</option>
-                                <option value="admin">管理员</option>
-                              </select>
-                            </td>
-                            <td className="px-3 py-3">
-                              <select
-                                value={user.status}
-                                onChange={(event) => updateUser(user.id, { status: event.target.value })}
-                                disabled={saving || isSuperAdmin}
-                                className="h-8 w-full max-w-36 rounded border border-border px-2 text-xs disabled:bg-muted disabled:text-muted-foreground"
-                              >
-                                <option value="active">启用</option>
-                                <option value="disabled">禁用</option>
-                              </select>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )
+        <div className="mb-4 flex gap-2">
+          {([
+            { value: 'active', label: '启用' },
+            { value: 'disabled', label: '禁用' },
+          ] as const).map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              className={`h-8 rounded border px-3 text-xs transition ${
+                statusFilter === tab.value
+                  ? 'border-ws-blue bg-ws-blue text-white'
+                  : 'border-border bg-white text-foreground hover:border-ws-blue'
+              }`}
+              onClick={() => changeStatusFilter(tab.value)}
+            >
+              {tab.label}
+            </button>
           ))}
+        </div>
+
+        <section>
+          <div className="mb-6 overflow-hidden rounded-lg border border-border bg-white">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                {statusFilter === 'active' ? '启用' : '禁用'}
+              </h2>
+              <div className="mt-0.5 text-xs text-muted-foreground">{total} 人</div>
+            </div>
+            <div className="overflow-auto">
+              <table className="w-full text-sm table-fixed">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
+                    <th className="w-2/5 px-3 py-2 text-left">用户</th>
+                    <th className="w-[18%] px-3 py-2 text-left">岗位</th>
+                    <th className="w-[18%] px-3 py-2 text-left">系统权限</th>
+                    <th className="w-[18%] px-3 py-2 text-left">状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => {
+                    const isSuperAdmin = user.username === 'admin';
+                    return (
+                      <tr key={user.id} className="border-b border-border transition hover:bg-muted/20">
+                        <td className="px-3 py-3">
+                          <div className="text-sm font-medium">{user.username}</div>
+                          {user.email && (
+                            <div className="text-xs text-muted-foreground">{user.email}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="text-xs text-muted-foreground">{positionLabel(user)}</span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <select
+                            value={user.role}
+                            onChange={(event) => updateUser(user.id, { role: event.target.value })}
+                            disabled={saving || isSuperAdmin}
+                            className="h-8 w-full rounded border border-border px-2 text-xs disabled:bg-muted disabled:text-muted-foreground"
+                          >
+                            <option value="user">用户</option>
+                            <option value="manager">业务管理者</option>
+                            <option value="admin">管理员</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-3">
+                          <select
+                            value={user.status}
+                            onChange={(event) => updateUser(user.id, { status: event.target.value })}
+                            disabled={saving || isSuperAdmin}
+                            className="h-8 w-full max-w-36 rounded border border-border px-2 text-xs disabled:bg-muted disabled:text-muted-foreground"
+                          >
+                            <option value="active">启用</option>
+                            <option value="disabled">禁用</option>
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {users.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                        暂无用户
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+            <div className="border-t border-border px-4 py-3">
+              <ClientPager
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                disabled={loading || saving}
+                onPageChange={setPage}
+              />
+            </div>
+          </div>
         </section>
       </div>
 
@@ -331,4 +400,3 @@ function CreateUserModal({
     </div>
   );
 }
-
