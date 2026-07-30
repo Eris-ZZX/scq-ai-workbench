@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { scheduleResourceBroadcast } from '@/lib/dingtalk/notify-review';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 import { diffKeys } from '@/modules/ai-resources/policy';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
-import { archiveResourceSchema, reviewSubmissionSchema } from '@/modules/ai-resources/validation';
+import { archiveResourceSchema, resourceUpdateBodySchema } from '@/modules/ai-resources/validation';
 
 export async function PATCH(
   request: NextRequest,
@@ -20,7 +21,7 @@ export async function PATCH(
       return NextResponse.json({ error: '资源不存在。' }, { status: 404 });
     }
 
-    const payload = reviewSubmissionSchema.safeParse(await request.json().catch(() => null));
+    const payload = resourceUpdateBodySchema.safeParse(await request.json().catch(() => null));
     if (!payload.success) {
       return NextResponse.json({ error: formatZodError(payload.error) }, { status: 400 });
     }
@@ -37,6 +38,7 @@ export async function PATCH(
       content: payload.data.resource.content,
       attachments: payload.data.resource.attachments,
       extractedText: payload.data.resource.extractedText,
+      extension: payload.data.resource.extension,
     };
 
     const changedFields = diffKeys(
@@ -78,6 +80,18 @@ export async function PATCH(
       });
 
       return resource;
+    });
+
+    scheduleResourceBroadcast({
+      kind: 'UPDATE',
+      resourceId: result.id,
+      name: result.name,
+      summary: result.summary,
+      type: result.type,
+      ownerName: result.ownerName,
+      tags: result.tags,
+      actorName: actor.username,
+      updateSummary: payload.data.updateSummary,
     });
 
     return NextResponse.json({ resource: result });

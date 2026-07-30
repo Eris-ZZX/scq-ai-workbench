@@ -67,10 +67,13 @@ export const resourcePayloadSchema = z.object({
   extractedText: z.string().optional().nullable(),
 });
 
-export const reviewSubmissionSchema = z.object({
+export const resourceUpdateBodySchema = z.object({
   updateSummary: z.string().trim().min(4).max(500),
-  reviewerId: z.string().trim().min(1, '请选择审批人'),
   resource: resourcePayloadSchema,
+});
+
+export const reviewSubmissionSchema = resourceUpdateBodySchema.extend({
+  reviewerId: z.string().trim().min(1, '请选择审批人'),
 });
 
 export const rejectSchema = z.object({

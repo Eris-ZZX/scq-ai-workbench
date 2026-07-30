@@ -32,7 +32,10 @@ export async function authMiddleware(request: NextRequest) {
 
   if (!token) {
     if (isApi) return NextResponse.json({ error: '未登录' }, { status: 401 });
-    return NextResponse.redirect(getRequestUrl(request, '/login'));
+    const loginUrl = getRequestUrl(request, '/login');
+    const next = `${pathname}${request.nextUrl.search}`;
+    if (next && next !== '/') loginUrl.searchParams.set('next', next);
+    return NextResponse.redirect(loginUrl);
   }
 
   try {
@@ -45,7 +48,10 @@ export async function authMiddleware(request: NextRequest) {
     return res;
   } catch {
     if (isApi) return NextResponse.json({ error: '会话已过期' }, { status: 401 });
-    const res = NextResponse.redirect(getRequestUrl(request, '/login'));
+    const loginUrl = getRequestUrl(request, '/login');
+    const next = `${pathname}${request.nextUrl.search}`;
+    if (next && next !== '/') loginUrl.searchParams.set('next', next);
+    const res = NextResponse.redirect(loginUrl);
     res.cookies.delete(COOKIE_NAME);
     return res;
   }

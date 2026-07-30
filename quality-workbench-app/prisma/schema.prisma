@@ -28,7 +28,8 @@ model User {
 
   // 外部系统集成预留
   externalSource String? // 钉钉 / 企业 LDAP
-  externalId     String? // 外部系统的用户 ID
+  externalId     String? // 外部系统的用户 ID（钉钉为 unionId）
+  dingtalkUserId String? // 钉钉企业通讯录 userid（工作通知用）
   syncAt         DateTime?
 
   projectMembers ProjectMember[]
@@ -64,6 +65,7 @@ model User {
   @@index([username])
   @@index([role])
   @@index([status])
+  @@index([dingtalkUserId])
 }
 
 // ═══════════════════════════════════════════════
@@ -756,7 +758,7 @@ model AiResource {
 model AiResourceReviewRequest {
   id            String    @id @default(cuid())
   legacyId      String?   @unique
-  type          String    // CREATE | UPDATE
+  type          String    // CREATE | UPDATE | ARCHIVE
   status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
   resourceId    String?
   proposedData  String    // JSON
@@ -765,6 +767,11 @@ model AiResourceReviewRequest {
   rejectReason  String?
   createdAt     DateTime  @default(now())
   reviewedAt    DateTime?
+  dingtalkTodoId     String?
+  dingtalkTodoUnionId String?
+  /** 驳回后提交人待办（修改/废弃） */
+  dingtalkReworkTodoId     String?
+  dingtalkReworkTodoUnionId String?
 
   requesterId String
   requester   User @relation("AiResourceReviewRequester", fields: [requesterId], references: [id], onDelete: Restrict)
@@ -778,6 +785,14 @@ model AiResourceReviewRequest {
   @@index([requesterId])
   @@index([reviewerId])
   @@index([resourceId])
+}
+
+/// 通用应用配置（key/value JSON 文本）
+model AppSetting {
+  key         String   @id
+  value       String
+  updatedAt   DateTime @updatedAt
+  updatedById String?
 }
 
 model AiResourceUpdateLog {

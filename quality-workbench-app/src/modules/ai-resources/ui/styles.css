@@ -2272,6 +2272,65 @@ h3 {
   font-weight: 600;
 }
 
+.rejected-rework-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.rejected-rework-archive {
+  display: grid;
+  gap: 10px;
+}
+
+.rejected-rework-actions .button {
+  width: 100%;
+}
+
+.dingtalk-settings {
+  display: grid;
+  gap: 24px;
+}
+
+.dingtalk-settings-block h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.dingtalk-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+  font-size: 14px;
+}
+
+.dingtalk-env-list {
+  margin: 8px 0 12px;
+  padding-left: 18px;
+  line-height: 1.7;
+}
+
+.dingtalk-env-list .ok {
+  color: #1f6b3a;
+}
+
+.dingtalk-env-list .bad {
+  color: #9a3412;
+}
+
+.dingtalk-feedback {
+  margin: 0;
+  font-size: 13px;
+}
+
+.dingtalk-feedback.ok {
+  color: #1f6b3a;
+}
+
+.dingtalk-feedback.bad {
+  color: #9a3412;
+}
+
 @media (max-width: 900px) {
   .detail-layout,
   .review-detail-layout {

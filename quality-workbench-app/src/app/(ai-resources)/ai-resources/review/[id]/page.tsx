@@ -13,8 +13,9 @@ import {
   reviewTypeLabel,
 } from '@/modules/ai-resources/labels';
 import { parseList } from '@/modules/ai-resources/list-fields';
-import { canActOnReviewRequest, canAdmin, canReview } from '@/modules/ai-resources/policy';
+import { canActOnReviewRequest, canAdmin, canResubmitReview, canReview } from '@/modules/ai-resources/policy';
 import { DownloadAttachment } from '@/modules/ai-resources/ui/download-attachment';
+import { RejectedReworkActions } from '@/modules/ai-resources/ui/rejected-rework-actions';
 import { ReviewActions } from '@/modules/ai-resources/ui/review-actions';
 
 export default async function ReviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -64,6 +65,7 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
   const proposed = fromPrismaJsonObject(request.proposedData) as Record<string, unknown>;
   const changedFields = parseList(request.changedFields);
   const canAct = canActOnReviewRequest(actor, request);
+  const canRework = canResubmitReview(actor, request);
   const title = String(proposed.name ?? request.resource?.name ?? '未命名资源');
   const type = (proposed.type as AiResourceType | undefined) ?? (request.resource?.type as AiResourceType | undefined);
   const tags = parseList(proposed.tags ?? request.resource?.tags);
@@ -273,6 +275,12 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
 
             {canAct ? (
               <ReviewActions reviewId={request.id} redirectTo="/ai-resources/review?tab=pending" stacked />
+            ) : canRework ? (
+              <RejectedReworkActions
+                reviewId={request.id}
+                reviewType={request.type}
+                initialReviewerId={request.reviewerId}
+              />
             ) : request.status === 'PENDING' ? (
               <p className="subtle">当前账号不可对此单执行审批。</p>
             ) : (

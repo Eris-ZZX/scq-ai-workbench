@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { createSession } from '@/platform/auth/auth.config';
 import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 import { getRequestUrl } from '@/platform/auth/request-url';
+import { AUTH_RETURN_COOKIE, resolveReturnPath } from '@/platform/auth/return-path';
 import {
   findDingTalkUser,
   createDingTalkUser,
@@ -127,6 +128,7 @@ export async function GET(request: Request) {
             if (idRes.ok) {
               const idData = JSON.parse(idText) as { errcode: number; result?: { userid?: string } };
               if (idData.errcode === 0 && idData.result?.userid) {
+                profile.dingtalkUserId = idData.result.userid;
                 const detailRes = await fetch(
                   `https://oapi.dingtalk.com/topapi/v2/user/get?access_token=${at}`,
                   { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userid: idData.result.userid }) },
@@ -180,7 +182,16 @@ export async function GET(request: Request) {
     // 第 4 步：签发 session
     await createSession({ id: user.id, username: user.username, role: user.role });
 
-    return NextResponse.redirect(getRequestUrl(request, DEFAULT_AFTER_LOGIN), { status: 303 });
+    const returnTo = resolveReturnPath(jar.get(AUTH_RETURN_COOKIE)?.value, DEFAULT_AFTER_LOGIN);
+    jar.set(AUTH_RETURN_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
+
+    return NextResponse.redirect(getRequestUrl(request, returnTo), { status: 303 });
   } catch (err) {
     console.error('[dingtalk] Unexpected callback error:', err);
     return loginErrorRedirect(request, 'dingtalk');

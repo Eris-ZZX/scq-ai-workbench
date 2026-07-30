@@ -15,6 +15,8 @@ export interface DingTalkProfile {
   email?: string;
   /** 钉钉通讯录职位（title） */
   title?: string;
+  /** 企业通讯录 userid */
+  dingtalkUserId?: string;
 }
 
 /** 按钉钉 unionId 查找已有的钉钉用户（组合唯一约束） */
@@ -74,6 +76,7 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
         avatar: profile.avatarUrl ?? null,
         externalSource: 'dingtalk',
         externalId: profile.unionId,
+        dingtalkUserId: profile.dingtalkUserId ?? null,
         syncAt: new Date(),
         role: 'user',
         status: 'active',
@@ -110,6 +113,7 @@ export async function syncDingTalkUser(userId: string, profile: DingTalkProfile)
     data: {
       email: profile.email ?? undefined,
       avatar: profile.avatarUrl ?? undefined,
+      dingtalkUserId: profile.dingtalkUserId ?? undefined,
       syncAt: new Date(),
     },
   });

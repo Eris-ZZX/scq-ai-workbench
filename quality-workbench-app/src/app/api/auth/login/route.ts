@@ -4,10 +4,12 @@ import { DUMMY_HASH, findByUsername, verifyPassword } from '@/lib/db/auth';
 import { createSession } from '@/platform/auth/auth.config';
 import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 import { getRequestUrl } from '@/platform/auth/request-url';
+import { resolveReturnPath } from '@/platform/auth/return-path';
 
 type LoginBody = {
   username?: string;
   password?: string;
+  next?: string;
 };
 
 function isFormRequest(request: Request) {
@@ -24,11 +26,13 @@ async function readLoginBody(request: Request): Promise<{ body: LoginBody | null
     const form = await request.formData();
     const username = form.get('username');
     const password = form.get('password');
+    const next = form.get('next');
     return {
       formMode,
       body: {
         username: typeof username === 'string' ? username : undefined,
         password: typeof password === 'string' ? password : undefined,
+        next: typeof next === 'string' ? next : undefined,
       },
     };
   }
@@ -81,7 +85,8 @@ export async function POST(request: Request) {
   });
 
   if (formMode) {
-    const response = NextResponse.redirect(getRequestUrl(request, DEFAULT_AFTER_LOGIN), { status: 303 });
+    const next = resolveReturnPath(body.next, DEFAULT_AFTER_LOGIN);
+    const response = NextResponse.redirect(getRequestUrl(request, next), { status: 303 });
     response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
     return response;
   }

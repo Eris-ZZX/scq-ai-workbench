@@ -8,7 +8,9 @@ import {
   reviewTypeLabel,
 } from '@/modules/ai-resources/labels';
 import { fromPrismaJsonObject } from '@/modules/ai-resources/json';
-import { canReview, pendingReviewWhere } from '@/modules/ai-resources/policy';
+import { canReview, inboxReviewWhere } from '@/modules/ai-resources/policy';
+import type { AiResourceActor } from '@/modules/ai-resources/guards';
+import type { Prisma } from '@/generated/prisma/client';
 
 type TabKey = 'pending' | 'mine' | 'done';
 
@@ -40,39 +42,25 @@ export default async function ReviewPage({
   });
 
   const [pendingCount, mineCount, doneCount] = await Promise.all([
-    isReviewer
-      ? prisma.aiResourceReviewRequest.count({
-          where: pendingReviewWhere(actor),
-        })
-      : Promise.resolve(0),
+    prisma.aiResourceReviewRequest.count({
+      where: inboxReviewWhere(actor),
+    }),
     prisma.aiResourceReviewRequest.count({ where: { requesterId: actor.userId } }),
-    isReviewer
-      ? prisma.aiResourceReviewRequest.count({
-          where: {
-            status: { in: ['APPROVED', 'REJECTED'] },
-            OR: [{ reviewerId: actor.userId }, { requesterId: actor.userId }],
-          },
-        })
-      : prisma.aiResourceReviewRequest.count({
-          where: {
-            requesterId: actor.userId,
-            status: { in: ['APPROVED', 'REJECTED'] },
-          },
-        }),
+    prisma.aiResourceReviewRequest.count({
+      where: doneReviewWhere(actor, isReviewer),
+    }),
   ]);
 
   return (
     <main className="main">
       <nav className="review-tabs" aria-label="审批筛选">
-        {isReviewer ? (
-          <Link
-            className={tab === 'pending' ? 'review-tab active' : 'review-tab'}
-            href="/ai-resources/review?tab=pending"
-          >
-            待我审批
-            <strong>{pendingCount}</strong>
-          </Link>
-        ) : null}
+        <Link
+          className={tab === 'pending' ? 'review-tab active' : 'review-tab'}
+          href="/ai-resources/review?tab=pending"
+        >
+          待我处理
+          <strong>{pendingCount}</strong>
+        </Link>
         <Link className={tab === 'mine' ? 'review-tab active' : 'review-tab'} href="/ai-resources/review?tab=mine">
           我的提交
           <strong>{mineCount}</strong>
@@ -116,16 +104,18 @@ export default async function ReviewPage({
                       ? 'badge warning'
                       : request.status === 'REJECTED'
                         ? 'badge danger'
-                        : 'badge'
+                        : request.status === 'DISCARDED'
+                          ? 'badge'
+                          : 'badge'
                   }
                 >
-                  {reviewStatusLabel[request.status as AiReviewStatus]}
+                  {reviewStatusLabel[request.status as AiReviewStatus] ?? request.status}
                 </span>
               </Link>
             );
           })
         ) : (
-          <div className="empty">暂无审批记录。</div>
+          <div className="empty">暂无待处理记录。</div>
         )}
       </section>
     </main>
@@ -134,22 +124,48 @@ export default async function ReviewPage({
 
 function resolveTab(tab: string | undefined, isReviewer: boolean): TabKey {
   if (tab === 'pending' || tab === 'mine' || tab === 'done') return tab;
-  return isReviewer ? 'pending' : 'mine';
+  return isReviewer ? 'pending' : 'pending';
 }
 
 function buildWhere(
-  actor: Parameters<typeof pendingReviewWhere>[0],
+  actor: AiResourceActor,
   isReviewer: boolean,
   tab: TabKey,
-) {
+): Prisma.AiResourceReviewRequestWhereInput {
   if (tab === 'pending') {
-    return pendingReviewWhere(actor);
+    return inboxReviewWhere(actor);
   }
   if (tab === 'mine') {
     return { requesterId: actor.userId };
   }
+  return doneReviewWhere(actor, isReviewer);
+}
+
+function doneReviewWhere(
+  actor: AiResourceActor,
+  isReviewer: boolean,
+): Prisma.AiResourceReviewRequestWhereInput {
+  if (isReviewer) {
+    return {
+      OR: [
+        {
+          status: 'APPROVED',
+          OR: [{ reviewerId: actor.userId }, { requesterId: actor.userId }],
+        },
+        {
+          status: 'REJECTED',
+          reviewerId: actor.userId,
+          requesterId: { not: actor.userId },
+        },
+        {
+          status: 'DISCARDED',
+          requesterId: actor.userId,
+        },
+      ],
+    };
+  }
   return {
-    status: { in: ['APPROVED', 'REJECTED'] },
-    ...(isReviewer ? { OR: [{ reviewerId: actor.userId }, { requesterId: actor.userId }] } : { requesterId: actor.userId }),
+    requesterId: actor.userId,
+    status: { in: ['APPROVED', 'DISCARDED'] },
   };
 }

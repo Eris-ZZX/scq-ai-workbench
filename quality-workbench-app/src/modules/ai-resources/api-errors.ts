@@ -9,9 +9,11 @@ const fieldLabels: Record<string, string> = {
   resourceUrl: '存储路径/链接',
   content: '实现方法简述',
   updateSummary: '修改原因',
+  reviewerId: '审批人',
   reason: '驳回原因',
   resource: '资源信息',
   confirmationName: '确认名称',
+  attachments: '附件',
 };
 
 export function formatZodError(error: ZodError) {

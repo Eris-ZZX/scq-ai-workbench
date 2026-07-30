@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { scheduleReviewSubmitted } from '@/lib/dingtalk/notify-review';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { toJsonString } from '@/modules/ai-resources/json';
@@ -76,6 +77,7 @@ export async function POST(
       });
     });
 
+    scheduleReviewSubmitted(review.id);
     return NextResponse.json({ review }, { status: 201 });
   } catch (error) {
     return aiResourceErrorResponse(error);

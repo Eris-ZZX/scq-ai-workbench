@@ -31,9 +31,10 @@ export const reviewTypeLabel: Record<AiReviewType, string> = {
 };
 
 export const reviewStatusLabel: Record<AiReviewStatus, string> = {
-  PENDING: '待审批',
+  PENDING: '待处理',
   APPROVED: '已通过',
   REJECTED: '已驳回',
+  DISCARDED: '已废弃',
 };
 
 export const resourceFieldLabel: Record<string, string> = {

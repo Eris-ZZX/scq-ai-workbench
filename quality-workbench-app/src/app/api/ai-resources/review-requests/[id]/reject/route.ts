@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { scheduleReviewResolved } from '@/lib/dingtalk/notify-review';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
@@ -72,6 +73,7 @@ export async function POST(
       return handled;
     });
 
+    scheduleReviewResolved(result.id, { publish: false });
     return NextResponse.json({ review: result });
   } catch (error) {
     return aiResourceErrorResponse(error);

@@ -21,7 +21,7 @@ export type AiVisibilityScope = (typeof AI_VISIBILITY_SCOPES)[number];
 export const AI_REVIEW_TYPES = ['CREATE', 'UPDATE', 'ARCHIVE'] as const;
 export type AiReviewType = (typeof AI_REVIEW_TYPES)[number];
 
-export const AI_REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
+export const AI_REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'DISCARDED'] as const;
 export type AiReviewStatus = (typeof AI_REVIEW_STATUSES)[number];
 
 export const AI_UPDATE_LOG_ACTIONS = ['CREATE', 'UPDATE', 'ARCHIVE', 'RESTORE'] as const;

@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
+import { AUTH_RETURN_COOKIE, resolveReturnPath } from '@/platform/auth/return-path';
 
 const STATE_COOKIE = 'dingtalk_oauth_state';
 
@@ -16,7 +17,7 @@ function getDingTalkConfig() {
   return { clientId, clientSecret, redirectUri };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const config = getDingTalkConfig();
   if (!config) {
     return NextResponse.json(
@@ -24,6 +25,9 @@ export async function GET() {
       { status: 500 },
     );
   }
+
+  const url = new URL(request.url);
+  const next = resolveReturnPath(url.searchParams.get('next'));
 
   const state = crypto.randomBytes(32).toString('hex');
 
@@ -35,8 +39,14 @@ export async function GET() {
     maxAge: 600,
     path: '/',
   });
+  jar.set(AUTH_RETURN_COOKIE, next, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 600,
+    path: '/',
+  });
 
-  // 新版 OAuth2 端点
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: config.redirectUri,

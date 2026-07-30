@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { DatabaseZap, ShieldUser, TableProperties } from 'lucide-react';
+import { BellRing, DatabaseZap, ShieldUser, TableProperties } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireAiResourceRole } from '@/modules/ai-resources/guards';
 
@@ -44,6 +44,17 @@ export default async function AdminPage() {
             <span className="admin-feature-body">
               <strong>角色管理</strong>
               <span>分配模块管理员、审批人与普通成员角色。</span>
+            </span>
+            <span className="admin-feature-action">进入</span>
+          </Link>
+
+          <Link className="admin-feature-card" href="/ai-resources/admin/dingtalk">
+            <span className="admin-feature-icon">
+              <BellRing size={24} />
+            </span>
+            <span className="admin-feature-body">
+              <strong>钉钉通知</strong>
+              <span>配置审批待办与资源上线工作通知（应用内正式通道）。</span>
             </span>
             <span className="admin-feature-action">进入</span>
           </Link>

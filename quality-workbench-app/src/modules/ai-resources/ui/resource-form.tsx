@@ -27,6 +27,9 @@ import { parseJsonForDisplay } from '@/modules/ai-resources/json';
 type ResourceFormProps = {
   resource?: AiResource;
   directUpdate?: boolean;
+  /** 对被驳回单据重新提交（同一审批单） */
+  resubmitReviewId?: string;
+  initialReviewerId?: string | null;
 };
 
 type ResourceAttachment = {
@@ -58,7 +61,12 @@ const resourceTypes: Array<[AiResourceType, string]> = [
 
 const groupTags = ['NPQ', 'PQM', 'SQM', 'RAM', 'FAE', 'QCM', 'EMS', '部门'];
 
-export function ResourceForm({ resource, directUpdate = false }: ResourceFormProps) {
+export function ResourceForm({
+  resource,
+  directUpdate = false,
+  resubmitReviewId,
+  initialReviewerId,
+}: ResourceFormProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -68,7 +76,7 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
   );
   const [files, setFiles] = useState<File[]>([]);
   const [reviewers, setReviewers] = useState<Array<{ id: string; username: string; role: string }>>([]);
-  const [reviewerId, setReviewerId] = useState('');
+  const [reviewerId, setReviewerId] = useState(initialReviewerId ?? '');
   const [hostedHtml, setHostedHtml] = useState<HostedHtmlMeta | null>(() =>
     parseHostedHtml(resource?.extension),
   );
@@ -84,15 +92,23 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
     updateSummary: '',
   });
 
-  const endpoint = resource
-    ? directUpdate
-      ? `/api/ai-resources/admin/resources/${resource.id}`
-      : `/api/ai-resources/resources/${resource.id}/change-request`
-    : '/api/ai-resources/resources/draft';
-  const submitMethod = directUpdate ? 'PATCH' : 'POST';
-  const title = resource ? (directUpdate ? '保存资源' : '提交修改审批') : '提交新资源审批';
+  const endpoint = resubmitReviewId
+    ? `/api/ai-resources/review-requests/${resubmitReviewId}/resubmit`
+    : resource
+      ? directUpdate
+        ? `/api/ai-resources/admin/resources/${resource.id}`
+        : `/api/ai-resources/resources/${resource.id}/change-request`
+      : '/api/ai-resources/resources/draft';
+  const submitMethod = directUpdate && !resubmitReviewId ? 'PATCH' : 'POST';
+  const title = resubmitReviewId
+    ? '重新提交审批'
+    : resource
+      ? directUpdate
+        ? '保存资源'
+        : '提交修改审批'
+      : '提交新资源审批';
   const isWebPage = form.type === 'WEB_PAGE';
-  const needsReviewer = !directUpdate;
+  const needsReviewer = !directUpdate || Boolean(resubmitReviewId);
 
   useEffect(() => {
     if (!needsReviewer) return;
@@ -146,7 +162,11 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
         method: submitMethod,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          updateSummary: resource ? form.updateSummary : '首次上传',
+          updateSummary: resubmitReviewId
+            ? form.updateSummary.trim() || '按驳回意见修改后重新提交'
+            : resource
+              ? form.updateSummary
+              : '首次上传',
           ...(needsReviewer ? { reviewerId } : {}),
           resource: {
             name: form.name,
@@ -170,8 +190,12 @@ export function ResourceForm({ resource, directUpdate = false }: ResourceFormPro
         return;
       }
 
-      setMessage(directUpdate ? '资源已保存。' : '已提交审批。');
-      router.push(directUpdate && resource ? `/ai-resources/${resource.id}` : '/ai-resources/review');
+      setMessage(directUpdate && !resubmitReviewId ? '资源已保存。' : '已提交审批。');
+      if (resubmitReviewId) {
+        router.push(`/ai-resources/review/${resubmitReviewId}`);
+      } else {
+        router.push(directUpdate && resource ? `/ai-resources/${resource.id}` : '/ai-resources/review');
+      }
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '附件上传失败。');

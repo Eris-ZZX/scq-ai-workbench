@@ -87,6 +87,8 @@ npx prisma migrate deploy
 | --- | --- |
 | `20260730120000_ai_resource_search_trgm` | 启用 `pg_trgm`，为名称/说明/正文等建立搜索索引 |
 | `20260730140000_ai_review_assignee_index` | 为审批单 `reviewerId` 建索引（指定审批人列表） |
+| `20260730160000_dingtalk_notify` | 钉钉 userid / 待办字段、`AppSetting` 配置表 |
+| `20260730170000_dingtalk_rework_todo` | 驳回后提交人待办字段 |
 
 检查是否已应用：
 
@@ -152,9 +154,11 @@ POSTGRES_DB="qe"
 | --- | --- | --- |
 | `DATABASE_URL` | 是 | PostgreSQL 连接串,格式 `postgresql://用户:密码@主机:5432/库名?schema=public`。生产环境用户名/密码/库名需与 `docker-compose.yml` 的 `POSTGRES_*` 一致。 |
 | `JWT_SECRET` | 是 | 登录会话签名密钥。生产环境必须配置，建议使用 32 位以上随机字符串。 |
-| `DINGTALK_CLIENT_ID` | 否 | 钉钉扫码登录应用 ID。启用钉钉登录时需要。 |
-| `DINGTALK_CLIENT_SECRET` | 否 | 钉钉扫码登录应用密钥。启用钉钉登录时需要。 |
+| `DINGTALK_CLIENT_ID` | 否 | 钉钉企业内部应用 AppKey（扫码登录 / 工作通知 / 待办共用）。 |
+| `DINGTALK_CLIENT_SECRET` | 否 | 钉钉应用 AppSecret。 |
 | `DINGTALK_REDIRECT_URI` | 否 | 钉钉 OAuth 回调地址。启用钉钉登录时需要。 |
+| `DINGTALK_AGENT_ID` | 否 | 钉钉微应用 AgentId。启用审批工作通知 / 上线广播时需要。 |
+| `APP_BASE_URL` | 否 | 对外可访问的站点根地址（无末尾斜杠），用于待办与工作通知中的详情链接，如 `https://qe.example.com`。 |
 | `ALLOWED_DEV_ORIGINS` | 否 | 开发环境跨主机访问白名单，生产环境通常不需要。 |
 
 说明：AI 资源库为产品内置模块，默认启用，无需额外开关。
@@ -177,14 +181,16 @@ POSTGRES_DB="qe"
 - 生产环境务必设置强 `POSTGRES_PASSWORD`,不要沿用本地开发的弱密码。
 - 定期对 PostgreSQL 做备份(如 `pg_dump`),重要数据勿仅依赖单机命名卷。
 
-## 4.1 钉钉登录配置
+## 4.1 钉钉登录与通知配置
 
-如需保留钉钉扫码登录，IT 需要在钉钉开放平台准备企业内部应用，并在服务器环境变量中配置：
+如需钉钉扫码登录，以及 AI 资源审批/上线工作通知，IT 需在钉钉开放平台准备**同一个企业内部应用**，并配置：
 
 ```env
-DINGTALK_CLIENT_ID="钉钉应用 Client ID"
-DINGTALK_CLIENT_SECRET="钉钉应用 Client Secret"
+DINGTALK_CLIENT_ID="钉钉应用 AppKey"
+DINGTALK_CLIENT_SECRET="钉钉应用 AppSecret"
 DINGTALK_REDIRECT_URI="https://你的域名/api/auth/dingtalk/callback"
+DINGTALK_AGENT_ID="微应用 AgentId"
+APP_BASE_URL="https://你的域名"
 ```
 
 项目固定回调路径为：
@@ -200,6 +206,14 @@ DINGTALK_REDIRECT_URI="https://你的域名/api/auth/dingtalk/callback"
 ```text
 https://qeworkbench.example.com/api/auth/dingtalk/callback
 ```
+
+通知能力说明：
+
+1. **提交审批**：给指定审批人发送工作通知 + 高优先级钉钉待办（`priority=40`），详情跳转 `/ai-resources/review/{id}`。
+2. **审批通过/驳回**：将对应待办标记完成。
+3. **新建/更新审批通过**：若在「AI 资源后台 → 钉钉通知」开启开关，则向已绑定钉钉的模块成员分批发送工作通知（不发群）；删除审批通过不广播。
+4. 开放平台需开通：**待办写权限**、工作通知相关权限；配置服务器出口 IP 白名单。
+5. 用户需至少钉钉扫码登录一次，系统才会落库 `unionId` / `dingtalkUserId`。
 
 如果应用通过 Nginx、IIS 或其他网关反向代理，代理需要正确传递原始协议和域名，否则可能导致回调地址、Cookie 安全属性或登录跳转异常。
 
@@ -261,7 +275,7 @@ npm run build
 
 说明：
 
-1. **`npx prisma migrate deploy` 不可省略。** 只 pull + build 不会应用新索引/表结构。本次版本尤其确认 `ai_resource_search_trgm` 与 `ai_review_assignee_index` 已在 `migrate status` 中显示为 Applied。
+1. **`npx prisma migrate deploy` 不可省略。** 只 pull + build 不会应用新索引/表结构。本次版本尤其确认 `ai_resource_search_trgm`、`ai_review_assignee_index` 与 `dingtalk_notify` 已在 `migrate status` 中显示为 Applied。
 2. **已有生产库不要重复 `db:seed`**，否则会把 `admin` 密码重置回 `zx123456`。仅全新空库需要 seed。
 3. 如果使用 PM2、systemd、Docker 或其他进程管理工具，请在 `npm run build` 后重启对应服务。
 4. 常规版本更新只更新代码与构建产物，**不会删除** `storage/` 下的用户上传附件。

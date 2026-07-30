@@ -23,19 +23,52 @@ export function canActOnReviewRequest(
   return true;
 }
 
-/** 待审批列表过滤：管理员看全部；审批人只看指派给自己的（含历史未指派单）。 */
-export function pendingReviewWhere(actor: AiResourceActor) {
-  if (!canReview(actor)) {
-    return { status: 'PENDING' as const, requesterId: actor.userId };
-  }
-  if (canAdmin(actor)) {
-    return { status: 'PENDING' as const };
-  }
-  return {
-    status: 'PENDING' as const,
-    requesterId: { not: actor.userId },
-    OR: [{ reviewerId: actor.userId }, { reviewerId: null }],
+/** 待我处理：待我审批的单 + 我被驳回需重提的单 */
+export function inboxReviewWhere(actor: AiResourceActor): Prisma.AiResourceReviewRequestWhereInput {
+  const rejectedMine: Prisma.AiResourceReviewRequestWhereInput = {
+    status: 'REJECTED',
+    requesterId: actor.userId,
   };
+
+  if (!canReview(actor)) {
+    return rejectedMine;
+  }
+
+  if (canAdmin(actor)) {
+    return {
+      OR: [{ status: 'PENDING' }, rejectedMine],
+    };
+  }
+
+  return {
+    OR: [
+      {
+        status: 'PENDING',
+        requesterId: { not: actor.userId },
+        OR: [{ reviewerId: actor.userId }, { reviewerId: null }],
+      },
+      rejectedMine,
+    ],
+  };
+}
+
+/** @deprecated use inboxReviewWhere */
+export function pendingReviewWhere(actor: AiResourceActor) {
+  return inboxReviewWhere(actor);
+}
+
+export function canResubmitReview(
+  actor: AiResourceActor,
+  request: { status: string; requesterId: string },
+) {
+  return request.status === 'REJECTED' && request.requesterId === actor.userId;
+}
+
+export function canDiscardReview(
+  actor: AiResourceActor,
+  request: { status: string; requesterId: string },
+) {
+  return request.status === 'REJECTED' && request.requesterId === actor.userId;
 }
 
 export function canEditResource(

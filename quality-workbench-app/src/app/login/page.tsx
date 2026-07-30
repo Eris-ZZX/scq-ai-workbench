@@ -1,8 +1,14 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/platform/auth/auth.config';
 import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
+import { resolveReturnPath } from '@/platform/auth/return-path';
 
 type SearchParams = Record<string, string | string[] | undefined>;
+
+function firstParam(params: SearchParams, key: string) {
+  const current = params[key];
+  return Array.isArray(current) ? current[0] : current;
+}
 
 function hasParam(params: SearchParams, key: string, value: string) {
   const current = params[key];
@@ -18,12 +24,18 @@ function dingtalkErrorMessage(params: SearchParams): string | null {
 }
 
 export default async function LoginPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
-  const session = await getSession();
-  if (session) redirect(DEFAULT_AFTER_LOGIN);
-
   const params = (await searchParams) ?? {};
+  const next = resolveReturnPath(firstParam(params, 'next'), DEFAULT_AFTER_LOGIN);
+
+  const session = await getSession();
+  if (session) redirect(next);
+
   const loginError = hasParam(params, 'error', '1');
   const dtError = dingtalkErrorMessage(params);
+  const dingtalkHref =
+    next && next !== DEFAULT_AFTER_LOGIN
+      ? `/api/auth/dingtalk?next=${encodeURIComponent(next)}`
+      : '/api/auth/dingtalk';
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ws-content-bg px-4">
@@ -38,6 +50,8 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
           {dtError && (
             <div className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{dtError}</div>
           )}
+
+          <input type="hidden" name="next" value={next} />
 
           <label className="mb-4 block">
             <span className="mb-1 block text-sm font-medium text-muted-foreground">用户名</span>
@@ -76,7 +90,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
         </div>
 
         <a
-          href="/api/auth/dingtalk"
+          href={dingtalkHref}
           className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
