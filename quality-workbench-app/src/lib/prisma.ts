@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-const PRISMA_CLIENT_REVISION = 6;
+const PRISMA_CLIENT_REVISION = 7;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -50,17 +50,29 @@ function getPrismaClient() {
   }
 
   const client = createPrismaClient();
-  if (process.env.NODE_ENV !== 'production') {
-    globalForPrisma.prisma = client;
-    globalForPrisma.prismaRevision = PRISMA_CLIENT_REVISION;
-  }
+  // Cache in all environments so lazy proxy does not create a client per access.
+  globalForPrisma.prisma = client;
+  globalForPrisma.prismaRevision = PRISMA_CLIENT_REVISION;
   return client;
 }
 
-export const prisma = getPrismaClient();
+/**
+ * Lazy Prisma accessor: import is safe during `next build` without DATABASE_URL.
+ * Client is created on first property access (runtime request / seed / migrate scripts).
+ */
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, prop, receiver);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+});
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
-    await prisma.$disconnect();
+    const existing = globalForPrisma.prisma;
+    if (existing) {
+      await existing.$disconnect();
+    }
   });
 }

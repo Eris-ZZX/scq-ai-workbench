@@ -27,7 +27,7 @@ Git
 PostgreSQL 17（推荐用 Docker 运行,见下方 docker-compose.yml）
 ```
 
-> 应用作为宿主机进程运行(`npm run start`),数据库为 PostgreSQL。本地开发与生产共用同一份 `docker-compose.yml` 启动 PostgreSQL:端口只绑 `127.0.0.1:5432`,不对外暴露。
+> 应用推荐生产用 `npm run start:prod`（自动拼库连接并 migrate）。数据库为 PostgreSQL。本地开发与生产共用同一份 `docker-compose.yml` 启动 PostgreSQL：端口只绑 `127.0.0.1:5432`,不对外暴露。也可 `docker compose --profile app up -d --build` 同时起应用容器。
 
 如需通过 Nginx、IIS 或其他网关暴露服务，请将外部访问地址反向代理到应用监听端口。
 
@@ -62,10 +62,11 @@ New-Item -ItemType File -Path .env -Force
 启动 PostgreSQL（Docker,首次会拉取 postgres:17 镜像）：
 
 ```bash
-docker compose up -d
+docker compose up -d db
 ```
 
-> 生产环境请先在同目录 `.env` 设置强 `POSTGRES_PASSWORD`(以及可选的 `POSTGRES_USER` / `POSTGRES_DB`),再执行 `docker compose up -d`,并确保 `DATABASE_URL` 与之匹配。
+> 生产环境请先在同目录 `.env` 设置强 `POSTGRES_PASSWORD`（以及 `JWT_SECRET`）。  
+> 使用 `npm run start:prod` 或官方镜像入口时，**可不填 `DATABASE_URL`**：启动脚本会按 `POSTGRES_*` 自动拼接，并在库就绪后执行 `prisma migrate deploy`。
 
 生成 Prisma Client：
 
@@ -73,22 +74,23 @@ docker compose up -d
 npx prisma generate
 ```
 
-执行数据库迁移：
+如不用启动脚本、而是手动启进程，再执行数据库迁移：
 
 ```bash
 npx prisma migrate deploy
 ```
 
-`migrate deploy` 只会执行库里尚未应用的迁移，可重复执行、安全增量升级。`git pull` / 发版**不会**自动改库结构，每次上线代码后都必须跑一遍。
+`migrate deploy` 只会执行库里尚未应用的迁移，可重复执行、安全增量升级。`git pull` / 发版**不会**自动改库结构；用 `start:prod` / Docker ENTRYPOINT 时会在启动时自动跑一遍。
 
 近期与 AI 资源库相关、生产上需确认已打上的迁移包括：
 
-| 迁移                                        | 作用                                |
-| ----------------------------------------- | --------------------------------- |
-| `20260730120000_ai_resource_search_trgm`  | 启用 `pg_trgm`，为名称/说明/正文等建立搜索索引     |
-| `20260730140000_ai_review_assignee_index` | 为审批单 `reviewerId` 建索引（指定审批人列表）    |
-| `20260730160000_dingtalk_notify`          | 钉钉 userid / 待办字段、`AppSetting` 配置表 |
-| `20260730170000_dingtalk_rework_todo`     | 驳回后提交人待办字段                        |
+| 迁移 | 作用 |
+| --- | --- |
+| `20260730120000_ai_resource_search_trgm` | 启用 `pg_trgm`，为名称/说明/正文等建立搜索索引 |
+| `20260730140000_ai_review_assignee_index` | 为审批单 `reviewerId` 建索引（指定审批人列表） |
+| `20260730160000_dingtalk_notify` | 钉钉 userid / 待办字段、`AppSetting` 配置表 |
+| `20260730170000_dingtalk_rework_todo` | 驳回后提交人待办字段 |
+| `20260731080000_ai_resource_comments` | 资源评论表 + `createdAt` 索引 |
 
 检查是否已应用：
 
@@ -101,6 +103,8 @@ npx prisma migrate status
 ```bash
 npm run db:seed
 ```
+
+> 默认**不会**在启动时自动 seed。仅当设置 `RUN_SEED_ON_BOOT=true` 时，`start:prod` / 容器入口才会执行 seed（生产慎用，会重置 `admin` 密码）。
 
 seed 仅创建超级管理员 `admin` / `zx123456`：
 
@@ -115,51 +119,75 @@ seed 仅创建超级管理员 `admin` / `zx123456`：
 npm run build
 ```
 
-启动应用：
+启动应用（推荐生产：自动拼 DATABASE_URL + 等库 + migrate）：
+
+```bash
+npm run start:prod
+```
+
+或仅启动 Next（需已自行配置 `DATABASE_URL` 并完成迁移）：
 
 ```bash
 npm run start
 ```
 
+一键起库+应用（Docker Compose，需已配置 `JWT_SECRET`）：
+
+```bash
+docker compose --profile app up -d --build
+```
+
 默认监听端口由 Next.js 决定，通常是 `3000`。可通过环境变量指定：
 
 ```bash
-PORT=3000 npm run start
+PORT=3000 npm run start:prod
 ```
 
 Windows PowerShell 示例：
 
 ```powershell
 $env:PORT="3000"
-npm run start
+npm run start:prod
 ```
 
 ## 4. 环境变量
 
-生产环境至少需要配置：
+生产环境**最小**配置（推荐，交给启动脚本拼连接串）：
+
+```env
+JWT_SECRET="replace-with-a-long-random-secret"
+POSTGRES_USER="qe"
+POSTGRES_PASSWORD="强密码"
+POSTGRES_DB="qe"
+# 宿主机连本机 compose 库时用 localhost；compose 内 app 服务已设 POSTGRES_HOST=db
+POSTGRES_HOST="localhost"
+POSTGRES_PORT="5432"
+```
+
+也可用显式连接串覆盖（优先级更高）：
 
 ```env
 DATABASE_URL="postgresql://qe:强密码@localhost:5432/qe?schema=public"
 JWT_SECRET="replace-with-a-long-random-secret"
-
-# docker-compose.yml 用于创建 PostgreSQL 的账号(需与 DATABASE_URL 一致)
-POSTGRES_USER="qe"
-POSTGRES_PASSWORD="强密码"
-POSTGRES_DB="qe"
 ```
 
 说明：
 
-| 变量                       | 必填   | 说明                                                                                                                      |
-| ------------------------ | ---- | ----------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`           | 是    | PostgreSQL 连接串,格式 `postgresql://用户:密码@主机:5432/库名?schema=public`。生产环境用户名/密码/库名需与 `docker-compose.yml` 的 `POSTGRES_*` 一致。 |
-| `JWT_SECRET`             | 是    | 登录会话签名密钥。生产环境必须配置，建议使用 32 位以上随机字符串。                                                                                     |
-| `DINGTALK_CLIENT_ID`     | 条件必填 | 钉钉企业内部应用 AppKey。启用钉钉登录或 AI 资源通知时必填。                                                                                     |
-| `DINGTALK_CLIENT_SECRET` | 条件必填 | 钉钉应用 AppSecret。与 Client ID 成对配置。                                                                                        |
-| `DINGTALK_REDIRECT_URI`  | 条件必填 | 钉钉 OAuth 回调地址。启用钉钉扫码登录时必填，须与开放平台一致。                                                                                     |
-| `DINGTALK_AGENT_ID`      | 条件必填 | 钉钉微应用 AgentId。工作通知 / 上线广播必填；仅扫码登录可不配。                                                                                   |
-| `APP_BASE_URL`           | 条件必填 | 对外可访问的站点根地址（无末尾斜杠）。待办与工作通知里的详情链接依赖它，如 `https://qe.example.com`。                                                         |
-| `ALLOWED_DEV_ORIGINS`    | 否    | 开发环境跨主机访问白名单，生产环境通常不需要。                                                                                                 |
+| 变量 | 必填 | 说明 |
+| --- | --- | --- |
+| `JWT_SECRET` | 是 | 登录会话签名密钥。生产环境必须配置，建议使用 32 位以上随机字符串。 |
+| `POSTGRES_PASSWORD` | 条件必填 | 与 `docker-compose` 的库密码一致。未设 `DATABASE_URL` 时必填；生产勿用 `dev`。 |
+| `POSTGRES_USER` / `POSTGRES_DB` | 否 | 默认均为 `qe`。 |
+| `POSTGRES_HOST` / `POSTGRES_PORT` | 否 | 默认 `localhost` / `5432`；compose 内 app 用 `db`。 |
+| `DATABASE_URL` | 否 | 可选。已设置则直接使用；未设置时由 `POSTGRES_*` 自动生成。 |
+| `RUN_SEED_ON_BOOT` | 否 | `true` 时启动脚本会执行 `db:seed`（默认关闭）。 |
+| `SKIP_MIGRATE_ON_BOOT` | 否 | `true` 时跳过启动时 `migrate deploy`。 |
+| `DINGTALK_CLIENT_ID` | 条件必填 | 钉钉企业内部应用 AppKey。启用钉钉登录或 AI 资源通知时必填。 |
+| `DINGTALK_CLIENT_SECRET` | 条件必填 | 钉钉应用 AppSecret。与 Client ID 成对配置。 |
+| `DINGTALK_REDIRECT_URI` | 条件必填 | 钉钉 OAuth 回调地址。启用钉钉扫码登录时必填，须与开放平台一致。 |
+| `DINGTALK_AGENT_ID` | 条件必填 | 钉钉微应用 AgentId。工作通知 / 上线广播必填；仅扫码登录可不配。 |
+| `APP_BASE_URL` | 条件必填 | 对外可访问的站点根地址（无末尾斜杠）。待办与工作通知里的详情链接依赖它，如 `https://qe.example.com`。 |
+| `ALLOWED_DEV_ORIGINS` | 否 | 开发环境跨主机访问白名单，生产环境通常不需要。 |
 
 说明：AI 资源库为产品内置模块，默认启用，无需额外开关。
 
@@ -167,19 +195,21 @@ POSTGRES_DB="qe"
 
 部署红线：
 
-- 生产环境 `DATABASE_URL` 必须指向服务器上运行的 PostgreSQL,凭据与 `docker-compose.yml` 一致。
+- 推荐用 `npm run start:prod` 或镜像 ENTRYPOINT：自动拼 `DATABASE_URL`、等待库就绪、执行 `migrate deploy`。
+- 生产 `POSTGRES_PASSWORD` 必须为强密码；与 compose 中库账号一致。显式 `DATABASE_URL` 时也须指向同一库。
 - 数据库端口只绑 `127.0.0.1`,不要对公网暴露 `5432`。
 - 重新部署代码不会自动删除数据库;数据存放在 Docker 命名卷 `qe_pgdata`,需单独做备份。
 - AI 资源附件在磁盘目录 `storage/ai-resources/uploads/`（不进 Git），升级代码时勿清空该目录；备份与容灾需一并覆盖。
 - `JWT_SECRET` 变更后，已有登录会话会失效。
 - 若 Nginx 等反向代理托管上传，请将 `client_max_body_size` 调到至少 **100m**（单附件上限 100MB；托管 HTML 上限 5MB）。
-- 服务器执行 `prisma migrate deploy` / `db:seed` 时需能使用 `prisma` 与 `tsx`（二者在 `devDependencies`；勿在 `npm ci --omit=dev` 之后才迁库，或临时安装后再迁）。
+- 镜像 / `start:prod` 已内置 migrate；若平台自管 CMD 且不用本入口，仍需能执行 `prisma`（勿在 `npm ci --omit=dev` 后无 prisma 再迁库）。
 
 注意：
 
 - 不要将 `.env` 提交到 Git。
 - 生产环境务必设置强 `POSTGRES_PASSWORD`,不要沿用本地开发的弱密码。
 - 定期对 PostgreSQL 做备份(如 `pg_dump`),重要数据勿仅依赖单机命名卷。
+- 部署面板若只注入运行时变量：至少配置 `JWT_SECRET` + `POSTGRES_PASSWORD`（及可选钉钉）；**不必再配 `DATABASE_URL`**，除非要覆盖自动拼接。
 
 ## 4.1 钉钉登录与通知配置
 
@@ -275,7 +305,7 @@ npx prisma generate
 npm run db:seed
 ```
 
-本地开发数据库由 `docker compose up -d` 启动的 PostgreSQL 提供,连接串在 `.env` 的 `DATABASE_URL`:
+本地开发数据库由 `docker compose up -d db` 启动的 PostgreSQL 提供。可用显式 `DATABASE_URL`，或只配 `POSTGRES_*` 后执行 `npm run start:prod`：
 
 ```env
 DATABASE_URL="postgresql://qe:dev@localhost:5432/qe?schema=public"
@@ -284,7 +314,7 @@ DATABASE_URL="postgresql://qe:dev@localhost:5432/qe?schema=public"
 生产环境使用服务器上运行的 PostgreSQL,凭据换成强密码,数据落在 Docker 命名卷 `qe_pgdata`。重置本地库可用:
 
 ```bash
-docker compose down -v && docker compose up -d
+docker compose down -v && docker compose up -d db
 npx prisma migrate deploy && npm run db:seed
 ```
 
@@ -298,14 +328,14 @@ npm ci
 npx prisma generate
 npx prisma migrate deploy
 npm run build
-# 然后重启进程（npm run start / PM2 / systemd 等）
+# 然后重启进程（npm run start:prod / PM2 / systemd 等）
 ```
 
 说明：
 
-1. **`npx prisma migrate deploy` 不可省略。** 只 pull + build 不会应用新索引/表结构。本次版本尤其确认下列迁移均为 Applied：`ai_resource_search_trgm`、`ai_review_assignee_index`、`dingtalk_notify`、`dingtalk_rework_todo`。
-2. **已有生产库不要重复 `db:seed`**，否则会把 `admin` 密码重置回 `zx123456`。仅全新空库需要 seed。
-3. 如果使用 PM2、systemd、Docker 或其他进程管理工具，请在 `npm run build` 后重启对应服务。
+1. **`npx prisma migrate deploy` 不可省略**（若不用 `start:prod` / 镜像入口自动 migrate）。只 pull + build 不会应用新索引/表结构。本次版本尤其确认下列迁移均为 Applied：`ai_resource_search_trgm`、`ai_review_assignee_index`、`dingtalk_notify`、`dingtalk_rework_todo`、`ai_resource_comments`。
+2. **已有生产库不要重复 `db:seed`**，也不要开 `RUN_SEED_ON_BOOT`，否则会把 `admin` 密码重置回 `zx123456`。仅全新空库需要 seed。
+3. 如果使用 PM2、systemd、Docker 或其他进程管理工具，请在 `npm run build` 后重启对应服务；推荐 CMD 使用 `npm run start:prod` 或镜像默认 ENTRYPOINT。
 4. 常规版本更新只更新代码与构建产物，**不会删除** `storage/` 下的用户上传附件。
 5. 若启用钉钉通知：确认生产 `.env` 已含第 4.1 节变量，重启后再打开 `/ai-resources/admin/dingtalk` 看环境检查三项均为「已配置」。
 
@@ -321,7 +351,7 @@ npm run dev
 
 ```bash
 npm run build
-npm run start
+npm run start:prod
 ```
 
 PM2 示例：

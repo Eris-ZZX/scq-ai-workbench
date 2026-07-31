@@ -1,0 +1,12 @@
+quality-workbench-app/node_modules
+quality-workbench-app/.next
+.git
+**/.env
+**/.env.*
+!**/.env.example
+quality-workbench-app/storage
+**/coverage
+**/*.log
+**/*.tsbuildinfo
+.codegraph
+.claude

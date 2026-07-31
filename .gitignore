@@ -35,7 +35,9 @@ CLAUDE.md
 .codegraph/
 start.bat
 scripts/
-quality-workbench-app/scripts/
+# Keep deploy boot helpers tracked (start-with-db / docker-entrypoint)
+!quality-workbench-app/scripts/
+!quality-workbench-app/scripts/**
 quality-workbench-app/src/__tests__/
 quality-workbench-app/vitest.config.ts
 quality-workbench-app/vitest.setup.ts
