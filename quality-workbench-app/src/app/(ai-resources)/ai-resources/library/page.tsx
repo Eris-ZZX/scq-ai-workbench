@@ -12,7 +12,7 @@ import { ResourceSidebar } from '@/modules/ai-resources/ui/resource-sidebar';
 
 const PAGE_SIZE = 20;
 
-const SORT_OPTIONS = ['views', 'likes', 'favorites'] as const;
+const SORT_OPTIONS = ['views', 'likes', 'favorites', 'createdAt'] as const;
 type LibrarySort = (typeof SORT_OPTIONS)[number];
 
 type LibraryParams = {
@@ -132,6 +132,9 @@ function buildOrderBy(sort: LibrarySort): Prisma.AiResourceOrderByWithRelationIn
   }
   if (sort === 'favorites') {
     return [{ favorites: { _count: 'desc' } }, { updatedAt: 'desc' }];
+  }
+  if (sort === 'createdAt') {
+    return [{ createdAt: 'desc' }, { id: 'desc' }];
   }
   return [{ viewCount: 'desc' }, { updatedAt: 'desc' }];
 }

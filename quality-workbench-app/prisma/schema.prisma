@@ -56,6 +56,7 @@ model User {
   aiResourceFavorites           AiResourceFavorite[]
   aiResourceFavoriteTags        AiResourceFavoriteTag[]
   aiResourceLikes               AiResourceLike[]
+  aiResourceComments            AiResourceComment[]
   aiResourceRoleAuditsAsSubject AiResourceRoleAudit[]     @relation("AiResourceRoleAuditSubject")
   aiResourceRoleAuditsAsActor   AiResourceRoleAudit[]     @relation("AiResourceRoleAuditActor")
   aiResourceMembershipUpdates   AiResourceMembership[]    @relation("AiResourceMembershipUpdater")
@@ -748,11 +749,13 @@ model AiResource {
   updateLogs     AiResourceUpdateLog[]
   favorites      AiResourceFavorite[]
   likes          AiResourceLike[]
+  comments       AiResourceComment[]
 
   @@index([type])
   @@index([status])
   @@index([createdById])
   @@index([updatedAt])
+  @@index([createdAt])
 }
 
 model AiResourceReviewRequest {
@@ -862,6 +865,20 @@ model AiResourceLike {
   @@unique([userId, resourceId])
   @@index([userId])
   @@index([resourceId])
+}
+
+model AiResourceComment {
+  id         String   @id @default(cuid())
+  resourceId String
+  userId     String
+  content    String
+  createdAt  DateTime @default(now())
+
+  resource AiResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([resourceId, createdAt])
+  @@index([userId])
 }
 
 model AiResourceMembership {

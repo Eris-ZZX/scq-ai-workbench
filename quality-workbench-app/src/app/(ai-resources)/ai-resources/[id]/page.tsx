@@ -8,13 +8,14 @@ import { hostedHtmlOpenPath, parseHostedHtml } from '@/modules/ai-resources/host
 import { resourceTypeLabel } from '@/modules/ai-resources/labels';
 import { parseJsonForDisplay } from '@/modules/ai-resources/json';
 import { parseList } from '@/modules/ai-resources/list-fields';
-import { canEditResource, canRequestArchive, canViewResource, visibleResourceWhere } from '@/modules/ai-resources/policy';
+import { canAdmin, canEditResource, canRequestArchive, canViewResource, visibleResourceWhere } from '@/modules/ai-resources/policy';
 import { ArchiveRequestButton } from '@/modules/ai-resources/ui/archive-request-button';
 import { DownloadAttachment } from '@/modules/ai-resources/ui/download-attachment';
 import {
   ResourceEngagementProvider,
   ResourceEngagementToggles,
 } from '@/modules/ai-resources/ui/resource-engagement';
+import { ResourceComments } from '@/modules/ai-resources/ui/resource-comments';
 import { UpdateHistoryDialog } from '@/modules/ai-resources/ui/update-history-dialog';
 import { ViewTracker } from '@/modules/ai-resources/ui/view-tracker';
 
@@ -42,12 +43,23 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
 
   if (!resource || !canViewResource(actor, resource)) notFound();
 
-  const [favorite, like] = await Promise.all([
+  const [favorite, like, comments] = await Promise.all([
     prisma.aiResourceFavorite.findUnique({
       where: { userId_resourceId: { userId: actor.userId, resourceId: id } },
     }),
     prisma.aiResourceLike.findUnique({
       where: { userId_resourceId: { userId: actor.userId, resourceId: id } },
+    }),
+    prisma.aiResourceComment.findMany({
+      where: { resourceId: id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 100,
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        user: { select: { id: true, username: true } },
+      },
     }),
   ]);
 
@@ -152,6 +164,18 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
             <h2>实现方法简述</h2>
             <p className="detail-text">{resource.content}</p>
           </section>
+
+          <ResourceComments
+            resourceId={resource.id}
+            currentUserId={actor.userId}
+            canModerate={canAdmin(actor)}
+            initialComments={comments.map((item) => ({
+              id: item.id,
+              content: item.content,
+              createdAt: item.createdAt.toISOString(),
+              user: item.user,
+            }))}
+          />
         </article>
 
         <aside className="detail-aside">

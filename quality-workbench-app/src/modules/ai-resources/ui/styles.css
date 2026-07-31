@@ -1289,6 +1289,97 @@ h3 {
   line-height: 1.75;
 }
 
+.resource-comments .comment-compose {
+  display: grid;
+  gap: 10px;
+}
+
+.resource-comments textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.resource-comments textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.comment-compose-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.comment-item {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.comment-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.comment-meta strong {
+  font-size: 14px;
+}
+
+.comment-content {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.65;
+}
+
+.comment-delete {
+  appearance: none;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.comment-delete:hover {
+  color: var(--danger);
+}
+
+.comment-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.comment-feedback.bad {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+}
+
 .timeline {
   display: grid;
   gap: 12px;

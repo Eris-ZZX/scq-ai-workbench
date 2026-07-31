@@ -8,6 +8,7 @@ const SORT_OPTIONS = [
   { value: 'views', label: '按浏览量' },
   { value: 'likes', label: '按点赞量' },
   { value: 'favorites', label: '按收藏量' },
+  { value: 'createdAt', label: '按提交时间' },
 ] as const;
 
 export function ResourceSearch({ tags }: { tags: string[] }) {
