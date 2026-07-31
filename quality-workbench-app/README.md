@@ -92,6 +92,7 @@ npx prisma migrate deploy
 | `20260730170000_dingtalk_rework_todo` | 驳回后提交人待办字段 |
 | `20260731080000_ai_resource_comments` | 资源评论表 + `createdAt` 索引 |
 | `20260731160000_ai_resource_favorite_sort_order` | 补 `AiResourceFavorite.sortOrder`（收藏排序；修 P2022） |
+| `20260731170000_ai_resource_like` | 补建 `AiResourceLike` 表（schema 有、历史迁移漏建；修 P2021） |
 
 检查是否已应用：
 
@@ -350,7 +351,7 @@ npm run build
 
 说明：
 
-1. **`npx prisma migrate deploy` 不可省略**（若不用 `start:prod` / 镜像入口自动 migrate）。只 pull + build 不会应用新索引/表结构。本次版本尤其确认下列迁移均为 Applied：`ai_resource_search_trgm`、`ai_review_assignee_index`、`dingtalk_notify`、`dingtalk_rework_todo`、`ai_resource_comments`、`ai_resource_favorite_sort_order`。
+1. **`npx prisma migrate deploy` 不可省略**（若不用 `start:prod` / 镜像入口自动 migrate）。只 pull + build 不会应用新索引/表结构。本次版本尤其确认下列迁移均为 Applied：`ai_resource_search_trgm`、`ai_review_assignee_index`、`dingtalk_notify`、`dingtalk_rework_todo`、`ai_resource_comments`、`ai_resource_favorite_sort_order`、`ai_resource_like`。
 2. **已有生产库不要重复 `db:seed`**，也不要开 `RUN_SEED_ON_BOOT`，否则会把 `admin` 密码重置回 `zx123456`。仅全新空库需要 seed。
 3. 如果使用 PM2、systemd、Docker 或其他进程管理工具，请在 `npm run build` 后重启对应服务；推荐 CMD 使用 `npm run start:prod` 或镜像默认 ENTRYPOINT。
 4. 常规版本更新只更新代码与构建产物，**不会删除** `storage/` 下的用户上传附件。
