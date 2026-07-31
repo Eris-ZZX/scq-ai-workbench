@@ -42,11 +42,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
 
-RUN chmod +x /app/scripts/docker-entrypoint.sh \
-  && mkdir -p /app/storage/ai-resources/uploads \
+RUN mkdir -p /app/storage/ai-resources/uploads \
   && chown -R nextjs:nodejs /app/storage
 
 USER nextjs
 EXPOSE 3000
-ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
+# Use node directly to avoid shell shebang/CRLF issues on Windows-authored scripts.
+ENTRYPOINT ["node", "scripts/start-with-db.mjs"]
 CMD ["npm", "run", "start"]
