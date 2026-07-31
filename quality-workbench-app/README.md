@@ -137,6 +137,22 @@ npm run start
 docker compose --profile app up -d --build
 ```
 
+### 部署平台（机器人）启动命令
+
+若平台日志出现 `exec /usr/local/bin/docker-entrypoint.sh: no such file or directory`，说明容器仍在用 **Node 镜像默认入口**，没有走到本仓库的启动逻辑。请在平台里把应用启动配置改成下面之一（并清空/覆盖默认 Entrypoint）：
+
+```bash
+node scripts/start-with-db.mjs npm run start
+```
+
+或：
+
+```bash
+npm run start:prod
+```
+
+同时确认构建用的是仓库根目录 `Dockerfile`（或 `quality-workbench-app/Dockerfile`），并 **强制重新构建镜像**（不要只用旧缓存镜像重启）。
+
 默认监听端口由 Next.js 决定，通常是 `3000`。可通过环境变量指定：
 
 ```bash

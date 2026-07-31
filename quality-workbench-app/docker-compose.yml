@@ -28,6 +28,9 @@ services:
       dockerfile: Dockerfile
     container_name: qe-app
     restart: unless-stopped
+    # Force-clear Node image default entrypoint (/usr/local/bin/docker-entrypoint.sh)
+    entrypoint: ["node", "scripts/start-with-db.mjs"]
+    command: ["npm", "run", "start"]
     depends_on:
       db:
         condition: service_healthy
