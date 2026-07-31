@@ -5,7 +5,7 @@ CREATE UNIQUE INDEX "User_externalSource_externalId_key" ON "User"("externalSour
 CREATE TABLE "AiResourceModuleSettings" (
     "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
     "maintenanceMode" BOOLEAN NOT NULL DEFAULT false,
-    "updatedAt" DATETIME NOT NULL
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -14,8 +14,8 @@ CREATE TABLE "AiResourceMigrationRun" (
     "status" TEXT NOT NULL,
     "reportPath" TEXT,
     "operatorId" TEXT,
-    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "finishedAt" DATETIME,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "finishedAt" TIMESTAMP(3),
     "errorMessage" TEXT,
     CONSTRAINT "AiResourceMigrationRun_operatorId_fkey" FOREIGN KEY ("operatorId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -54,8 +54,8 @@ CREATE TABLE "AiResource" (
     "extractedText" TEXT,
     "currentVersion" INTEGER NOT NULL DEFAULT 1,
     "viewCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdById" TEXT NOT NULL,
     CONSTRAINT "AiResource_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -71,8 +71,8 @@ CREATE TABLE "AiResourceReviewRequest" (
     "updateSummary" TEXT NOT NULL,
     "changedFields" TEXT NOT NULL DEFAULT '',
     "rejectReason" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "reviewedAt" DATETIME,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewedAt" TIMESTAMP(3),
     "requesterId" TEXT NOT NULL,
     "reviewerId" TEXT,
     CONSTRAINT "AiResourceReviewRequest_requesterId_fkey" FOREIGN KEY ("requesterId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -92,7 +92,7 @@ CREATE TABLE "AiResourceUpdateLog" (
     "result" TEXT NOT NULL,
     "updateSummary" TEXT NOT NULL,
     "changedFields" TEXT NOT NULL DEFAULT '',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AiResourceUpdateLog_resourceId_fkey" FOREIGN KEY ("resourceId") REFERENCES "AiResource" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "AiResourceUpdateLog_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "AiResourceUpdateLog_reviewerId_fkey" FOREIGN KEY ("reviewerId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -104,7 +104,7 @@ CREATE TABLE "AiResourceFavorite" (
     "legacyId" TEXT,
     "userId" TEXT NOT NULL,
     "resourceId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AiResourceFavorite_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "AiResourceFavorite_resourceId_fkey" FOREIGN KEY ("resourceId") REFERENCES "AiResource" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -115,8 +115,8 @@ CREATE TABLE "AiResourceMembership" (
     "userId" TEXT NOT NULL,
     "role" TEXT NOT NULL,
     "updatedById" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "AiResourceMembership_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "AiResourceMembership_updatedById_fkey" FOREIGN KEY ("updatedById") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -132,7 +132,7 @@ CREATE TABLE "AiResourceRoleAudit" (
     "fromRole" TEXT,
     "toRole" TEXT,
     "action" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AiResourceRoleAudit_membershipId_fkey" FOREIGN KEY ("membershipId") REFERENCES "AiResourceMembership" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "AiResourceRoleAudit_subjectUserId_fkey" FOREIGN KEY ("subjectUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "AiResourceRoleAudit_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
