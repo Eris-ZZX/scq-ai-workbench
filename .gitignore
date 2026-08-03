@@ -11,6 +11,7 @@ coverage/
 # Local environment and data
 .env
 .env.*
+!.env.example
 *.db
 *.db-journal
 *.sqlite
@@ -34,15 +35,6 @@ AGENTS.md
 CLAUDE.md
 .codegraph/
 start.bat
-scripts/
-# Keep deploy boot helpers tracked (start-with-db / docker-entrypoint)
-!quality-workbench-app/scripts/
-!quality-workbench-app/scripts/**
-quality-workbench-app/src/__tests__/
-quality-workbench-app/vitest.config.ts
-quality-workbench-app/vitest.setup.ts
-quality-workbench-app/.prettierrc
-quality-workbench-app/components.json
 
 # AI/tool local config that is machine-specific
 .claude/
@@ -53,3 +45,9 @@ quality-workbench-app/components.json
 Thumbs.db
 .idea/
 .vscode/
+
+# Legacy local-only workspace left after the root-layout migration
+quality-workbench-app/
+
+# Local gate tooling (MinIO binary, data, logs)
+tools/

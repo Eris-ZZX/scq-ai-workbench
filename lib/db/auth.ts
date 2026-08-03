@@ -1,0 +1,60 @@
+// lib/db/auth.ts — User 数据访问封装 (F2.S1)
+import { db } from '@/lib/database';
+import bcrypt from 'bcryptjs';
+
+const SALT_ROUNDS = 12;
+
+/** Dummy bcrypt hash for externally-authenticated users (DingTalk/LDAP).
+ *  Matches no real password — hash verification always gracefully fails. */
+export const DUMMY_HASH =
+  '$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+/** 返回给客户端的安全 User 字段（不含 passwordHash） */
+const SAFE_USER_SELECT = {
+  id: true, username: true, avatar: true,
+  role: true, status: true, email: true,
+  createdAt: true, updatedAt: true,
+} as const;
+
+type SafeUser = Pick<
+  Awaited<ReturnType<typeof db.user.findUniqueOrThrow>>,
+  keyof typeof SAFE_USER_SELECT
+>;
+
+/** 创建用户（密码自动 bcrypt 哈希） */
+export async function createUser(params: {
+  username: string;
+  password: string;
+  email?: string;
+}) {
+  const passwordHash = await bcrypt.hash(params.password, SALT_ROUNDS);
+  return db.user.create({
+    data: {
+      username: params.username,
+      passwordHash,
+      email: params.email ?? null,
+    },
+    select: SAFE_USER_SELECT,
+  });
+}
+
+/** 按 username 查找用户（含 passwordHash，仅用于登录验证） */
+export function findByUsername(username: string) {
+  return db.user.findUnique({ where: { username } });
+}
+
+/** 🔧 Agent 2-#6: 按 id 查找安全用户（不含 passwordHash/internalSource 等内部字段） */
+export async function findById(id: string): Promise<SafeUser | null> {
+  return db.user.findUnique({
+    where: { id },
+    select: SAFE_USER_SELECT,
+  });
+}
+
+/** 验证密码 */
+export async function verifyPassword(
+  plain: string,
+  hash: string,
+): Promise<boolean> {
+  return bcrypt.compare(plain, hash);
+}

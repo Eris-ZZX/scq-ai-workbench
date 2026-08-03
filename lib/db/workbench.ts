@@ -1,0 +1,522 @@
+import { db } from '@/lib/database';
+
+type SessionLike = {
+  sub: string;
+  username: string;
+  role: string;
+};
+
+type ProjectRole = 'owner' | 'member' | 'observer' | 'admin';
+
+type TodoType =
+  | 'overdue'
+  | 'blocked'
+  | 'returned'
+  | 'responsibility'
+  | 'pending_parent_close';
+
+type WorkbenchTodoItem = {
+  id: string;
+  type: TodoType;
+  tags: string[];
+  projectId: string;
+  parentId: string | null;
+  childId: string | null;
+  stage: string;
+  title: string;
+  parentTitle: string;
+  ownerRole: string;
+  status: string;
+  dueAt: string | null;
+  priorityRank: number;
+  allowedActions: string[];
+};
+
+const BUSINESS_PROJECT_STATUSES = ['active', 'paused'];
+
+export async function getWorkbenchData(session: SessionLike, options: { projectId?: string } = {}) {
+  // Get all member records for this user (includes per-project role and assignedRole)
+  const memberProjects = await db.projectMember.findMany({
+    where: { userId: session.sub },
+    select: { projectId: true, role: true, assignedRole: true },
+  });
+
+  // Per-project role map
+  const projectRoleMap = new Map<string, ProjectRole>();
+  for (const mp of memberProjects) {
+    projectRoleMap.set(mp.projectId, mp.role as ProjectRole);
+  }
+  if (session.role === 'admin' || session.role === 'manager') {
+    // admin overrides all per-project roles
+  }
+
+  // Build projectId → effectiveRoleIds (assignedRole → PositionRole.id)
+  const effectiveRoleIdsByProject = await buildProjectEffectiveRoleIds(memberProjects);
+
+  // For cross-project filtering: collect all role ids
+  const allEffectiveRoleIds = new Set<string>();
+  for (const ids of effectiveRoleIdsByProject.values()) {
+    for (const id of ids) allEffectiveRoleIds.add(id);
+  }
+
+  const baseProjectWhere = buildProjectWhere(session, memberProjects, allEffectiveRoleIds);
+  const projectWhere = options.projectId ? { AND: [baseProjectWhere, { id: options.projectId }] } : baseProjectWhere;
+  const projects = await db.project.findMany({
+    where: projectWhere,
+    include: {
+      members: {
+        select: { userId: true, role: true, assignedRole: true },
+      },
+      stageGateRecords: true,
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+  const currentStageParents = projects.length > 0
+    ? await db.projectActivityParent.findMany({
+        where: {
+          OR: projects.map((project) => ({ projectId: project.id, stage: project.currentStage })),
+        },
+        include: {
+          children: {
+            include: { attachments: { where: { deletedAt: null }, select: { id: true } } },
+            orderBy: { updatedAt: 'desc' },
+          },
+        },
+        orderBy: [{ sortOrder: 'asc' }],
+      })
+    : [];
+  const parentsByProject = new Map<string, typeof currentStageParents>();
+  for (const parent of currentStageParents) {
+    const parents = parentsByProject.get(parent.projectId) ?? [];
+    parents.push(parent);
+    parentsByProject.set(parent.projectId, parents);
+  }
+  const projectsWithParents = projects.map((project) => ({
+    ...project,
+    activityParents: parentsByProject.get(project.id) ?? [],
+  }));
+
+  const now = new Date();
+  const projectTodos = (session.role === 'admin' || session.role === 'manager')
+    ? []
+    : projectsWithParents.map((project) => {
+        const projectRole = projectRoleMap.get(project.id) ?? 'observer' as ProjectRole;
+        const projectRoleIds = effectiveRoleIdsByProject.get(project.id) ?? [];
+        const todos = buildProjectTodos({ project, session, projectRole, projectRoleIds, now });
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          currentStage: project.currentStage,
+          riskFlags: getProjectRiskFlags(todos),
+          todoCount: todos.length,
+          todos,
+          updatedAt: project.updatedAt.toISOString(),
+        };
+      }).filter((group) => group.todos.length > 0);
+
+  const allTodos = projectTodos.flatMap((group) => group.todos);
+  const projectCards = projectsWithParents
+    .map((project) => {
+      const group = projectTodos.find((item) => item.projectId === project.id);
+      const parentCount = project.activityParents.length;
+      const progressPercent = parentCount > 0
+        ? Math.round(project.activityParents.reduce((sum, parent) => sum + getParentProgressPercent(parent.children), 0) / parentCount)
+        : 0;
+      const riskFlags = group?.riskFlags ?? getProjectRiskFlagsFromParents(project.activityParents);
+      const nextTodo = group?.todos[0] ?? null;
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        currentStage: project.currentStage,
+        progressPercent,
+        todoCount: group?.todoCount ?? 0,
+        nextTodo: nextTodo ? {
+          id: nextTodo.id,
+          type: nextTodo.type,
+          title: nextTodo.title,
+          parentTitle: nextTodo.parentTitle,
+          stage: nextTodo.stage,
+          dueAt: nextTodo.dueAt,
+        } : null,
+        riskFlags,
+        updatedAt: project.updatedAt.toISOString(),
+        sortScore: getProjectSortScore(group?.todos ?? [], riskFlags, project.updatedAt),
+      };
+    })
+    .sort((a, b) => b.sortScore - a.sortScore)
+    .map((card) => ({
+      projectId: card.projectId,
+      projectName: card.projectName,
+      currentStage: card.currentStage,
+      progressPercent: card.progressPercent,
+      todoCount: card.todoCount,
+      nextTodo: card.nextTodo,
+      riskFlags: card.riskFlags,
+      updatedAt: card.updatedAt,
+    }));
+
+  const projectIds = projects.map((project) => project.id);
+  const recentEvents = projectIds.length > 0
+    ? await db.activityEvent.findMany({
+        where: { projectId: { in: projectIds } },
+        include: {
+          project: { select: { id: true, name: true } },
+          actor: { select: { username: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      })
+    : [];
+
+  return {
+    roleContext: {
+      userId: session.sub,
+      username: session.username,
+      appRole: session.role,
+      workbenchRole: (session.role === 'admin' || session.role === 'manager') ? 'admin' as const : 'executor' as const,
+    },
+    actionMetrics: {
+      totalTodo: allTodos.length,
+      overdue: allTodos.filter((todo) => todo.type === 'overdue').length,
+      blocked: allTodos.filter((todo) => todo.type === 'blocked').length,
+      pendingParentClose: allTodos.filter((todo) => todo.type === 'pending_parent_close').length,
+    },
+    projectTodos: projectTodos
+      .sort((a, b) => getTodoGroupScore(b.todos, b.updatedAt) - getTodoGroupScore(a.todos, a.updatedAt))
+      .map((group) => ({
+        projectId: group.projectId,
+        projectName: group.projectName,
+        currentStage: group.currentStage,
+        riskFlags: group.riskFlags,
+        todoCount: group.todoCount,
+        todos: group.todos,
+      })),
+    projectCards,
+    recentEvents: recentEvents.map((event) => ({
+      id: event.id,
+      projectId: event.projectId,
+      projectName: event.project.name,
+      actionType: event.actionType,
+      note: event.note,
+      actorName: event.actor?.username ?? null,
+      createdAt: event.createdAt.toISOString(),
+    })),
+  };
+}
+
+async function buildProjectEffectiveRoleIds(
+  memberProjects: Array<{ projectId: string; assignedRole: string | null }>,
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  const assignedRoles = new Set<string>();
+  for (const mp of memberProjects) {
+    if (mp.assignedRole) {
+      for (const r of mp.assignedRole.split(',').map((s) => s.trim())) assignedRoles.add(r);
+    }
+  }
+
+  const positionRoles = assignedRoles.size > 0
+    ? await db.positionRole.findMany({
+        where: { name: { in: Array.from(assignedRoles) }, isActive: true },
+        select: { id: true, name: true },
+      })
+    : [];
+
+  const nameToIds = new Map<string, string[]>();
+  for (const pr of positionRoles) {
+    const ids = nameToIds.get(pr.name) ?? [];
+    ids.push(pr.id);
+    nameToIds.set(pr.name, ids);
+  }
+
+  for (const mp of memberProjects) {
+    if (mp.assignedRole) {
+      const allIds: string[] = [];
+      for (const r of mp.assignedRole.split(',').map((s) => s.trim())) {
+        const ids = nameToIds.get(r);
+        if (ids) allIds.push(...ids);
+      }
+      map.set(mp.projectId, allIds);
+    } else {
+      map.set(mp.projectId, []);
+    }
+  }
+
+  return map;
+}
+
+function buildProjectWhere(
+  session: SessionLike,
+  memberProjects: Array<{ projectId: string }>,
+  allEffectiveRoleIds: Set<string>,
+) {
+  const status = { in: BUSINESS_PROJECT_STATUSES };
+  if (session.role === 'admin' || session.role === 'manager') return { status };
+
+  const assignedProjectIds = memberProjects.map((mp) => mp.projectId);
+  const roleIdList = Array.from(allEffectiveRoleIds);
+
+  return {
+    status,
+    OR: [
+      { members: { some: { userId: session.sub } } },
+      { activityChildren: { some: { assigneeUserId: session.sub, isNotApplicable: false } } },
+      assignedProjectIds.length > 0 && roleIdList.length > 0
+        ? { activityChildren: { some: { projectId: { in: assignedProjectIds }, responsibleRoleId: { in: roleIdList }, isNotApplicable: false } } }
+        : { id: '__never__' },
+    ],
+  };
+}
+
+function buildProjectTodos({
+  project,
+  session,
+  projectRole,
+  projectRoleIds,
+  now,
+}: {
+  project: { id: string; name: string; currentStage: string; updatedAt: Date; members: Array<{ userId: string; role: string }> } & {
+    activityParents: Array<{
+      id: string;
+      stage: string;
+      projectTaskName: string;
+      status: string;
+      plannedDueDate: Date | null;
+      progressPercent: number;
+      hasBlocked: boolean;
+      hasOverdue: boolean;
+      updatedAt: Date;
+      children: Array<{
+        id: string;
+        status: string;
+        thirdLevelPlan: string;
+        ownerRole: string;
+        responsibleRoleId: string | null;
+        assigneeUserId: string | null;
+        requiresDeliverable: boolean;
+        requiresAttachment: boolean;
+        deliverableUrl: string | null;
+        isBlocked: boolean;
+        isNotApplicable: boolean;
+        plannedDueDateOverride: Date | null;
+        updatedAt: Date;
+        attachments: { id: string }[];
+      }>;
+    }>;
+    stageGateRecords: Array<{ stage: string; status: string }>;
+  };
+  session: SessionLike;
+  projectRole: ProjectRole;
+  projectRoleIds: string[];
+  now: Date;
+}) {
+  const todos: WorkbenchTodoItem[] = [];
+  const roleIdSet = new Set(projectRoleIds);
+  const isOwner = projectRole === 'owner';
+
+  for (const parent of project.activityParents) {
+    if (parent.status === 'not_started') continue;
+
+    if (parent.status === 'in_progress' && isOwner) {
+      const parentTodoType = getParentTodoType(parent, now);
+      if (parentTodoType) {
+        todos.push({
+          id: `parent:${parent.id}`,
+          type: parentTodoType,
+          tags: [parentTodoType],
+          projectId: project.id,
+          parentId: parent.id,
+          childId: null,
+          stage: parent.stage,
+          title: parent.projectTaskName,
+          parentTitle: parent.projectTaskName,
+          ownerRole: 'NPQ',
+          status: parent.status,
+          dueAt: parent.plannedDueDate?.toISOString() ?? null,
+          priorityRank: getTodoPriority(parentTodoType, parent.plannedDueDate, now),
+          allowedActions: getProjectRoleActions(projectRole, 'parent'),
+        });
+      }
+    }
+
+    for (const child of parent.children) {
+      if (child.isNotApplicable) continue;
+      if (child.status !== 'in_progress' && child.status !== 'returned') continue;
+      if (!canSeeChildTodo({ child, session, roleIdSet, projectRole })) continue;
+
+      const dueAt = child.plannedDueDateOverride ?? parent.plannedDueDate;
+      const type = getChildTodoType(child, dueAt, now);
+      const tags = getChildTodoTags(child, dueAt, now);
+      todos.push({
+        id: `child:${child.id}`,
+        type,
+        tags,
+        projectId: project.id,
+        parentId: parent.id,
+        childId: child.id,
+        stage: parent.stage,
+        title: child.thirdLevelPlan,
+        parentTitle: parent.projectTaskName,
+        ownerRole: child.ownerRole,
+        status: child.status,
+        dueAt: dueAt?.toISOString() ?? null,
+        priorityRank: getTodoPriority(type, dueAt, now),
+        allowedActions: getProjectRoleActions(projectRole, 'child'),
+      });
+    }
+
+    if (parent.status === 'pending_npq_close' && isOwner) {
+      todos.push({
+        id: `parent:${parent.id}`,
+        type: 'pending_parent_close' as TodoType,
+        tags: ['pending_parent_close'],
+        projectId: project.id,
+        parentId: parent.id,
+        childId: null,
+        stage: parent.stage,
+        title: parent.projectTaskName,
+        parentTitle: parent.projectTaskName,
+        ownerRole: 'NPQ',
+        status: parent.status,
+        dueAt: parent.plannedDueDate?.toISOString() ?? null,
+        priorityRank: getTodoPriority('pending_parent_close', parent.plannedDueDate, now),
+        allowedActions: getProjectRoleActions(projectRole, 'parent'),
+      });
+    }
+  }
+
+  return todos.sort((a, b) => a.priorityRank - b.priorityRank);
+}
+
+function canSeeChildTodo({
+  child,
+  session,
+  roleIdSet,
+  projectRole,
+}: {
+  child: { responsibleRoleId: string | null; assigneeUserId: string | null };
+  session: SessionLike;
+  roleIdSet: Set<string>;
+  projectRole: ProjectRole;
+}) {
+  if (projectRole === 'observer') return false;
+  if (child.assigneeUserId === session.sub) return true;
+  if (child.responsibleRoleId && roleIdSet.has(child.responsibleRoleId)) return true;
+  return false;
+}
+
+function getChildTodoType(
+  child: {
+    status: string;
+    isBlocked: boolean;
+    requiresAttachment: boolean;
+    requiresDeliverable: boolean;
+    deliverableUrl: string | null;
+    attachments: { id: string }[];
+  },
+  dueAt: Date | null,
+  now: Date,
+): TodoType {
+  if (child.status === 'returned') return 'returned';
+  if (child.isBlocked) return 'blocked';
+  if (dueAt && dueAt < now) return 'overdue';
+  return 'responsibility';
+}
+
+function getChildTodoTags(
+  child: { status: string; isBlocked: boolean },
+  dueAt: Date | null,
+  now: Date,
+): string[] {
+  const tags: string[] = [];
+  if (child.status === 'returned') tags.push('returned');
+  if (child.isBlocked) tags.push('blocked');
+  if (dueAt && dueAt < now) tags.push('overdue');
+  if (tags.length === 0) tags.push('responsibility');
+  return tags;
+}
+
+function getParentTodoType(
+  parent: {
+    hasBlocked: boolean;
+    hasOverdue: boolean;
+    plannedDueDate: Date | null;
+    children: Array<{
+      status: string;
+      isNotApplicable: boolean;
+      isBlocked: boolean;
+      plannedDueDateOverride: Date | null;
+    }>;
+  },
+  now: Date,
+): TodoType | null {
+  const openChildren = parent.children.filter((child) => child.status !== 'completed' && !child.isNotApplicable);
+  const hasBlocked = parent.hasBlocked || openChildren.some((child) => child.isBlocked);
+  if (hasBlocked) return 'blocked';
+
+  const hasOverdue = parent.hasOverdue || openChildren.some((child) => {
+    const due = child.plannedDueDateOverride ?? parent.plannedDueDate;
+    return Boolean(due && due < now);
+  });
+  if (hasOverdue) return 'overdue';
+
+  return null;
+}
+
+function getTodoPriority(type: TodoType, dueAt: Date | null, now: Date) {
+  const base: Record<TodoType, number> = {
+    blocked: 20,
+    overdue: 30,
+    pending_parent_close: 40,
+    returned: 50,
+    responsibility: 100,
+  };
+  const days = dueAt ? Math.floor((dueAt.getTime() - now.getTime()) / 86_400_000) : 0;
+  return base[type] + Math.max(Math.min(days, 30), -30);
+}
+
+function getProjectRoleActions(projectRole: ProjectRole, target: 'child' | 'parent') {
+  if (projectRole === 'observer') return ['view'];
+  if (projectRole === 'admin') return ['view', 'configure'];
+  if (projectRole === 'owner') {
+    if (target === 'parent') return ['view', 'close_parent'];
+    return ['view', 'update', 'complete', 'block', 'attachment', 'return', 'not_applicable', 'adjust'];
+  }
+  // member
+  if (target !== 'child') return ['view'];
+  return ['view', 'update', 'complete', 'block', 'attachment'];
+}
+
+function getProjectRiskFlags(todos: { type: string }[]) {
+  const flags = new Set<string>();
+  if (todos.some((todo) => todo.type === 'overdue')) flags.add('逾期');
+  if (todos.some((todo) => todo.type === 'blocked')) flags.add('阻塞');
+  return Array.from(flags);
+}
+
+function getProjectRiskFlagsFromParents(parents: { hasOverdue: boolean; hasBlocked: boolean; status: string }[]) {
+  const flags = new Set<string>();
+  if (parents.some((parent) => parent.hasOverdue)) flags.add('逾期');
+  if (parents.some((parent) => parent.hasBlocked)) flags.add('阻塞');
+  return Array.from(flags);
+}
+
+function getParentProgressPercent(children: { status: string; isNotApplicable: boolean }[]) {
+  if (children.length === 0) return 0;
+  const completed = children.filter((child) => child.status === 'completed' || child.isNotApplicable).length;
+  return Math.round((completed / children.length) * 100);
+}
+
+function getProjectSortScore(todos: { type: string }[], riskFlags: string[], updatedAt: Date) {
+  let score = Math.floor(updatedAt.getTime() / 1_000_000_000);
+  if (todos.length > 0) score += 10_000;
+  if (todos.some((todo) => todo.type === 'blocked') || riskFlags.includes('阻塞')) score += 10_000;
+  if (todos.some((todo) => todo.type === 'overdue') || riskFlags.includes('逾期')) score += 8_000;
+  if (todos.some((todo) => todo.type === 'pending_parent_close')) score += 6_000;
+  return score;
+}
+
+function getTodoGroupScore(todos: { priorityRank: number }[], updatedAt: string) {
+  const bestPriority = todos.length > 0 ? Math.min(...todos.map((todo) => todo.priorityRank)) : 999;
+  return 10_000 - bestPriority + Math.floor(new Date(updatedAt).getTime() / 10_000_000_000);
+}
