@@ -571,9 +571,21 @@ export function ResourceForm({
   );
 }
 
+function createClientId() {
+  // Public http://host:port is not a secure context; crypto.randomUUID() throws there.
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      // fall through
+    }
+  }
+  return `path-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function createPath(value: string, label = ''): ResourcePath {
   return {
-    id: crypto.randomUUID(),
+    id: createClientId(),
     value,
     label,
   };
