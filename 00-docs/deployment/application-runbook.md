@@ -1,121 +1,179 @@
 # QE 工作台部署手册
 
+目标环境：**Linux 生产服务器**，以 Docker Compose 运行 `app` + `db` + `minio`。
+
 ## 运行契约
 
-- Node.js 22.13+（安装、构建和直接运行 pnpm 11.6.0）
-- Node.js 20（仅最终 standalone 容器运行时）
-- pnpm 11.6.0
-- PostgreSQL 17
-- MinIO/S3 兼容私有对象存储
-- `pnpm start` 等同于 `next start`，不使用递归启动脚本
-- 生产 Docker 镜像在 standalone 产物内执行 `node server.js`（见 `Dockerfile` `CMD`）
+- 宿主机：Linux（x86_64），已安装 Docker Engine 与 Docker Compose Plugin
+- 构建阶段：Node.js 22.13+ / pnpm 11.6.0（Docker 多阶段 `deps`/`builder`）
+- 运行阶段：Node.js 20 standalone（镜像内 `CMD ["node", "server.js"]`）
+- 数据：PostgreSQL 17
+- 对象存储：MinIO（S3 兼容）；浏览器不直连 MinIO
+- `pnpm start` 等同于 `next start`；容器部署始终使用镜像内的 `node server.js`
 
-标准命令：
-
-```bash
-pnpm install --frozen-lockfile
-pnpm build
-pnpm start
-```
-
-`pnpm@11.6.0` 自身要求 Node.js 22.13+；因此不能在 Node.js 20 上直接执行上述
-pnpm 命令。生产 Docker 镜像使用 Node.js 22 构建，最终 standalone runner 继续使用
-Node.js 20。非容器部署必须使用 Node.js 22.13+。
-
-本地开发若已配置 `output: "standalone"`，`next start` 可能打印提示改用
-`node .next/standalone/server.js`；当前版本下 `pnpm start` 仍可完成
-instrumentation 初始化。容器部署请始终使用镜像内的 `node server.js`。
-
-`instrumentation.ts` 在服务接收请求前完成以下操作：
+`instrumentation.ts` 在服务接收请求前完成：
 
 1. 等待 PostgreSQL；
 2. 获取 PostgreSQL advisory lock；
 3. 执行 `drizzle/` 中尚未应用的 migration；
-4. 幂等插入基础阶段、岗位、项目角色、组件和内置 NPQ 模板；
-5. 空库创建 `admin` 和对应 AI 资源管理员权限；
+4. 幂等初始化基础字典与内置 NPQ 模板；
+5. 空库创建 `admin` 及对应 AI 资源管理员权限；
 6. 创建或复用 MinIO bucket；
 7. 释放 advisory lock。
 
-任一步骤失败都会阻止服务就绪。多实例同时启动时，初始化由 advisory lock 串行化。
+任一步骤失败都会阻止服务就绪。多实例并发启动时由 advisory lock 串行化初始化。
+
+## 推荐目录布局（Linux）
+
+```text
+/opt/qe-workbench-it/
+  current/          # 当前发布目录（含 Dockerfile、docker-compose.yml、.env）
+  releases/         # 可选：按时间戳保留历史发布包
+  backup-*/         # 可选：切换前的备份目录
+```
+
+Compose 项目名建议固定，例如：
+
+```bash
+export COMPOSE_PROJECT_NAME=qe-it-workbench
+```
 
 ## 环境变量
+
+在发布目录维护 `.env`（勿提交仓库）。Compose 会注入 `app` / `db` / `minio`。
 
 必填：
 
 ```dotenv
-DATABASE_URL=postgresql://user:password@host:5432/database
+COMPOSE_PROJECT_NAME=qe-it-workbench
+
+POSTGRES_USER=qe_it
+POSTGRES_PASSWORD=...
+POSTGRES_DB=qe_it
+# 仅本机访问时可绑定回环，例如 55432
+POSTGRES_HOST_PORT=55432
+
 JWT_SECRET=long-random-secret
+APP_HOST_PORT=3000
 APP_BASE_URL=https://qe.example.com
 
+MINIO_ACCESS_KEY=...
+MINIO_SECRET_KEY=...
+MINIO_BUCKET=qe-workbench-it
+MINIO_HOST_PORT=9100
+MINIO_CONSOLE_HOST_PORT=9101
+
+ADMIN_INITIAL_PASSWORD=...   # 仅空库首次创建 admin 需要
+```
+
+`app` 容器内会使用 Compose 网络连接 `db` / `minio`（见 `docker-compose.yml`）。若不用 Compose 而直连外部库，则还需配置：
+
+```dotenv
+DATABASE_URL=postgresql://user:password@host:5432/database
 MINIO_ENDPOINT=minio.example.com
 MINIO_PORT=443
 MINIO_USE_SSL=true
-MINIO_ACCESS_KEY=...
-MINIO_SECRET_KEY=...
-MINIO_BUCKET=qe-workbench
 ```
 
-空数据库首次启动还必须提供：
-
-```dotenv
-ADMIN_INITIAL_PASSWORD=...
-```
-
-管理员账号存在后不会再读取该变量来重置密码。密码不会写入日志。
-
-钉钉能力按需配置：
+钉钉按需配置，并保证回调与公网入口一致：
 
 ```dotenv
 DINGTALK_CLIENT_ID=
 DINGTALK_CLIENT_SECRET=
-DINGTALK_REDIRECT_URI=
+DINGTALK_REDIRECT_URI=https://qe.example.com/api/auth/dingtalk/callback
 DINGTALK_AGENT_ID=
 ```
 
-不使用 Authing，也没有 Authing 环境变量。
+不使用 Authing。管理员账号存在后，不会再用 `ADMIN_INITIAL_PASSWORD` 重置密码；该值勿写入日志或文档明文。
 
-## 数据与存储
+## 公网入口与安全组
 
-`drizzle/0000_initial.sql` 是空库的初始结构，包含 40 个业务模型。新增结构变更必须：
+- 应用对公网暴露 **TCP `APP_HOST_PORT`（默认 3000）**。
+- PostgreSQL / MinIO 端口应只绑定 `127.0.0.1`（Compose 默认如此），不要对公网开放。
+- 在云厂商安全组 / 防火墙放行应用端口；宿主机 `firewalld`/`nftables` 若启用，需同步放行。
+- 更新 `APP_BASE_URL` 与 `DINGTALK_REDIRECT_URI` 后需重建/重启 `app`，并在钉钉开放平台同步回调地址。
 
-```bash
-pnpm db:generate
-```
+## 容器部署（Linux）
 
-提交生成的 migration；生产环境禁止执行 `drizzle-kit push`。
-
-附件由服务端读写 MinIO，浏览器不直连 MinIO，也不签发 presigned URL。对象位于：
-
-```text
-ai-resources/uploads/<storedName>
-```
-
-本次重构不迁移旧数据库记录或本地附件。
-
-## 容器部署
-
-本地联调：
+在发布目录（含源码或构建上下文、`Dockerfile`、`docker-compose.yml`、`.env`）：
 
 ```bash
+cd /opt/qe-workbench-it/current
+
+# 仅数据面
 docker compose up -d db minio
+
+# 构建并启动应用（profile: app）
 docker compose --profile app up -d --build
 ```
 
-生产建议连接独立的新 PostgreSQL 数据库和独立 MinIO bucket。验收后切换入口；回滚时恢复旧应用及旧资源连接。
-
-## 发布门禁
+查看状态：
 
 ```bash
+docker compose --profile app ps
+docker compose --profile app logs -f --tail=200 app
+```
+
+健康检查通过后，本机验证：
+
+```bash
+curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/login
+```
+
+再从办公网访问 `APP_BASE_URL`。
+
+### 发布更新
+
+```bash
+cd /opt/qe-workbench-it/current
+# 更新代码或替换发布目录后：
+docker compose --profile app build app
+docker compose --profile app up -d --force-recreate app
+```
+
+数据库与 MinIO 卷默认持久化（`qe_pgdata` / `qe_minio`）。除非明确要求，不要对生产卷执行 `docker compose down -v`。
+
+### 回滚
+
+1. 切回上一版发布目录或镜像标签；
+2. `docker compose --profile app up -d`；
+3. 确认 `APP_BASE_URL`、回调地址与安全组仍指向当前入口。
+
+结构变更必须通过提交 `drizzle/` migration；**生产禁止 `drizzle-kit push`**。
+
+## 数据与对象路径
+
+- 初始结构：`drizzle/0000_initial.sql`（40 张业务表）
+- 新增结构：本地/CI 执行 `pnpm db:generate`，提交 SQL 后由启动期自动 migrate
+- MinIO 对象键：`ai-resources/uploads/<storedName>`
+
+本次 IT 模板迁移不自动搬运旧库数据或旧主机本地磁盘附件。
+
+## 发布门禁（构建机 / CI）
+
+构建机需 Node.js 22.13+：
+
+```bash
+pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
 ```
 
-还需在预生产执行：
+上线前在 Linux 预生产或生产旁路环境确认：
 
-- 空库首次启动；
-- 两实例并发启动；
-- MinIO 上传、下载、HTML CSP 与 404；
-- 本地 admin 登录；
-- 钉钉扫码、岗位同步、工作通知和待办 smoke test。
+- 空库首次启动与 `admin` 创建；
+- 两实例并发启动（advisory lock）；
+- MinIO 上传、下载、托管 HTML、缺对象 404；
+- 本地 `admin` 登录；
+- 钉钉扫码、岗位同步、通知/待办 smoke（若启用）。
+
+## 常用排障
+
+| 现象 | 排查 |
+|------|------|
+| 公网打不开、本机 `curl 127.0.0.1:3000` 正常 | 安全组 / 防火墙未放行应用端口 |
+| 容器反复重启 | `docker compose logs app`；查 `DATABASE_URL`/MinIO/JWT/`ADMIN_INITIAL_PASSWORD` |
+| 钉钉回调失败 | `DINGTALK_REDIRECT_URI` 与 `APP_BASE_URL`、开放平台配置不一致 |
+| 上传页在 `http://公网IP:端口` 白屏/加载失败 | 确认已部署含非安全上下文 ID 回退的版本；硬刷新缓存 |
