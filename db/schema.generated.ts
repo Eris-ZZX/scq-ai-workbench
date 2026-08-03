@@ -10,6 +10,7 @@ export const User = pgTable('users', {
 	passwordHash: text('password_hash').notNull(),
 	email: text('email').unique(),
 	avatar: text('avatar'),
+	platformRole: text('platform_role').notNull().default("user"),
 	role: text('role').notNull().default("user"),
 	status: text('status').notNull().default("active"),
 	createdAt: timestamp('created_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
@@ -17,14 +18,18 @@ export const User = pgTable('users', {
 	externalSource: text('external_source'),
 	externalId: text('external_id'),
 	dingtalkUserId: text('dingtalk_user_id'),
+	supervisorDingtalkUserId: text('supervisor_dingtalk_user_id'),
+	supervisorName: text('supervisor_name'),
 	syncAt: timestamp('sync_at', { precision: 3, withTimezone: true })
 }, (User) => ({
 	'User_externalSource_externalId_unique_idx': uniqueIndex('user_external_source_external_id_key')
 		.on(User.externalSource, User.externalId),
 	'users_username_idx': index('users_username_idx').on(User.username),
 	'users_role_idx': index('users_role_idx').on(User.role),
+	'users_platform_role_idx': index('users_platform_role_idx').on(User.platformRole),
 	'users_status_idx': index('users_status_idx').on(User.status),
 	'users_dingtalk_user_id_idx': index('users_dingtalk_user_id_idx').on(User.dingtalkUserId),
+	'users_supervisor_dingtalk_user_id_idx': index('users_supervisor_dingtalk_user_id_idx').on(User.supervisorDingtalkUserId),
 }));
 
 export const Project = pgTable('projects', {

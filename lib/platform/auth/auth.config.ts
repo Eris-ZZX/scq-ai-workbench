@@ -41,12 +41,15 @@ export async function createSession(user: {
   id: string;
   username: string;
   role: string;
+  platformRole?: string;
 }): Promise<SessionCookie> {
   const authAt = Date.now();
+  const platformRole = user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user');
   const token = await new SignJWT({
     sub: user.id,
     username: user.username,
     role: user.role,
+    platformRole,
     authAt,
   })
     .setProtectedHeader({ alg: 'HS256' })
@@ -76,11 +79,13 @@ export async function maybeRefreshSession(existing: {
   sub: string;
   username: string;
   role: string;
+  platformRole?: string;
 }) {
   await createSession({
     id: existing.sub,
     username: existing.username,
     role: existing.role,
+    platformRole: existing.platformRole,
   });
 }
 
@@ -124,13 +129,14 @@ function isRevokedToken(token: string) {
 
 function isValidPayload(
   payload: unknown,
-): payload is { sub: string; username: string; role: string; iat?: number; authAt?: number } {
+): payload is { sub: string; username: string; role: string; platformRole?: string; iat?: number; authAt?: number } {
   if (!payload || typeof payload !== 'object') return false;
   const p = payload as Record<string, unknown>;
   return (
     typeof p.sub === 'string' &&
     typeof p.username === 'string' &&
     typeof p.role === 'string' &&
+    (p.platformRole === undefined || typeof p.platformRole === 'string') &&
     (p.iat === undefined || typeof p.iat === 'number') &&
     (p.authAt === undefined || typeof p.authAt === 'number')
   );
@@ -140,6 +146,7 @@ export async function getSession(): Promise<{
   sub: string;
   username: string;
   role: string;
+  platformRole: string;
 } | null> {
   const jar = await cookies();
   const token = jar.get(COOKIE_NAME)?.value;
@@ -158,6 +165,7 @@ export async function getSession(): Promise<{
       select: {
         id: true,
         username: true,
+        platformRole: true,
         role: true,
         status: true,
         updatedAt: true,
@@ -179,6 +187,7 @@ export async function getSession(): Promise<{
       sub: user.id,
       username: user.username,
       role: user.role,
+      platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
     };
   } catch {
     return null;

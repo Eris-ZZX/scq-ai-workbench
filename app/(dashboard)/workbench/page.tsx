@@ -390,7 +390,7 @@ function roleFallback(role: WorkbenchRole) {
     npq: 'NPQ',
     executor: '执行角色',
     manager: '管理者',
-    admin: '系统管理员',
+    admin: '应用管理员',
   };
   return map[role];
 }

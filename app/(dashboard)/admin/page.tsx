@@ -9,7 +9,6 @@ export default async function AdminHome() {
   const access = await getProjectAdminAccess(session);
   const links = access.kind === 'admin' ? [
     { href: '/admin/templates', label: '模板中心', desc: '维护 NPQ 活动模板、版本和三级结构。' },
-    { href: '/admin/users', label: '用户管理', desc: '查看用户与岗位仪表盘，并进入角色管理或用户账号维护。' },
     { href: '/admin/components', label: '功能组件管理', desc: '启用或停用后台与业务入口。' },
     { href: '/admin/observability', label: '运行日志', desc: '查看请求、错误和用户动作记录。' },
   ] : [

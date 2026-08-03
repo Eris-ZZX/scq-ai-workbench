@@ -29,6 +29,11 @@ export const modelMetadata = {
         "type": "String",
         "nullable": true
       },
+      "platformRole": {
+        "column": "platform_role",
+        "type": "String",
+        "nullable": false
+      },
       "role": {
         "column": "role",
         "type": "String",
@@ -61,6 +66,16 @@ export const modelMetadata = {
       },
       "dingtalkUserId": {
         "column": "dingtalk_user_id",
+        "type": "String",
+        "nullable": true
+      },
+      "supervisorDingtalkUserId": {
+        "column": "supervisor_dingtalk_user_id",
+        "type": "String",
+        "nullable": true
+      },
+      "supervisorName": {
+        "column": "supervisor_name",
         "type": "String",
         "nullable": true
       },

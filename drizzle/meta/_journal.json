@@ -8,6 +8,20 @@
       "when": 1785498040210,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785742329802,
+      "tag": "0001_split_platform_and_workbench_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785750591281,
+      "tag": "0002_add_dingtalk_supervisor",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, isUniqueViolation } from '@/lib/database';
+import { db } from '@/lib/database';
 import { getSession } from '@/platform/auth/auth.config';
 
 async function checkAdmin() {
@@ -7,10 +7,6 @@ async function checkAdmin() {
   if (!session) return { error: '未登录', status: 401 };
   if (session.role !== 'admin') return { error: '需要管理员权限', status: 403 };
   return { ok: true, session };
-}
-
-function clean(value: unknown) {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 export async function GET() {
@@ -38,97 +34,22 @@ export async function GET() {
   return NextResponse.json(positions);
 }
 
-export async function POST(request: Request) {
+const READ_ONLY_ERROR = '岗位由钉钉通讯录同步，不能手动新增、修改或删除。';
+
+export async function POST() {
   const r = await checkAdmin();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
-
-  let body: Record<string, unknown>;
-  try { body = await request.json(); } catch {
-    return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
-  }
-
-  const name = clean(body.name ?? body.groupName);
-  if (!name) return NextResponse.json({ error: '请填写岗位名称' }, { status: 400 });
-
-  try {
-    const existing = await db.positionRole.findUnique({ where: { name }, select: { id: true } });
-    if (existing) return NextResponse.json({ error: '岗位名称已存在' }, { status: 409 });
-
-    const count = await db.positionRole.count();
-    const created = await db.positionRole.create({
-      data: { name, sortOrder: count + 1 },
-      select: { id: true, name: true, isActive: true, sortOrder: true },
-    });
-    return NextResponse.json(created, { status: 201 });
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      return NextResponse.json({ error: '岗位已存在' }, { status: 409 });
-    }
-    console.error('[positions:POST]', error);
-    return NextResponse.json({ error: '创建岗位失败' }, { status: 500 });
-  }
+  return NextResponse.json({ error: READ_ONLY_ERROR }, { status: 403 });
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH() {
   const r = await checkAdmin();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
-
-  let body: Record<string, unknown>;
-  try { body = await request.json(); } catch {
-    return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
-  }
-
-  const id = clean(body.id);
-  if (!id) return NextResponse.json({ error: '缺少岗位 ID' }, { status: 400 });
-
-  const name = clean(body.name ?? body.groupName);
-  if (name) {
-    const existing = await db.positionRole.findFirst({ where: { name, NOT: { id } }, select: { id: true } });
-    if (existing) return NextResponse.json({ error: '岗位名称已存在' }, { status: 409 });
-  }
-
-  try {
-    const updated = await db.positionRole.update({
-      where: { id },
-      data: {
-        name: name || undefined,
-        isActive: typeof body.isActive === 'boolean' ? body.isActive : undefined,
-        sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : undefined,
-      },
-      select: { id: true, name: true, isActive: true, sortOrder: true },
-    });
-    return NextResponse.json(updated);
-  } catch (error) {
-    console.error('[positions:PATCH]', error);
-    return NextResponse.json({ error: '更新岗位失败' }, { status: 500 });
-  }
+  return NextResponse.json({ error: READ_ONLY_ERROR }, { status: 403 });
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE() {
   const r = await checkAdmin();
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
-
-  const id = clean(new URL(request.url).searchParams.get('id'));
-  if (!id) return NextResponse.json({ error: '缺少岗位 ID' }, { status: 400 });
-
-  const role = await db.positionRole.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      _count: {
-        select: { userPositions: true, projectAssignments: true, templateChildren: true, activityChildren: true },
-      },
-    },
-  });
-  if (!role) return NextResponse.json({ error: '岗位不存在' }, { status: 404 });
-
-  const refCount =
-    role._count.userPositions + role._count.projectAssignments +
-    role._count.templateChildren + role._count.activityChildren;
-  if (refCount > 0) {
-    return NextResponse.json({ error: '岗位已被用户/项目/模板引用，不能直接删除' }, { status: 409 });
-  }
-
-  await db.positionRole.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ error: READ_ONLY_ERROR }, { status: 403 });
 }

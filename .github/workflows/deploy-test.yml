@@ -1,0 +1,72 @@
+name: Deploy test server
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qe-test-server-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ secrets.TEST_SERVER_SSH_KEY }}"
+          test -n "${{ secrets.TEST_SERVER_KNOWN_HOSTS }}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "${{ secrets.TEST_SERVER_SSH_KEY }}" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "${{ secrets.TEST_SERVER_KNOWN_HOSTS }}" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Pull dev and deploy on test server
+        shell: bash
+        env:
+          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST }}
+          TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$TEST_SERVER_HOST"
+          test -n "$TEST_SERVER_USER"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ROOT=/opt/qe-workbench-it
+          SOURCE="$ROOT/source"
+          REPO_URL=https://github.com/Eris-ZZX/scq-ai-workbench.git
+          BRANCH=dev
+
+          mkdir -p "$ROOT"
+          if [ ! -d "$SOURCE/.git" ]; then
+            git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$SOURCE"
+          fi
+
+          bash "$SOURCE/scripts/deploy-test-server.sh"
+          REMOTE
+
+      - name: Verify public login endpoint
+        env:
+          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --retry 12 \
+            --retry-delay 5 \
+            --connect-timeout 10 \
+            "http://$TEST_SERVER_HOST:3000/login" \
+            -o /dev/null

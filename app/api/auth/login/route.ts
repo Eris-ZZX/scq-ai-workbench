@@ -82,6 +82,7 @@ export async function POST(request: Request) {
     id: user.id,
     username: user.username,
     role: user.role,
+    platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
   });
 
   if (formMode) {
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
     id: user.id,
     username: user.username,
     role: user.role,
+    platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
   });
   response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
   return response;

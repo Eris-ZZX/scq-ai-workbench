@@ -16,6 +16,10 @@ export interface DingTalkProfile {
   title?: string;
   /** 企业通讯录 userid */
   dingtalkUserId?: string;
+  /** 直属上级企业通讯录 userid */
+  supervisorDingtalkUserId?: string;
+  /** 直属上级姓名 */
+  supervisorName?: string;
 }
 
 /** 按钉钉 unionId 查找已有的钉钉用户（组合唯一约束） */
@@ -76,7 +80,10 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
         externalSource: 'dingtalk',
         externalId: profile.unionId,
         dingtalkUserId: profile.dingtalkUserId ?? null,
+        supervisorDingtalkUserId: profile.supervisorDingtalkUserId ?? null,
+        supervisorName: profile.supervisorName ?? null,
         syncAt: new Date(),
+        platformRole: 'user',
         role: 'user',
         status: 'active',
       },
@@ -105,7 +112,7 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
   }
 }
 
-/** 同步钉钉用户档案（昵称/头像/邮箱/岗位变更时更新） */
+/** 同步钉钉用户档案（昵称/头像/邮箱/岗位/直属上级变更时更新） */
 export async function syncDingTalkUser(userId: string, profile: DingTalkProfile) {
   await db.user.update({
     where: { id: userId },
@@ -113,6 +120,8 @@ export async function syncDingTalkUser(userId: string, profile: DingTalkProfile)
       email: profile.email ?? undefined,
       avatar: profile.avatarUrl ?? undefined,
       dingtalkUserId: profile.dingtalkUserId ?? undefined,
+      supervisorDingtalkUserId: profile.supervisorDingtalkUserId ?? undefined,
+      supervisorName: profile.supervisorName ?? undefined,
       syncAt: new Date(),
     },
   });

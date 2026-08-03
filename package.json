@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "build": "node scripts/build.mjs",
+    "deploy:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-test-server.ps1",
     "start": "next start",
     "lint": "eslint app components db lib scripts tests instrumentation.ts instrumentation-node.ts proxy.ts next.config.ts drizzle.config.ts vitest.config.ts",
     "typecheck": "tsc --noEmit",

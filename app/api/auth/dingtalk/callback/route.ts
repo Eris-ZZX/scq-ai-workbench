@@ -137,10 +137,45 @@ export async function GET(request: Request) {
                 const detailText = await detailRes.text();
                 console.info('[dingtalk] topapi getuser status:', detailRes.status);
                 if (detailRes.ok) {
-                  const detail = JSON.parse(detailText) as { errcode: number; result?: { title?: string } };
-                  if (detail.errcode === 0 && detail.result?.title) {
-                    profile.title = detail.result.title;
-                    console.info('[dingtalk] user position synchronized');
+                  const detail = JSON.parse(detailText) as {
+                    errcode: number;
+                    result?: {
+                      title?: string;
+                      managerUserid?: string;
+                      manager_userid?: string;
+                    };
+                  };
+                  if (detail.errcode === 0 && detail.result) {
+                    if (detail.result.title) {
+                      profile.title = detail.result.title;
+                      console.info('[dingtalk] user position synchronized');
+                    }
+
+                    const supervisorDingtalkUserId =
+                      detail.result.managerUserid ?? detail.result.manager_userid;
+                    if (supervisorDingtalkUserId) {
+                      profile.supervisorDingtalkUserId = supervisorDingtalkUserId;
+                      const supervisorRes = await fetch(
+                        `https://oapi.dingtalk.com/topapi/v2/user/get?access_token=${at}`,
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ userid: supervisorDingtalkUserId }),
+                        },
+                      );
+                      if (supervisorRes.ok) {
+                        const supervisorText = await supervisorRes.text();
+                        const supervisor = JSON.parse(supervisorText) as {
+                          errcode: number;
+                          result?: { name?: string; nick?: string };
+                        };
+                        const supervisorName = supervisor.result?.name ?? supervisor.result?.nick;
+                        if (supervisor.errcode === 0 && supervisorName) {
+                          profile.supervisorName = supervisorName;
+                          console.info('[dingtalk] direct supervisor synchronized');
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -159,7 +194,7 @@ export async function GET(request: Request) {
 
     // 第 3 步：查找或创建用户（以 unionId 为唯一标识）
     const existing = await findDingTalkUser(profile.unionId);
-    let user: { id: string; username: string; role: string };
+    let user: { id: string; username: string; platformRole: string; role: string };
 
     if (existing) {
       if (existing.status !== 'active') {
@@ -181,7 +216,12 @@ export async function GET(request: Request) {
     }
 
     // 第 4 步：签发 session
-    await createSession({ id: user.id, username: user.username, role: user.role });
+    await createSession({
+      id: user.id,
+      username: user.username,
+      platformRole: user.platformRole,
+      role: user.role,
+    });
 
     const returnTo = resolveReturnPath(jar.get(AUTH_RETURN_COOKIE)?.value, DEFAULT_AFTER_LOGIN);
     jar.set(AUTH_RETURN_COOKIE, '', {

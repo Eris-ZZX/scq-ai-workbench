@@ -19,14 +19,13 @@ export default function AdminComponentsPage() {
       setLoading(false);
     }
   }
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   const visibleComps = useMemo(() => comps
-    .filter((component) => component.path !== '/admin/positions')
-    .map((component) => component.path === '/admin/users'
-      ? { ...component, name: '用户管理', path: '/admin/users' }
-      : component),
+    .filter((component) => (
+      component.path !== '/admin/positions' &&
+      component.path !== '/admin/users'
+    )),
   [comps]);
 
   async function toggle(id: string, enabled: boolean) {
@@ -40,7 +39,7 @@ export default function AdminComponentsPage() {
     <div className="min-h-screen bg-ws-content-bg">
       <div className="mx-auto max-w-3xl px-6 py-8">
         <h1 className="mb-2 text-2xl font-bold text-foreground">功能组件管理</h1>
-        <p className="mb-6 text-sm text-muted-foreground">控制后台与业务入口是否可见。旧“岗位角色”入口已合并到“用户管理”。</p>
+        <p className="mb-6 text-sm text-muted-foreground">控制后台与业务入口是否可见。平台用户与权限请从应用选择页进入统一管理。</p>
         {error && <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         <div className="space-y-2">
           {visibleComps.map((component) => (

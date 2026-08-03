@@ -31,6 +31,7 @@ type MockResponse = { status: number; data?: unknown; url?: string };
 const activeUser = {
   id: 'u1',
   username: 'testuser',
+  platformRole: 'user',
   role: 'user',
   status: 'active',
   passwordHash: '$2a$12$dummyhashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
@@ -114,6 +115,7 @@ describe('POST /api/auth/login', () => {
     expect(mockCreateSession).toHaveBeenCalledWith({
       id: 'u1',
       username: 'testuser',
+      platformRole: 'user',
       role: 'user',
     });
   });
@@ -133,6 +135,7 @@ describe('POST /api/auth/login', () => {
     expect(mockCreateSession).toHaveBeenCalledWith({
       id: 'u1',
       username: 'testuser',
+      platformRole: 'user',
       role: 'user',
     });
   });

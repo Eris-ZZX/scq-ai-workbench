@@ -23,9 +23,9 @@ export async function DynamicNav() {
       component.path.startsWith('/admin') &&
       component.enabled &&
       component.path !== '/admin/positions' &&
+      component.path !== '/admin/users' &&
       component.path !== '/admin/projects'
-    ))
-    .map((component) => component.path === '/admin/users' ? { ...component, name: '用户管理' } : component);
+    ));
 
   return (
     <nav className="flex flex-col gap-1">

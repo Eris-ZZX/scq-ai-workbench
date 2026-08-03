@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { FolderKanban, Library } from 'lucide-react';
+import { FolderKanban, Library, ShieldCheck } from 'lucide-react';
 import { getSession } from '@/platform/auth/auth.config';
 
 export default async function PortalPage() {
@@ -39,6 +39,19 @@ export default async function PortalPage() {
             <div className="text-lg font-semibold text-foreground">质量工作台</div>
             <p className="mt-2 text-sm text-muted-foreground">项目活动、待办与 NPQ 流程管理（测试）</p>
           </Link>
+
+          {session.platformRole === 'admin' ? (
+            <Link
+              href="/portal/users"
+              className="rounded-lg border border-border bg-white p-6 shadow-sm transition hover:border-primary"
+            >
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div className="text-lg font-semibold text-foreground">用户与权限管理</div>
+              <p className="mt-2 text-sm text-muted-foreground">统一维护平台账号、角色、岗位和项目权限</p>
+            </Link>
+          ) : null}
         </div>
 
         <form action="/api/auth/logout" method="POST" className="mt-8 text-center">

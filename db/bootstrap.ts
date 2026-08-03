@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import bcrypt from 'bcryptjs';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { closeDatabase, getDatabase } from './client';
 import {
   ActivityTemplate,
@@ -62,15 +62,12 @@ const components = [
   ['cmp-npq-activity-dashboard', '活动管理看板', '/flows/npq/activity-dashboard'],
   ['cmp-admin-projects', '项目管理', '/admin/projects'],
   ['cmp-admin-templates', '模板中心', '/admin/templates'],
-  ['cmp-admin-positions', '岗位角色', '/admin/positions'],
-  ['cmp-admin-users', '用户管理', '/admin/users'],
   ['cmp-admin-components', '功能组件管理', '/admin/components'],
   ['cmp-admin-observability', '运行日志', '/admin/observability'],
 ] as const;
 
 const componentDependencies: Record<string, string> = {
   'cmp-npq-activity-dashboard': 'cmp-npq-activities',
-  'cmp-admin-users': 'cmp-admin-positions',
   'cmp-admin-components': 'cmp-admin-templates',
 };
 
@@ -126,6 +123,7 @@ async function ensureAdmin() {
       id: 'seed-admin',
       username: 'admin',
       passwordHash: await bcrypt.hash(initialPassword, 12),
+      platformRole: 'admin',
       role: 'admin',
       status: 'active',
     })
@@ -185,6 +183,10 @@ async function ensureBaseDictionaries() {
       dependsOnId: componentDependencies[id] ?? null,
     })),
   ).onConflictDoNothing();
+  await database
+    .update(ComponentConfig)
+    .set({ enabled: false })
+    .where(inArray(ComponentConfig.id, ['cmp-admin-users', 'cmp-admin-positions']));
 
   await database
     .insert(AiResourceModuleSettings)
