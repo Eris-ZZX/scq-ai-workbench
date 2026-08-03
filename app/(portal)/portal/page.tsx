@@ -19,17 +19,6 @@ export default async function PortalPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Link
-            href="/workbench"
-            className="rounded-lg border border-border bg-white p-6 shadow-sm transition hover:border-primary"
-          >
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <FolderKanban className="h-5 w-5" />
-            </div>
-            <div className="text-lg font-semibold text-foreground">质量工作台</div>
-            <p className="mt-2 text-sm text-muted-foreground">项目活动、待办与 NPQ 流程管理</p>
-          </Link>
-
-          <Link
             href="/ai-resources"
             className="rounded-lg border border-border bg-white p-6 shadow-sm transition hover:border-primary"
           >
@@ -38,6 +27,17 @@ export default async function PortalPage() {
             </div>
             <div className="text-lg font-semibold text-foreground">AI 资源库</div>
             <p className="mt-2 text-sm text-muted-foreground">部门 AI 应用、Agent、Skill、Prompt 与规范目录</p>
+          </Link>
+
+          <Link
+            href="/workbench"
+            className="rounded-lg border border-border bg-white p-6 shadow-sm transition hover:border-primary"
+          >
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <FolderKanban className="h-5 w-5" />
+            </div>
+            <div className="text-lg font-semibold text-foreground">质量工作台</div>
+            <p className="mt-2 text-sm text-muted-foreground">项目活动、待办与 NPQ 流程管理（测试）</p>
           </Link>
         </div>
 
