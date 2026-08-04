@@ -320,8 +320,8 @@ export default function PlatformUsersPage() {
                 </span>
               </div>
 
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                <PermissionCard className="min-w-[240px] flex-1" title="平台角色" description="控制整个质量平台的全局管理权限。">
+              <div className="space-y-3">
+                <PermissionCard title="平台角色" description="控制整个质量平台的全局管理权限。">
                   <PermissionField label="平台角色">
                     <select className="h-9 w-full rounded border border-border px-2 text-sm" value={selectedUser.platformRole} disabled={saving} onChange={(event) => void updatePermission('platform', { platformRole: event.target.value })}>
                       <option value="user">普通平台用户</option>
@@ -335,7 +335,7 @@ export default function PlatformUsersPage() {
                     </select>
                   </PermissionField>
                 </PermissionCard>
-                <PermissionCard className="min-w-[240px] flex-1" title="AI 资源库角色" description="只控制 AI 资源库内的成员、审批和资源管理权限。">
+                <PermissionCard title="AI 资源库角色" description="只控制 AI 资源库内的成员、审批和资源管理权限。">
                   <PermissionField label="应用角色">
                     <select className="h-9 w-full rounded border border-border px-2 text-sm" value={selectedUser.aiResourceRole ?? 'user'} disabled={saving} onChange={(event) => void updatePermission('ai-resource-role', { role: event.target.value })}>
                       <option value="user">普通成员</option>
@@ -344,7 +344,7 @@ export default function PlatformUsersPage() {
                     </select>
                   </PermissionField>
                 </PermissionCard>
-                <PermissionCard className="min-w-[240px] flex-1" title="质量工作台角色" description="只控制质量工作台的应用级项目管理能力。">
+                <PermissionCard title="质量工作台角色" description="只控制质量工作台的应用级项目管理能力。">
                   <PermissionField label="应用角色">
                     <select className="h-9 w-full rounded border border-border px-2 text-sm" value={selectedUser.workbenchRole} disabled={saving} onChange={(event) => void updatePermission('workbench-role', { role: event.target.value })}>
                       <option value="user">普通用户</option>
@@ -385,18 +385,16 @@ function PermissionField({ label, children }: { label: string; children: ReactNo
 }
 
 function PermissionCard({
-  className,
   title,
   description,
   children,
 }: {
-  className?: string;
   title: string;
   description: string;
   children: ReactNode;
 }) {
   return (
-    <div className={`rounded border border-border p-3 ${className ?? ''}`}>
+    <div className="w-full rounded border border-border p-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       <p className="mt-1 min-h-10 text-xs leading-5 text-muted-foreground">{description}</p>
       <div className="mt-3 space-y-3">{children}</div>
