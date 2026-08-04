@@ -69,11 +69,6 @@ export function AppShell({
               <>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm text-white">{session.username}</div>
-                  <div className="text-xs text-ws-sidebar-text/60">
-                    平台：{session.platformRole === 'admin' ? '管理员' : '普通用户'}
-                    {' · '}
-                    工作台：{session.role === 'admin' ? '应用管理员' : session.role === 'manager' ? '项目管理者' : '普通用户'}
-                  </div>
                 </div>
                 <Link href="/portal" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="返回应用选择">
                   应用

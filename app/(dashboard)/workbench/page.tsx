@@ -145,14 +145,11 @@ export default function WorkbenchPage() {
   if (loading) return <div className="p-8 text-sm text-muted-foreground">加载个人项目工作台...</div>;
   if (!data) return <div className="p-8 text-sm text-red-600">{error || '个人项目工作台不可用'}</div>;
 
-  const roleName = data.roleContext.position?.roleName ?? data.roleContext.position?.name ?? roleFallback(data.roleContext.workbenchRole);
-
   return (
     <div className="min-h-screen bg-slate-50/80 px-5 py-5 text-slate-900">
       <div className="mx-auto flex max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs text-slate-500">{roleName}</p>
             <h1 className="mt-1 text-xl font-semibold">个人项目工作台</h1>
           </div>
           <Button variant="outline" size="sm" onClick={loadData} disabled={refreshing}>
@@ -383,16 +380,6 @@ function ProjectStatusBadge({ label, tone }: { label: string; tone: 'green' | 'a
 
 function projectTaskHref(projectId: string, todoId: string) {
   return `/flows/npq/projects/${projectId}?todo=${encodeURIComponent(todoId)}`;
-}
-
-function roleFallback(role: WorkbenchRole) {
-  const map: Record<WorkbenchRole, string> = {
-    npq: 'NPQ',
-    executor: '执行角色',
-    manager: '管理者',
-    admin: '应用管理员',
-  };
-  return map[role];
 }
 
 function formatDate(value: string) {

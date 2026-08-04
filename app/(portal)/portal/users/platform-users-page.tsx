@@ -200,18 +200,18 @@ export default function PlatformUsersPage() {
             </select>
             <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={platformRoleFilter} onChange={(event) => setPlatformRoleFilter(event.target.value)}>
               <option value="">全部平台角色</option>
-              <option value="user">普通用户</option>
+              <option value="user">用户</option>
               <option value="admin">平台管理员</option>
             </select>
             <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={workbenchRoleFilter} onChange={(event) => setWorkbenchRoleFilter(event.target.value)}>
               <option value="">全部工作台角色</option>
-              <option value="user">普通用户</option>
+              <option value="user">用户</option>
               <option value="manager">项目管理者</option>
               <option value="admin">应用管理员</option>
             </select>
             <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={aiResourceRoleFilter} onChange={(event) => setAiResourceRoleFilter(event.target.value)}>
               <option value="">全部 AI 角色</option>
-              <option value="user">普通成员</option>
+              <option value="user">用户</option>
               <option value="reviewer">审批人</option>
               <option value="admin">管理员</option>
             </select>
@@ -247,11 +247,11 @@ export default function PlatformUsersPage() {
             <input className="h-9 rounded border border-border px-2 text-sm" placeholder="初始密码" type="password" value={createForm.password} onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })} />
             <input className="h-9 rounded border border-border px-2 text-sm" placeholder="邮箱（可选）" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} />
             <select className="h-9 rounded border border-border px-2 text-sm" value={createForm.platformRole} onChange={(event) => setCreateForm({ ...createForm, platformRole: event.target.value })}>
-              <option value="user">普通平台用户</option>
+              <option value="user">用户</option>
               <option value="admin">平台管理员</option>
             </select>
             <select className="h-9 rounded border border-border px-2 text-sm" value={createForm.workbenchRole} onChange={(event) => setCreateForm({ ...createForm, workbenchRole: event.target.value })}>
-              <option value="user">普通用户</option>
+              <option value="user">用户</option>
               <option value="manager">项目管理者</option>
               <option value="admin">应用管理员</option>
             </select>
@@ -281,11 +281,11 @@ export default function PlatformUsersPage() {
                     <span className="block truncate text-sm font-medium text-foreground">{user.username}</span>
                     <span className="block truncate text-xs text-muted-foreground">{user.email || '未填写邮箱'}</span>
                     <span className="block truncate text-[11px] text-muted-foreground">
-                      平台：{user.platformRole === 'admin' ? '管理员' : '普通用户'}
+                      平台：{user.platformRole === 'admin' ? '管理员' : '用户'}
                       {' · '}
-                      AI {user.aiResourceRole === 'admin' ? '管理员' : user.aiResourceRole === 'reviewer' ? '审批人' : '普通成员'}
+                      AI {user.aiResourceRole === 'admin' ? '管理员' : user.aiResourceRole === 'reviewer' ? '审批人' : '用户'}
                       {' · '}
-                      工作台：{user.workbenchRole === 'admin' ? '应用管理员' : user.workbenchRole === 'manager' ? '项目管理者' : '普通用户'}
+                      工作台：{user.workbenchRole === 'admin' ? '应用管理员' : user.workbenchRole === 'manager' ? '项目管理者' : '用户'}
                       {' · '}
                       {user.position?.positionRole.name || '未绑定岗位'}
                       {' · '}
@@ -324,7 +324,7 @@ export default function PlatformUsersPage() {
                 <PermissionCard title="平台角色" description="控制整个质量平台的全局管理权限。">
                   <PermissionField label="平台角色">
                     <select className="h-9 w-full rounded border border-border px-2 text-sm" value={selectedUser.platformRole} disabled={saving} onChange={(event) => void updatePermission('platform', { platformRole: event.target.value })}>
-                      <option value="user">普通平台用户</option>
+                      <option value="user">用户</option>
                       <option value="admin">平台管理员</option>
                     </select>
                   </PermissionField>
@@ -338,7 +338,7 @@ export default function PlatformUsersPage() {
                 <PermissionCard title="AI 资源库角色" description="只控制 AI 资源库内的成员、审批和资源管理权限。">
                   <PermissionField label="应用角色">
                     <select className="h-9 w-full rounded border border-border px-2 text-sm" value={selectedUser.aiResourceRole ?? 'user'} disabled={saving} onChange={(event) => void updatePermission('ai-resource-role', { role: event.target.value })}>
-                      <option value="user">普通成员</option>
+                      <option value="user">用户</option>
                       <option value="reviewer">审批人</option>
                       <option value="admin">应用管理员</option>
                     </select>
@@ -347,7 +347,7 @@ export default function PlatformUsersPage() {
                 <PermissionCard title="质量工作台角色" description="只控制质量工作台的应用级项目管理能力。">
                   <PermissionField label="应用角色">
                     <select className="h-9 w-full rounded border border-border px-2 text-sm" value={selectedUser.workbenchRole} disabled={saving} onChange={(event) => void updatePermission('workbench-role', { role: event.target.value })}>
-                      <option value="user">普通用户</option>
+                      <option value="user">用户</option>
                       <option value="manager">项目管理者</option>
                       <option value="admin">应用管理员</option>
                     </select>
