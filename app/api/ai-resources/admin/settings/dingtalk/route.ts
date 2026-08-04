@@ -2,27 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { dingtalkNotifyEnvStatus } from '@/lib/dingtalk/config';
 import { sendTestNotifyToUser } from '@/lib/dingtalk/notify-review';
-import { isPublishNotifyEnabled, setPublishNotifyEnabled } from '@/lib/dingtalk/settings';
+import {
+  DINGTALK_NOTIFICATION_CATEGORIES,
+  getDingTalkNotificationSettings,
+  setDingTalkNotificationEnabled,
+  type DingTalkNotificationCategory,
+} from '@/lib/dingtalk/settings';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 
+const categorySchema = z.enum(DINGTALK_NOTIFICATION_CATEGORIES);
 const putSchema = z.object({
-  publishNotifyEnabled: z.boolean(),
+  category: categorySchema.optional(),
+  enabled: z.boolean().optional(),
+  // 兼容旧版管理页请求
+  publishNotifyEnabled: z.boolean().optional(),
 });
 
 export async function GET() {
   try {
     await requireAiResourceRoleApi('admin');
     const env = dingtalkNotifyEnvStatus();
-    let publishNotifyEnabled = false;
+    let notifications = {
+      reviewSubmitted: true,
+      reviewRejected: true,
+      reviewApproved: true,
+      publish: true,
+    };
     try {
-      publishNotifyEnabled = await isPublishNotifyEnabled();
+      notifications = await getDingTalkNotificationSettings();
     } catch (error) {
-      console.error('[dingtalk] read publishNotify setting failed:', error);
+      console.error('[dingtalk] read notification settings failed:', error);
     }
     return NextResponse.json({
-      publishNotifyEnabled,
+      notifications,
+      publishNotifyEnabled: notifications.publish,
       env,
       audience: 'app_members',
     });
@@ -39,9 +54,23 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: formatZodError(payload.error) }, { status: 400 });
     }
 
-    await setPublishNotifyEnabled(payload.data.publishNotifyEnabled, actor.userId);
+    const category =
+      payload.data.category ??
+      (payload.data.publishNotifyEnabled === undefined ? undefined : 'publish');
+    const enabled = payload.data.enabled ?? payload.data.publishNotifyEnabled;
+    if (!category || enabled === undefined) {
+      return NextResponse.json({ error: '缺少通知类别或开关状态。' }, { status: 400 });
+    }
+
+    await setDingTalkNotificationEnabled(
+      category as DingTalkNotificationCategory,
+      enabled,
+      actor.userId,
+    );
+    const notifications = await getDingTalkNotificationSettings();
     return NextResponse.json({
-      publishNotifyEnabled: payload.data.publishNotifyEnabled,
+      notifications,
+      publishNotifyEnabled: notifications.publish,
       env: dingtalkNotifyEnvStatus(),
       audience: 'app_members',
     });
@@ -53,12 +82,22 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireAiResourceRoleApi('admin');
-    const body = (await request.json().catch(() => ({}))) as { action?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+      action?: string;
+      category?: string;
+    };
     if (body.action !== 'test') {
       return NextResponse.json({ error: '未知操作。' }, { status: 400 });
     }
 
-    const result = await sendTestNotifyToUser(actor.userId);
+    const category = body.category
+      ? categorySchema.safeParse(body.category)
+      : { success: true as const, data: 'publish' as const };
+    if (!category.success) {
+      return NextResponse.json({ error: '通知类别无效。' }, { status: 400 });
+    }
+
+    const result = await sendTestNotifyToUser(actor.userId, category.data);
     if (!result.ok) {
       return NextResponse.json({ error: result.error ?? '发送失败' }, { status: 400 });
     }

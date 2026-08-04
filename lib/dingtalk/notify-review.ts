@@ -2,7 +2,10 @@ import { db } from '@/lib/database';
 import { resourceTypeLabel, reviewTypeLabel } from '@/modules/ai-resources/labels';
 import type { AiResourceType, AiReviewType } from '@/modules/ai-resources/constants';
 import { buildAuthEntryUrl, buildDingTalkPcBrowserUrl, buildNotifyLinks, dingtalkNotifyEnvStatus } from './config';
-import { isPublishNotifyEnabled } from './settings';
+import {
+  isDingTalkNotificationEnabled,
+  type DingTalkNotificationCategory,
+} from './settings';
 import { completeDingTalkTodo, createDingTalkTodo } from './todo';
 import { ensureDingTalkUserId, getDingTalkUnionId, listPublishNotifyUserIds } from './users';
 import { sendActionCardNotify } from './work-notify';
@@ -45,6 +48,18 @@ function extractProposed(proposedData: string): {
   } catch {
     return { name: '未命名资源' };
   }
+}
+
+function buildNotificationMarkdown(title: string, paragraphs: string[]) {
+  return [
+    `## ${title}`,
+    '',
+    ...paragraphs
+      .filter((paragraph) => paragraph.trim())
+      .flatMap((paragraph) => [paragraph, '']),
+  ]
+    .join('\n')
+    .trim();
 }
 
 function fireAndForget(label: string, work: () => Promise<void>) {
@@ -111,6 +126,10 @@ export async function onReviewSubmitted(reviewId: string): Promise<void> {
     console.warn('[dingtalk] skip review notify: missing DINGTALK_CLIENT_ID/SECRET');
     return;
   }
+  if (!(await isDingTalkNotificationEnabled('reviewSubmitted'))) {
+    console.log('[dingtalk] review submitted notification disabled');
+    return;
+  }
 
   const review = await db.aiResourceReviewRequest.findUnique({
     where: { id: reviewId },
@@ -130,8 +149,13 @@ export async function onReviewSubmitted(reviewId: string): Promise<void> {
 
   const proposed = extractProposed(review.proposedData);
   const typeLabel = reviewTypeText(review.type);
-  const subject = `【AI资源审批】${typeLabel}：${proposed.name}`;
-  const description = `提交人：${review.requester.username}\n说明：${review.updateSummary}`;
+  const subject = `【AI资源库】审批待处理｜${typeLabel}：${proposed.name}`;
+  const notificationParagraphs = [
+    `提交人：${review.requester.username}`,
+    `说明：${review.updateSummary}`,
+    '请尽快处理。',
+  ];
+  const description = notificationParagraphs.slice(0, 2).join('\n\n');
   const links = buildNotifyLinks(`/ai-resources/review/${review.id}`);
 
   const reviewerUnionId = await getDingTalkUnionId(review.reviewer.id);
@@ -145,7 +169,7 @@ export async function onReviewSubmitted(reviewId: string): Promise<void> {
     if (reviewerUserId && links) {
       await sendActionCardNotify([reviewerUserId], {
         title: subject,
-        markdown: `### ${subject}\n\n${description}\n\n请尽快处理。`,
+        markdown: buildNotificationMarkdown(subject, notificationParagraphs),
         singleTitle: '去处理',
         singleUrl: links.pcUrl,
       });
@@ -188,6 +212,10 @@ export async function onReviewSubmitted(reviewId: string): Promise<void> {
 async function createSubmitterReworkTodo(reviewId: string): Promise<void> {
   const env = dingtalkNotifyEnvStatus();
   if (!env.hasCredentials || !env.hasAppBaseUrl) return;
+  if (!(await isDingTalkNotificationEnabled('reviewRejected'))) {
+    console.log('[dingtalk] review rejected notification disabled');
+    return;
+  }
 
   const review = await db.aiResourceReviewRequest.findUnique({
     where: { id: reviewId },
@@ -206,14 +234,14 @@ async function createSubmitterReworkTodo(reviewId: string): Promise<void> {
 
   const proposed = extractProposed(review.proposedData);
   const typeLabel = reviewTypeText(review.type);
-  const subject = `【AI资源待处理】${typeLabel}被驳回：${proposed.name}`;
-  const description = [
+  const notificationParagraphs = [
     `审批人：${review.reviewer?.username ?? '-'}`,
     review.rejectReason ? `驳回原因：${review.rejectReason}` : null,
     '请修改后重新提交，或废弃此单据。',
   ]
-    .filter(Boolean)
-    .join('\n');
+    .filter((line): line is string => Boolean(line));
+  const subject = `【AI资源库】待处理｜${typeLabel}被驳回：${proposed.name}`;
+  const description = notificationParagraphs.join('\n\n');
   const links = buildNotifyLinks(`/ai-resources/review/${review.id}`);
   if (!links) return;
 
@@ -222,7 +250,7 @@ async function createSubmitterReworkTodo(reviewId: string): Promise<void> {
     if (userid) {
       await sendActionCardNotify([userid], {
         title: subject,
-        markdown: `### ${subject}\n\n${description}`,
+        markdown: buildNotificationMarkdown(subject, notificationParagraphs),
         singleTitle: '去处理',
         singleUrl: links.pcUrl,
       });
@@ -254,6 +282,10 @@ async function createSubmitterReworkTodo(reviewId: string): Promise<void> {
 async function notifySubmitterApproved(reviewId: string): Promise<void> {
   const env = dingtalkNotifyEnvStatus();
   if (!env.hasCredentials || !env.hasAgentId) return;
+  if (!(await isDingTalkNotificationEnabled('reviewApproved'))) {
+    console.log('[dingtalk] review approved notification disabled');
+    return;
+  }
 
   const review = await db.aiResourceReviewRequest.findUnique({
     where: { id: reviewId },
@@ -280,7 +312,10 @@ async function notifySubmitterApproved(reviewId: string): Promise<void> {
 
   await sendActionCardNotify([userid], {
     title: subject,
-    markdown: `### ${subject}\n\n审批人：${review.reviewer?.username ?? '-'}\n\n可点击查看详情。`,
+    markdown: buildNotificationMarkdown(subject, [
+      `审批人：${review.reviewer?.username ?? '-'}`,
+      '可点击查看详情。',
+    ]),
     singleTitle: '查看详情',
     singleUrl: links.pcUrl,
   });
@@ -332,15 +367,15 @@ function buildPublishCardMarkdown(input: {
   updateSummary?: string;
 }) {
   const lines = [
-    `## ${input.headline}`,
+    `## 【AI资源库】${input.headline}`,
     '',
     `### ${input.name}`,
     '',
     `**类型**  ${input.typeLabel}`,
   ];
-  if (input.ownerName) lines.push(`**负责人**  ${input.ownerName}`);
-  if (input.tags) lines.push(`**适用小组**  ${input.tags}`);
-  lines.push(`**提交人**  ${input.requesterName}`);
+  if (input.ownerName) lines.push('', `**负责人**  ${input.ownerName}`);
+  if (input.tags) lines.push('', `**适用小组**  ${input.tags}`);
+  lines.push('', `**提交人**  ${input.requesterName}`);
   if (input.summary) {
     lines.push('', '---', '', `**使用说明**`, '', input.summary.slice(0, 500));
   }
@@ -374,7 +409,7 @@ export async function notifyResourceBroadcast(input: ResourceBroadcastInput): Pr
   sent: number;
   reason?: string;
 }> {
-  if (!(await isPublishNotifyEnabled())) {
+  if (!(await isDingTalkNotificationEnabled('publish'))) {
     return { enabled: false, sent: 0, reason: 'disabled' };
   }
 
@@ -468,7 +503,36 @@ export async function onResourcePublishedNotify(reviewId: string): Promise<{
   });
 }
 
-export async function sendTestNotifyToUser(localUserId: string): Promise<{ ok: boolean; error?: string }> {
+const TEST_NOTIFICATION_CONTENT: Record<
+  DingTalkNotificationCategory,
+  { title: string; paragraphs: string[]; singleTitle: string }
+> = {
+  reviewSubmitted: {
+    title: '【AI资源库】审批待处理通知测试',
+    paragraphs: ['提交人：测试用户', '说明：这是一条待审批通知测试消息。', '请尽快处理。'],
+    singleTitle: '去处理',
+  },
+  reviewRejected: {
+    title: '【AI资源库】驳回待处理通知测试',
+    paragraphs: ['审批人：测试审批人', '驳回原因：这是一条驳回通知测试消息。', '请修改后重新提交，或废弃此单据。'],
+    singleTitle: '去处理',
+  },
+  reviewApproved: {
+    title: '【AI资源库】审批通过通知测试',
+    paragraphs: ['审批人：测试审批人', '这是一条审批通过通知测试消息。'],
+    singleTitle: '查看详情',
+  },
+  publish: {
+    title: '【AI资源库】资源发布通知测试',
+    paragraphs: ['测试资源', '类型：应用', '这是一条资源发布/更新广播测试消息。'],
+    singleTitle: '查看详情',
+  },
+};
+
+export async function sendTestNotifyToUser(
+  localUserId: string,
+  category: DingTalkNotificationCategory = 'publish',
+): Promise<{ ok: boolean; error?: string }> {
   const env = dingtalkNotifyEnvStatus();
   if (!env.hasCredentials || !env.hasAgentId || !env.hasAppBaseUrl) {
     return { ok: false, error: '请先配置 DINGTALK_CLIENT_ID/SECRET、DINGTALK_AGENT_ID、APP_BASE_URL' };
@@ -484,18 +548,11 @@ export async function sendTestNotifyToUser(localUserId: string): Promise<{ ok: b
     return { ok: false, error: 'APP_BASE_URL 未配置' };
   }
 
+  const content = TEST_NOTIFICATION_CONTENT[category];
   const result = await sendActionCardNotify([userid], {
-    title: '【AI资源库】钉钉通知测试',
-    markdown: [
-      '## 钉钉工作通知测试',
-      '',
-      '### 配置正常',
-      '',
-      '若你收到本条消息，说明应用工作通知配置正常。',
-      '',
-      '**通道**  企业内部应用工作通知',
-    ].join('\n'),
-    singleTitle: '打开配置',
+    title: content.title,
+    markdown: buildNotificationMarkdown(content.title, content.paragraphs),
+    singleTitle: content.singleTitle,
     singleUrl: buildDingTalkPcBrowserUrl(url),
   });
 

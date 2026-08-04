@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { dingtalkNotifyEnvStatus } from '@/lib/dingtalk/config';
-import { isPublishNotifyEnabled } from '@/lib/dingtalk/settings';
+import { getDingTalkNotificationSettings } from '@/lib/dingtalk/settings';
 import { requireAiResourceRole } from '@/modules/ai-resources/guards';
 import { AdminDingTalkPanel } from '@/modules/ai-resources/ui/admin-dingtalk-panel';
 
@@ -13,11 +13,16 @@ export default async function AdminDingTalkPage() {
   }
 
   const initialEnv = dingtalkNotifyEnvStatus();
-  let initialEnabled = false;
+  let initialNotifications = {
+    reviewSubmitted: true,
+    reviewRejected: true,
+    reviewApproved: true,
+    publish: true,
+  };
   try {
-    initialEnabled = await isPublishNotifyEnabled();
+    initialNotifications = await getDingTalkNotificationSettings();
   } catch (error) {
-    console.error('[dingtalk] read publishNotify setting on page failed:', error);
+    console.error('[dingtalk] read notification settings on page failed:', error);
   }
 
   return (
@@ -33,7 +38,10 @@ export default async function AdminDingTalkPage() {
       </section>
 
       <section className="panel admin-detail-panel">
-        <AdminDingTalkPanel initialEnabled={initialEnabled} initialEnv={initialEnv} />
+        <AdminDingTalkPanel
+          initialNotifications={initialNotifications}
+          initialEnv={initialEnv}
+        />
       </section>
     </main>
   );

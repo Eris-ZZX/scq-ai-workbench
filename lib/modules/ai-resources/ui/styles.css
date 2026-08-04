@@ -2387,6 +2387,43 @@ h3 {
   font-size: 16px;
 }
 
+.dingtalk-notification-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.dingtalk-notification-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.dingtalk-notification-card-head,
+.dingtalk-notification-card-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dingtalk-notification-card-head h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.dingtalk-notification-card-head .subtle,
+.dingtalk-notification-card-foot .subtle {
+  margin: 0;
+}
+
+.dingtalk-notification-card-foot {
+  align-items: center;
+}
+
 .dingtalk-toggle {
   display: inline-flex;
   align-items: center;
@@ -2420,6 +2457,18 @@ h3 {
 
 .dingtalk-feedback.bad {
   color: #9a3412;
+}
+
+@media (max-width: 768px) {
+  .dingtalk-notification-card-head,
+  .dingtalk-notification-card-foot {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dingtalk-notification-card-foot .button {
+    align-self: flex-start;
+  }
 }
 
 @media (max-width: 900px) {
