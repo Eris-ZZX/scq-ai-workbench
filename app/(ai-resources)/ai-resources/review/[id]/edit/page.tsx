@@ -20,6 +20,12 @@ export default async function ReviewResubmitPage({ params }: { params: Promise<{
     redirect(`/ai-resources/review/${id}`);
   }
 
+  const currentResource = request.resourceId
+    ? await db.aiResource.findUnique({
+        where: { id: request.resourceId },
+        select: { ownerId: true, ownerName: true },
+      })
+    : null;
   const proposed = fromJsonObject(request.proposedData) as Record<string, unknown>;
   const tags = Array.isArray(proposed.tags)
     ? proposed.tags.join(',')
@@ -33,7 +39,10 @@ export default async function ReviewResubmitPage({ params }: { params: Promise<{
     type: String(proposed.type ?? 'AGENT'),
     summary: String(proposed.summary ?? ''),
     tags,
-    ownerName: String(proposed.ownerName ?? actor.username),
+    ownerId: String(proposed.ownerId ?? currentResource?.ownerId ?? request.requesterId),
+    ownerName: String(
+      proposed.ownerName ?? currentResource?.ownerName ?? actor.username,
+    ),
     visibilityScope: String(proposed.visibilityScope ?? 'ALL'),
     visibleDeptIds: '[]',
     visibleUserIds: '[]',

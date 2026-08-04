@@ -7,6 +7,7 @@ import { toJsonString } from '@/modules/ai-resources/json';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { canEditResource, diffKeys } from '@/modules/ai-resources/policy';
 import { assertAssignableReviewer } from '@/modules/ai-resources/reviewers';
+import { withResolvedResourceOwner } from '@/modules/ai-resources/resource-data';
 import { reviewSubmissionSchema } from '@/modules/ai-resources/validation';
 
 export async function POST(
@@ -31,19 +32,21 @@ export async function POST(
     }
 
     await assertAssignableReviewer(actor, payload.data.reviewerId);
+    const normalizedResource = await withResolvedResourceOwner(payload.data.resource);
 
     const proposedData = {
-      name: payload.data.resource.name,
-      type: payload.data.resource.type,
-      summary: payload.data.resource.summary,
-      tags: payload.data.resource.tags,
-      ownerName: payload.data.resource.ownerName,
-      visibilityScope: payload.data.resource.visibilityScope,
-      status: payload.data.resource.status,
-      resourceUrl: payload.data.resource.resourceUrl || null,
-      content: payload.data.resource.content,
-      attachments: payload.data.resource.attachments,
-      extractedText: payload.data.resource.extractedText,
+      name: normalizedResource.name,
+      type: normalizedResource.type,
+      summary: normalizedResource.summary,
+      tags: normalizedResource.tags,
+      ownerId: normalizedResource.ownerId,
+      ownerName: normalizedResource.ownerName,
+      visibilityScope: normalizedResource.visibilityScope,
+      status: normalizedResource.status,
+      resourceUrl: normalizedResource.resourceUrl || null,
+      content: normalizedResource.content,
+      attachments: normalizedResource.attachments,
+      extractedText: normalizedResource.extractedText,
     };
 
     const changedFields = diffKeys(
@@ -52,6 +55,7 @@ export async function POST(
         type: existing.type,
         summary: existing.summary,
         tags: existing.tags,
+        ownerId: existing.ownerId,
         ownerName: existing.ownerName,
         visibilityScope: existing.visibilityScope,
         status: existing.status,

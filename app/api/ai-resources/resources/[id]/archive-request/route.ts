@@ -22,7 +22,7 @@ export async function POST(
       return NextResponse.json({ error: '资源不存在。' }, { status: 404 });
     }
     if (!canRequestArchive(actor, existing)) {
-      return NextResponse.json({ error: '只有上传者可以申请删除该资源。' }, { status: 403 });
+      return NextResponse.json({ error: '只有上传者或负责人可以申请删除该资源。' }, { status: 403 });
     }
 
     const payload = archiveRequestSchema.safeParse(await request.json().catch(() => null));
@@ -58,6 +58,7 @@ export async function POST(
           type: existing.type,
           summary: existing.summary,
           tags: existing.tags,
+          ownerId: existing.ownerId,
           ownerName: existing.ownerName,
           status: existing.status,
           content: existing.content,

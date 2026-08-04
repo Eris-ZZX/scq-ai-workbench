@@ -5,6 +5,7 @@ const fieldLabels: Record<string, string> = {
   type: '资源类型',
   summary: '面向用户/使用说明',
   tags: '适用小组',
+  ownerId: '负责人',
   ownerName: '负责人',
   resourceUrl: '存储路径/链接',
   content: '实现方法简述',

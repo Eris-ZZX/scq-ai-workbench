@@ -6,6 +6,7 @@ import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
+import { listActiveAiResourceUsers } from '@/modules/ai-resources/users';
 import { resourcePayloadSchema } from '@/modules/ai-resources/validation';
 
 /** Rows per DB transaction. Large imports are queued as sequential batches (no user-facing caps). */
@@ -26,14 +27,24 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     let parsedRows: Array<z.infer<typeof resourcePayloadSchema>>;
+    let ownerFallbackCount = 0;
     try {
       const rawRows = parseExcelRows(buffer);
       if (!rawRows.length) {
         return NextResponse.json({ error: '没有解析到可导入的资源。' }, { status: 400 });
       }
+      const activeUsers = await listActiveAiResourceUsers();
+      const usersByName = new Map(activeUsers.map((user) => [user.username, user]));
+      const fallbackOwner = activeUsers.find((user) => user.id === actor.userId);
+      if (!fallbackOwner) {
+        return NextResponse.json({ error: '当前操作用户不可作为负责人。' }, { status: 400 });
+      }
 
       parsedRows = rawRows.map((row, index) => {
-        const parsed = resourcePayloadSchema.safeParse(normalizeImportRow(row));
+        const ownerInput = String(row.ownerName ?? row['负责人'] ?? '').trim();
+        const owner = usersByName.get(ownerInput) ?? fallbackOwner;
+        if (!usersByName.has(ownerInput)) ownerFallbackCount += 1;
+        const parsed = resourcePayloadSchema.safeParse(normalizeImportRow(row, owner));
         if (!parsed.success) {
           throw new ImportError(`第${index + 1} 行：${formatZodError(parsed.error)}`);
         }
@@ -52,6 +63,7 @@ export async function POST(request: NextRequest) {
       count,
       batches: Math.ceil(count / IMPORT_BATCH_SIZE),
       batchSize: IMPORT_BATCH_SIZE,
+      ownerFallbackCount,
     });
   } catch (error) {
     return aiResourceErrorResponse(error);
@@ -146,13 +158,17 @@ function parseExcelRows(buffer: Buffer): Array<Record<string, unknown>> {
   return rawRows;
 }
 
-function normalizeImportRow(row: Record<string, unknown>) {
+function normalizeImportRow(
+  row: Record<string, unknown>,
+  owner: { id: string; username: string },
+) {
   return {
     name: row.name ?? row['资源名称'],
     type: normalizeType(row.type ?? row['资源类型']),
     summary: row.summary ?? row['面向用户/使用说明'] ?? row['使用说明'] ?? row['简介'],
     tags: normalizeList(row.tags ?? row['适用小组'] ?? row['标签']),
-    ownerName: row.ownerName ?? row['负责人'],
+    ownerId: owner.id,
+    ownerName: owner.username,
     visibilityScope: 'ALL' as const,
     visibleDeptIds: [],
     visibleUserIds: [],

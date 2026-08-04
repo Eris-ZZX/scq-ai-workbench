@@ -5,7 +5,7 @@ import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 import { diffKeys } from '@/modules/ai-resources/policy';
-import { toDbResourceData } from '@/modules/ai-resources/resource-data';
+import { toDbResourceData, withResolvedResourceOwner } from '@/modules/ai-resources/resource-data';
 import { archiveResourceSchema, resourceUpdateBodySchema } from '@/modules/ai-resources/validation';
 
 export async function PATCH(
@@ -25,20 +25,22 @@ export async function PATCH(
     if (!payload.success) {
       return NextResponse.json({ error: formatZodError(payload.error) }, { status: 400 });
     }
+    const normalizedResource = await withResolvedResourceOwner(payload.data.resource);
 
     const proposedData = {
-      name: payload.data.resource.name,
-      type: payload.data.resource.type,
-      summary: payload.data.resource.summary,
-      tags: payload.data.resource.tags,
-      ownerName: payload.data.resource.ownerName,
-      visibilityScope: payload.data.resource.visibilityScope,
-      status: payload.data.resource.status,
-      resourceUrl: payload.data.resource.resourceUrl || null,
-      content: payload.data.resource.content,
-      attachments: payload.data.resource.attachments,
-      extractedText: payload.data.resource.extractedText,
-      extension: payload.data.resource.extension,
+      name: normalizedResource.name,
+      type: normalizedResource.type,
+      summary: normalizedResource.summary,
+      tags: normalizedResource.tags,
+      ownerId: normalizedResource.ownerId,
+      ownerName: normalizedResource.ownerName,
+      visibilityScope: normalizedResource.visibilityScope,
+      status: normalizedResource.status,
+      resourceUrl: normalizedResource.resourceUrl || null,
+      content: normalizedResource.content,
+      attachments: normalizedResource.attachments,
+      extractedText: normalizedResource.extractedText,
+      extension: normalizedResource.extension,
     };
 
     const changedFields = diffKeys(
@@ -47,6 +49,7 @@ export async function PATCH(
         type: existing.type,
         summary: existing.summary,
         tags: existing.tags,
+        ownerId: existing.ownerId,
         ownerName: existing.ownerName,
         visibilityScope: existing.visibilityScope,
         status: existing.status,

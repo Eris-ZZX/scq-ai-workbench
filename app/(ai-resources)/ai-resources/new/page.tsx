@@ -2,11 +2,11 @@ import { ResourceForm } from '@/modules/ai-resources/ui/resource-form';
 import { requireAiResourceUser } from '@/modules/ai-resources/guards';
 
 export default async function NewResourcePage() {
-  await requireAiResourceUser();
+  const actor = await requireAiResourceUser();
 
   return (
     <main className="main">
-      <ResourceForm />
+      <ResourceForm initialOwnerId={actor.userId} initialOwnerName={actor.username} />
     </main>
   );
 }

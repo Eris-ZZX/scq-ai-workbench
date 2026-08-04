@@ -6,6 +6,7 @@ import { fromJsonObject } from '@/modules/ai-resources/json';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { canActOnReviewRequest, canReview } from '@/modules/ai-resources/policy';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
+import { resolveActiveAiResourceUser } from '@/modules/ai-resources/users';
 
 export async function POST(
   _request: NextRequest,
@@ -84,7 +85,26 @@ export async function POST(
         return { resource, review: handled };
       }
 
-      const proposedData = toDbResourceData(fromJsonObject(review.proposedData));
+      const rawProposedData = fromJsonObject(review.proposedData) as Record<string, unknown>;
+      let fallbackOwnerId = review.requesterId;
+      if (review.type === 'UPDATE' && review.resourceId) {
+        const existing = await tx.aiResource.findUnique({
+          where: { id: review.resourceId },
+          select: { ownerId: true },
+        });
+        fallbackOwnerId = existing?.ownerId ?? fallbackOwnerId;
+      }
+      const owner = await resolveActiveAiResourceUser(
+        typeof rawProposedData.ownerId === 'string' && rawProposedData.ownerId
+          ? rawProposedData.ownerId
+          : fallbackOwnerId,
+      );
+      const normalizedProposedData = {
+        ...rawProposedData,
+        ownerId: owner.id,
+        ownerName: owner.username,
+      };
+      const proposedData = toDbResourceData(normalizedProposedData);
       const resource =
         review.type === 'CREATE'
           ? await tx.aiResource.create({

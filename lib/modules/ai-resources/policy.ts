@@ -73,17 +73,27 @@ export function canDiscardReview(
 
 export function canEditResource(
   actor: AiResourceActor,
-  resource: Pick<{ createdById: string }, 'createdById'>,
+  resource: Pick<{ createdById: string; ownerId: string }, 'createdById' | 'ownerId'>,
 ) {
-  return canReview(actor) || resource.createdById === actor.userId;
+  return (
+    canReview(actor) ||
+    resource.createdById === actor.userId ||
+    resource.ownerId === actor.userId
+  );
 }
 
-/** 上传者可发起删除审批；管理员仍可走后台直接归档。 */
+/** 上传者和负责人可发起删除审批；管理员仍可走后台直接归档。 */
 export function canRequestArchive(
   actor: AiResourceActor,
-  resource: Pick<{ createdById: string; status: string }, 'createdById' | 'status'>,
+  resource: Pick<
+    { createdById: string; ownerId: string; status: string },
+    'createdById' | 'ownerId' | 'status'
+  >,
 ) {
-  return resource.status !== 'ARCHIVED' && resource.createdById === actor.userId;
+  return (
+    resource.status !== 'ARCHIVED' &&
+    (resource.createdById === actor.userId || resource.ownerId === actor.userId)
+  );
 }
 
 /** Current version: all members visible; no dept/user filtering. */

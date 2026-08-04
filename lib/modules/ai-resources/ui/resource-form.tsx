@@ -23,6 +23,7 @@ import {
   type HostedHtmlMeta,
 } from '@/modules/ai-resources/hosted-html';
 import { parseJsonForDisplay } from '@/modules/ai-resources/json';
+import type { AiResourceUserOption } from '@/modules/ai-resources/users';
 
 type ResourceFormProps = {
   resource?: AiResource;
@@ -30,6 +31,8 @@ type ResourceFormProps = {
   /** 对被驳回单据重新提交（同一审批单） */
   resubmitReviewId?: string;
   initialReviewerId?: string | null;
+  initialOwnerId?: string;
+  initialOwnerName?: string;
 };
 
 type ResourceAttachment = {
@@ -66,6 +69,8 @@ export function ResourceForm({
   directUpdate = false,
   resubmitReviewId,
   initialReviewerId,
+  initialOwnerId,
+  initialOwnerName,
 }: ResourceFormProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -77,6 +82,9 @@ export function ResourceForm({
   const [files, setFiles] = useState<File[]>([]);
   const [reviewers, setReviewers] = useState<Array<{ id: string; username: string; role: string }>>([]);
   const [reviewerId, setReviewerId] = useState(initialReviewerId ?? '');
+  const [ownerUsers, setOwnerUsers] = useState<AiResourceUserOption[]>([]);
+  const [ownerQuery, setOwnerQuery] = useState(resource?.ownerName ?? initialOwnerName ?? '');
+  const [ownerOpen, setOwnerOpen] = useState(false);
   const [hostedHtml, setHostedHtml] = useState<HostedHtmlMeta | null>(() =>
     parseHostedHtml(resource?.extension),
   );
@@ -86,7 +94,8 @@ export function ResourceForm({
     type: (resource?.type ?? 'AGENT') as AiResourceType,
     summary: resource?.summary ?? '',
     groups: resource?.tags ? resource.tags.split(',').filter(Boolean) : [],
-    ownerName: resource?.ownerName ?? '',
+    ownerId: resource?.ownerId ?? initialOwnerId ?? '',
+    ownerName: resource?.ownerName ?? initialOwnerName ?? '',
     resourceUrls: parseResourceUrls(resource?.resourceUrl),
     content: resource?.content ?? '',
     updateSummary: '',
@@ -133,6 +142,36 @@ export function ResourceForm({
     };
   }, [needsReviewer]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch('/api/ai-resources/users');
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          users?: AiResourceUserOption[];
+          currentUserId?: string;
+        };
+        if (cancelled) return;
+        const list = data.users ?? [];
+        const preferredId = resource?.ownerId || initialOwnerId || data.currentUserId || '';
+        const preferred = list.find((user) => user.id === preferredId);
+        setOwnerUsers(list);
+        setForm((current) => ({
+          ...current,
+          ownerId: preferred?.id ?? current.ownerId,
+          ownerName: preferred?.username ?? current.ownerName,
+        }));
+        if (preferred) setOwnerQuery(preferred.username);
+      } catch {
+        // keep empty; submit will surface validation error
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resource?.ownerId, initialOwnerId]);
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -141,6 +180,13 @@ export function ResourceForm({
     try {
       if (needsReviewer && !reviewerId) {
         setMessage('请选择审批人。');
+        return;
+      }
+      const selectedOwner =
+        ownerUsers.find((user) => user.id === form.ownerId) ??
+        ownerUsers.find((user) => user.username === ownerQuery.trim());
+      if (!selectedOwner) {
+        setMessage('请选择负责人。');
         return;
       }
       if (form.summary.length > AI_SUMMARY_MAX_LENGTH) {
@@ -173,7 +219,8 @@ export function ResourceForm({
             type: form.type,
             summary: form.summary,
             tags: form.groups,
-            ownerName: form.ownerName,
+            ownerId: selectedOwner.id,
+            ownerName: selectedOwner.username,
             visibilityScope: 'ALL',
             resourceUrl: serializeResourceUrls(form.resourceUrls),
             content: form.content,
@@ -209,6 +256,27 @@ export function ResourceForm({
     value: string,
   ) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateOwnerQuery(value: string) {
+    setOwnerQuery(value);
+    const selected = ownerUsers.find((user) => user.username === value.trim());
+    setForm((current) => ({
+      ...current,
+      ownerId: selected?.id ?? '',
+      ownerName: value,
+    }));
+    setOwnerOpen(true);
+  }
+
+  function selectOwner(user: AiResourceUserOption) {
+    setForm((current) => ({
+      ...current,
+      ownerId: user.id,
+      ownerName: user.username,
+    }));
+    setOwnerQuery(user.username);
+    setOwnerOpen(false);
   }
 
   function updateResourceUrl(id: string, field: 'value' | 'label', fieldValue: string) {
@@ -331,7 +399,44 @@ export function ResourceForm({
         </div>
         <div className="field">
           <label>负责人</label>
-          <input value={form.ownerName} onChange={(event) => update('ownerName', event.target.value)} required />
+          <div className="multi-dropdown owner-selector">
+            <input
+              value={ownerQuery}
+              placeholder="输入用户名搜索"
+              onFocus={() => setOwnerOpen(true)}
+              onBlur={() => setTimeout(() => setOwnerOpen(false), 120)}
+              onChange={(event) => updateOwnerQuery(event.target.value)}
+              required
+              aria-autocomplete="list"
+              aria-controls="owner-options"
+              aria-expanded={ownerOpen}
+              role="combobox"
+            />
+            {ownerOpen ? (
+              <div className="multi-dropdown-menu" id="owner-options" role="listbox">
+                {ownerUsers
+                  .filter((user) =>
+                    user.username.toLocaleLowerCase().includes(ownerQuery.trim().toLocaleLowerCase()),
+                  )
+                  .slice(0, 50)
+                  .map((user) => (
+                    <button
+                      type="button"
+                      className="multi-dropdown-option owner-option"
+                      key={user.id}
+                      onClick={() => selectOwner(user)}
+                    >
+                      {user.username}
+                    </button>
+                  ))}
+                {!ownerUsers.some((user) =>
+                  user.username.toLocaleLowerCase().includes(ownerQuery.trim().toLocaleLowerCase()),
+                ) ? (
+                  <span className="subtle owner-empty">没有匹配的用户</span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="field">
           <label>适用小组</label>

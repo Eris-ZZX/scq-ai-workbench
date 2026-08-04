@@ -27,7 +27,10 @@ export default async function AdminResourcesPage({
   const [total, resources] = await Promise.all([
     db.aiResource.count(),
     db.aiResource.findMany({
-      include: { createdBy: { select: { username: true } } },
+      include: {
+        createdBy: { select: { username: true } },
+        owner: { select: { username: true } },
+      },
       orderBy: { updatedAt: 'desc' },
       skip,
       take: pageSize,
@@ -76,7 +79,7 @@ export default async function AdminResourcesPage({
                   <td>{resourceTypeLabel[resource.type as AiResourceType] ?? resource.type}</td>
                   <td>{resource.status}</td>
                   <td>{parseList(resource.tags).join('、') || '未设置'}</td>
-                  <td>{resource.ownerName}</td>
+                  <td>{resource.owner.username || resource.ownerName}</td>
                   <td>v{resource.currentVersion}</td>
                   <td>{formatDate(resource.updatedAt)}</td>
                   <td>

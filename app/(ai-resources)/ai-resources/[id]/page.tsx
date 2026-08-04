@@ -29,6 +29,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
     },
     include: {
       createdBy: { select: { username: true } },
+      owner: { select: { username: true } },
       _count: { select: { favorites: true, likes: true } },
       updateLogs: {
         orderBy: { createdAt: 'desc' },
@@ -134,7 +135,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
                 <span className="subtle">负责人</span>
                 <strong>
                   <UserRound size={15} />
-                  {resource.ownerName}
+                  {resource.owner.username || resource.ownerName}
                 </strong>
               </div>
               <div>

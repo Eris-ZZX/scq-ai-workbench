@@ -32,8 +32,11 @@ export function AdminImportForm() {
       return;
     }
 
+    const fallbackCount = Number(payload?.ownerFallbackCount ?? 0);
     setMessage(
-      `已导入 ${payload?.count ?? 0} 条资源${payload?.batches > 1 ? `（分 ${payload.batches} 批）` : ''}。`,
+      `已导入 ${payload?.count ?? 0} 条资源${payload?.batches > 1 ? `（分 ${payload.batches} 批）` : ''}。${
+        fallbackCount ? `其中 ${fallbackCount} 条负责人未匹配，已回退为当前导入用户。` : ''
+      }`,
     );
     router.refresh();
   }
@@ -67,7 +70,7 @@ export function AdminImportForm() {
           <h2>批量导入</h2>
           <p className="subtle">
             支持 Excel (.xlsx / .xls) 文件，第一行为表头，字段可使用中文列名。大文件会在服务端自动分批排队写入，不限制行数。
-            点击“下载模板”获取带示例的导入模板。
+            “负责人”按用户名精确匹配，匹配不到时回退为当前导入用户。点击“下载模板”获取带示例的导入模板。
           </p>
         </div>
         <div className="meta">

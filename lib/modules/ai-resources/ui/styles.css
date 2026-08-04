@@ -1638,6 +1638,18 @@ h3 {
   background: #eef2f7;
 }
 
+.owner-option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.owner-empty {
+  padding: 6px;
+}
+
 .multi-dropdown-option input {
   width: 14px;
   height: 14px;

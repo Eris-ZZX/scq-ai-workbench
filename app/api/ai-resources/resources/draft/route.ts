@@ -6,6 +6,7 @@ import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { toJsonString } from '@/modules/ai-resources/json';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { assertAssignableReviewer } from '@/modules/ai-resources/reviewers';
+import { withResolvedResourceOwner } from '@/modules/ai-resources/resource-data';
 import { reviewSubmissionSchema } from '@/modules/ai-resources/validation';
 
 export async function POST(request: NextRequest) {
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     await assertAssignableReviewer(actor, payload.data.reviewerId);
+    const normalizedResource = await withResolvedResourceOwner(payload.data.resource);
 
     const review = await db.$transaction(async (tx) => {
       return tx.aiResourceReviewRequest.create({
@@ -25,7 +27,7 @@ export async function POST(request: NextRequest) {
           type: 'CREATE',
           requesterId: actor.userId,
           reviewerId: payload.data.reviewerId,
-          proposedData: toJsonString(normalizeResourceData(payload.data.resource)),
+          proposedData: toJsonString(normalizeResourceData(normalizedResource)),
           updateSummary: payload.data.updateSummary,
           changedFields: Object.keys(payload.data.resource).join(','),
         },

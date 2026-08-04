@@ -281,6 +281,19 @@ export const modelMetadata = {
           "createdById"
         ]
       },
+      "aiResourcesOwned": {
+        "model": "AiResource",
+        "list": true,
+        "nullable": false,
+        "relationName": "AiResourceOwner",
+        "localFields": [],
+        "referenceFields": [
+          "id"
+        ],
+        "remoteFields": [
+          "ownerId"
+        ]
+      },
       "aiResourceReviewsRequested": {
         "model": "AiResourceReviewRequest",
         "list": true,
@@ -3264,6 +3277,11 @@ export const modelMetadata = {
         "type": "String",
         "nullable": false
       },
+      "ownerId": {
+        "column": "owner_id",
+        "type": "String",
+        "nullable": false
+      },
       "visibilityScope": {
         "column": "visibility_scope",
         "type": "String",
@@ -3348,6 +3366,18 @@ export const modelMetadata = {
         "relationName": "AiResourceCreator",
         "localFields": [
           "createdById"
+        ],
+        "referenceFields": [
+          "id"
+        ]
+      },
+      "owner": {
+        "model": "User",
+        "list": false,
+        "nullable": false,
+        "relationName": "AiResourceOwner",
+        "localFields": [
+          "ownerId"
         ],
         "referenceFields": [
           "id"

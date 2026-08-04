@@ -907,6 +907,7 @@ export const AiResource = pgTable('ai_resources', {
 	summary: text('summary').notNull(),
 	tags: text('tags').notNull().default(''),
 	ownerName: text('owner_name').notNull(),
+	ownerId: text('owner_id').notNull(),
 	visibilityScope: text('visibility_scope').notNull().default("ALL"),
 	visibleDeptIds: text('visible_dept_ids').notNull().default(''),
 	visibleUserIds: text('visible_user_ids').notNull().default(''),
@@ -930,9 +931,17 @@ export const AiResource = pgTable('ai_resources', {
 	})
 		.onDelete('restrict')
 		.onUpdate('cascade'),
+	'AiResource_owner_fkey': foreignKey({
+		name: 'ai_resource_owner_fkey',
+		columns: [AiResource.ownerId],
+		foreignColumns: [User.id]
+	})
+		.onDelete('restrict')
+		.onUpdate('cascade'),
 	'ai_resources_type_idx': index('ai_resources_type_idx').on(AiResource.type),
 	'ai_resources_status_idx': index('ai_resources_status_idx').on(AiResource.status),
 	'ai_resources_created_by_id_idx': index('ai_resources_created_by_id_idx').on(AiResource.createdById),
+	'ai_resources_owner_id_idx': index('ai_resources_owner_id_idx').on(AiResource.ownerId),
 	'ai_resources_updated_at_idx': index('ai_resources_updated_at_idx').on(AiResource.updatedAt),
 	'ai_resources_created_at_idx': index('ai_resources_created_at_idx').on(AiResource.createdAt),
 	'ai_resources_name_trgm_idx': index('ai_resources_name_trgm_idx')
@@ -1255,6 +1264,9 @@ export const UserRelations = relations(User, ({ many }) => ({
 	}),
 	aiResourcesCreated: many(AiResource, {
 		relationName: 'AiResourceCreator'
+	}),
+	aiResourcesOwned: many(AiResource, {
+		relationName: 'AiResourceOwner'
 	}),
 	aiResourceReviewsRequested: many(AiResourceReviewRequest, {
 		relationName: 'AiResourceReviewRequester'
@@ -1731,6 +1743,11 @@ export const AiResourceRelations = relations(AiResource, ({ one, many }) => ({
 	createdBy: one(User, {
 		relationName: 'AiResourceCreator',
 		fields: [AiResource.createdById],
+		references: [User.id]
+	}),
+	owner: one(User, {
+		relationName: 'AiResourceOwner',
+		fields: [AiResource.ownerId],
 		references: [User.id]
 	}),
 	reviewRequests: many(AiResourceReviewRequest, {
