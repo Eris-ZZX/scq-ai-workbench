@@ -2,15 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 import { onReworkHandled } from '@/lib/dingtalk/notify-review';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { canDiscardReview } from '@/modules/ai-resources/policy';
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
     const actor = await requireAiResourceUserApi();
+    const auditContext = getAuditRequestContext(request);
     const { id } = await context.params;
 
     const existing = await db.aiResourceReviewRequest.findUnique({ where: { id } });
@@ -23,14 +29,32 @@ export async function POST(
 
     await onReworkHandled(id);
 
-    const claimed = await db.aiResourceReviewRequest.updateMany({
-      where: { id, status: 'REJECTED', requesterId: actor.userId },
-      data: {
-        status: 'DISCARDED',
-        reviewedAt: new Date(),
-        dingtalkReworkTodoId: null,
-        dingtalkReworkTodoUnionId: null,
-      },
+    const claimed = await db.$transaction(async (tx) => {
+      const updated = await tx.aiResourceReviewRequest.updateMany({
+        where: { id, status: 'REJECTED', requesterId: actor.userId },
+        data: {
+          status: 'DISCARDED',
+          reviewedAt: new Date(),
+          dingtalkReworkTodoId: null,
+          dingtalkReworkTodoUnionId: null,
+        },
+      });
+      if (updated.count > 0) {
+        await appendAiResourceAuditLog({
+          actorId: actor.userId,
+          actorUsername: actor.username,
+          action: AI_RESOURCE_AUDIT_ACTIONS.REVIEW_DISCARD,
+          targetType: 'REVIEW',
+          targetId: id,
+          resourceId: existing.resourceId,
+          reviewId: id,
+          result: 'SUCCESS',
+          before: { status: 'REJECTED' },
+          after: { status: 'DISCARDED' },
+          ...auditContext,
+        }, tx);
+      }
+      return updated;
     });
 
     if (claimed.count === 0) {

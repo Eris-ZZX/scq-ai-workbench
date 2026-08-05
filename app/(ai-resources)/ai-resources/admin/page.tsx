@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { BellRing, DatabaseZap, TableProperties } from 'lucide-react';
+import { BellRing, DatabaseZap, FileClock, LayoutDashboard, TableProperties } from 'lucide-react';
 import { db } from '@/lib/database';
 import { requireAiResourceRole } from '@/modules/ai-resources/guards';
 
@@ -15,6 +15,17 @@ export default async function AdminPage() {
           管理员：{actor.username}
         </p>
         <section className="admin-feature-grid">
+          <Link className="admin-feature-card" href="/ai-resources/admin/dashboard">
+            <span className="admin-feature-icon">
+              <LayoutDashboard size={24} />
+            </span>
+            <span className="admin-feature-body">
+              <strong>资源看板</strong>
+              <span>查看资源状态、审批趋势、热门资源和待处理事项。</span>
+            </span>
+            <span className="admin-feature-action">进入</span>
+          </Link>
+
           <Link className="admin-feature-card" href="/ai-resources/admin/import">
             <span className="admin-feature-icon">
               <DatabaseZap size={24} />
@@ -44,6 +55,17 @@ export default async function AdminPage() {
             <span className="admin-feature-body">
               <strong>钉钉通知</strong>
               <span>配置审批待办与资源上线工作通知（应用内正式通道）。</span>
+            </span>
+            <span className="admin-feature-action">进入</span>
+          </Link>
+
+          <Link className="admin-feature-card" href="/ai-resources/admin/audit-logs">
+            <span className="admin-feature-icon">
+              <FileClock size={24} />
+            </span>
+            <span className="admin-feature-body">
+              <strong>日志审计</strong>
+              <span>查询资源、审批、权限和通知配置的详细变更记录。</span>
             </span>
             <span className="admin-feature-action">进入</span>
           </Link>

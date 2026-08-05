@@ -1,4 +1,4 @@
-import { db } from '@/lib/database';
+import { db, type DatabaseClient } from '@/lib/database';
 
 export const PUBLISH_NOTIFY_ENABLED_KEY = 'dingtalk.publishNotify.enabled';
 export const DINGTALK_NOTIFICATION_CATEGORIES = [
@@ -21,8 +21,13 @@ export async function getAppSetting(key: string): Promise<string | null> {
   return row?.value ?? null;
 }
 
-export async function setAppSetting(key: string, value: string, updatedById?: string) {
-  return db.appSetting.upsert({
+export async function setAppSetting(
+  key: string,
+  value: string,
+  updatedById?: string,
+  tx: DatabaseClient = db,
+) {
+  return tx.appSetting.upsert({
     where: { key },
     create: { key, value, updatedById: updatedById ?? null },
     update: { value, updatedById: updatedById ?? null },
@@ -62,8 +67,9 @@ export async function setDingTalkNotificationEnabled(
   category: DingTalkNotificationCategory,
   enabled: boolean,
   updatedById?: string,
+  tx: DatabaseClient = db,
 ) {
-  return setAppSetting(NOTIFICATION_SETTING_KEYS[category], JSON.stringify(enabled), updatedById);
+  return setAppSetting(NOTIFICATION_SETTING_KEYS[category], JSON.stringify(enabled), updatedById, tx);
 }
 
 export async function isPublishNotifyEnabled(): Promise<boolean> {

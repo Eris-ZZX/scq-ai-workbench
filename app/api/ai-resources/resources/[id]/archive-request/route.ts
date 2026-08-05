@@ -3,6 +3,12 @@ import { db } from '@/lib/database';
 import { scheduleReviewSubmitted } from '@/lib/dingtalk/notify-review';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+  summarizeResource,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { toJsonString } from '@/modules/ai-resources/json';
 import { canRequestArchive } from '@/modules/ai-resources/policy';
@@ -15,6 +21,7 @@ export async function POST(
 ) {
   try {
     const actor = await requireAiResourceUserApi();
+    const auditContext = getAuditRequestContext(request);
     const { id } = await context.params;
 
     const existing = await db.aiResource.findUnique({ where: { id } });
@@ -47,28 +54,45 @@ export async function POST(
       return NextResponse.json({ error: '该资源已有待审批的删除申请。' }, { status: 409 });
     }
 
-    const review = await db.aiResourceReviewRequest.create({
-      data: {
-        type: 'ARCHIVE',
-        requesterId: actor.userId,
-        reviewerId: payload.data.reviewerId,
+    const review = await db.$transaction(async (tx) => {
+      const createdReview = await tx.aiResourceReviewRequest.create({
+        data: {
+          type: 'ARCHIVE',
+          requesterId: actor.userId,
+          reviewerId: payload.data.reviewerId,
+          resourceId: id,
+          proposedData: toJsonString({
+            name: existing.name,
+            type: existing.type,
+            summary: existing.summary,
+            tags: existing.tags,
+            ownerId: existing.ownerId,
+            ownerName: existing.ownerName,
+            status: existing.status,
+            content: existing.content,
+            resourceUrl: existing.resourceUrl,
+            attachments: existing.attachments,
+            extension: existing.extension,
+          }),
+          updateSummary: payload.data.updateSummary,
+          changedFields: 'status',
+        },
+      });
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.REVIEW_SUBMIT,
+        targetType: 'REVIEW',
+        targetId: createdReview.id,
         resourceId: id,
-        proposedData: toJsonString({
-          name: existing.name,
-          type: existing.type,
-          summary: existing.summary,
-          tags: existing.tags,
-          ownerId: existing.ownerId,
-          ownerName: existing.ownerName,
-          status: existing.status,
-          content: existing.content,
-          resourceUrl: existing.resourceUrl,
-          attachments: existing.attachments,
-          extension: existing.extension,
-        }),
-        updateSummary: payload.data.updateSummary,
-        changedFields: 'status',
-      },
+        reviewId: createdReview.id,
+        result: 'SUCCESS',
+        reason: payload.data.updateSummary,
+        before: summarizeResource(existing),
+        after: { status: 'ARCHIVE_PENDING', reviewerId: payload.data.reviewerId },
+        ...auditContext,
+      }, tx);
+      return createdReview;
     });
 
     scheduleReviewSubmitted(review.id);

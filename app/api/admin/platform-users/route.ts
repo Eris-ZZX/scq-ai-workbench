@@ -2,6 +2,11 @@ import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db, isUniqueViolation, type DatabaseClient } from '@/lib/database';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+} from '@/modules/ai-resources/audit';
 import { assertNotLastEffectiveAdmin } from '@/modules/ai-resources/guards';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 
@@ -206,6 +211,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await requireSystemAdminApi();
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auditContext = getAuditRequestContext(request);
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const userId = clean(body?.userId);
@@ -304,6 +310,17 @@ export async function PATCH(request: Request) {
           fromValue: fromRole,
           toValue: role,
         });
+        await appendAiResourceAuditLog({
+          actorId: auth.session.sub,
+          actorUsername: auth.session.username,
+          action: AI_RESOURCE_AUDIT_ACTIONS.PERMISSION_UPDATE,
+          targetType: 'MEMBERSHIP',
+          targetId: userId,
+          result: 'SUCCESS',
+          before: { role: fromRole },
+          after: { role },
+          ...auditContext,
+        }, tx);
       });
     } else {
       return NextResponse.json({ error: '不支持的权限操作。' }, { status: 400 });

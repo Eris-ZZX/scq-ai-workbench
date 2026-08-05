@@ -3,6 +3,11 @@ import { db } from '@/lib/database';
 import { scheduleReviewResolved } from '@/lib/dingtalk/notify-review';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { canActOnReviewRequest, canReview } from '@/modules/ai-resources/policy';
 import { rejectSchema } from '@/modules/ai-resources/validation';
@@ -13,6 +18,7 @@ export async function POST(
 ) {
   try {
     const actor = await requireAiResourceUserApi();
+    const auditContext = getAuditRequestContext(request);
     if (!canReview(actor)) {
       return NextResponse.json({ error: '你没有审批权限。' }, { status: 403 });
     }
@@ -70,6 +76,24 @@ export async function POST(
         });
       }
 
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.REVIEW_REJECT,
+        targetType: 'REVIEW',
+        targetId: review.id,
+        resourceId: review.resourceId,
+        reviewId: review.id,
+        result: 'REJECTED',
+        reason: payload.data.reason,
+        before: { status: 'PENDING' },
+        after: {
+          status: 'REJECTED',
+          reviewerId: actor.userId,
+          reason: payload.data.reason,
+        },
+        ...auditContext,
+      }, tx);
       return handled;
     });
 

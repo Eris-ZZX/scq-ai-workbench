@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { db } from '@/lib/database';
 import { dingtalkNotifyEnvStatus } from '@/lib/dingtalk/config';
 import { sendTestNotifyToUser } from '@/lib/dingtalk/notify-review';
 import {
@@ -10,6 +11,11 @@ import {
 } from '@/lib/dingtalk/settings';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 
 const categorySchema = z.enum(DINGTALK_NOTIFICATION_CATEGORIES);
@@ -49,6 +55,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const actor = await requireAiResourceRoleApi('admin');
+    const auditContext = getAuditRequestContext(request);
     const payload = putSchema.safeParse(await request.json().catch(() => null));
     if (!payload.success) {
       return NextResponse.json({ error: formatZodError(payload.error) }, { status: 400 });
@@ -62,11 +69,26 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: '缺少通知类别或开关状态。' }, { status: 400 });
     }
 
-    await setDingTalkNotificationEnabled(
-      category as DingTalkNotificationCategory,
-      enabled,
-      actor.userId,
-    );
+    const beforeSettings = await getDingTalkNotificationSettings();
+    await db.$transaction(async (tx) => {
+      await setDingTalkNotificationEnabled(
+        category as DingTalkNotificationCategory,
+        enabled,
+        actor.userId,
+        tx,
+      );
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_SETTINGS_UPDATE,
+        targetType: 'DINGTALK_SETTINGS',
+        targetId: category,
+        result: 'SUCCESS',
+        before: { category, enabled: beforeSettings[category as DingTalkNotificationCategory] },
+        after: { category, enabled },
+        ...auditContext,
+      }, tx);
+    });
     const notifications = await getDingTalkNotificationSettings();
     return NextResponse.json({
       notifications,
@@ -82,6 +104,7 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireAiResourceRoleApi('admin');
+    const auditContext = getAuditRequestContext(request);
     const body = (await request.json().catch(() => ({}))) as {
       action?: string;
       category?: string;
@@ -99,8 +122,30 @@ export async function POST(request: NextRequest) {
 
     const result = await sendTestNotifyToUser(actor.userId, category.data);
     if (!result.ok) {
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_TEST,
+        targetType: 'DINGTALK_SETTINGS',
+        targetId: category.data,
+        result: 'FAILED',
+        reason: result.error ?? '发送失败',
+        after: { category: category.data, audience: 'self' },
+        ...auditContext,
+      }).catch(() => undefined);
       return NextResponse.json({ error: result.error ?? '发送失败' }, { status: 400 });
     }
+    await appendAiResourceAuditLog({
+      actorId: actor.userId,
+      actorUsername: actor.username,
+      action: AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_TEST,
+      targetType: 'DINGTALK_SETTINGS',
+      targetId: category.data,
+      result: 'SUCCESS',
+      reason: '管理员手动发送测试通知',
+      after: { category: category.data, audience: 'self' },
+      ...auditContext,
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return aiResourceErrorResponse(error);

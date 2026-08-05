@@ -4,6 +4,11 @@ import * as XLSX from 'xlsx';
 import { db } from '@/lib/database';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
 import { listActiveAiResourceUsers } from '@/modules/ai-resources/users';
@@ -17,6 +22,7 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireAiResourceRoleApi('admin');
+    const auditContext = getAuditRequestContext(request);
 
     const formData = await request.formData().catch(() => null);
     const file = formData?.get('file');
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    const count = await importRowsInBatches(parsedRows, actor.userId);
+    const count = await importRowsInBatches(parsedRows, actor.userId, actor.username, auditContext);
 
     return NextResponse.json({
       count,
@@ -73,6 +79,8 @@ export async function POST(request: NextRequest) {
 async function importRowsInBatches(
   rows: Array<z.infer<typeof resourcePayloadSchema>>,
   userId: string,
+  username: string,
+  auditContext: ReturnType<typeof getAuditRequestContext>,
 ) {
   let imported = 0;
 
@@ -102,6 +110,24 @@ async function importRowsInBatches(
             };
           }),
         });
+        await appendAiResourceAuditLog({
+          actorId: userId,
+          actorUsername: username,
+          action: AI_RESOURCE_AUDIT_ACTIONS.RESOURCE_IMPORT,
+          targetType: 'IMPORT',
+          result: 'SUCCESS',
+          after: {
+            batchSize: batch.length,
+            offset,
+            resources: created.map((resource) => ({
+              id: resource.id,
+              name: resource.name,
+              ownerId: resource.ownerId,
+              ownerName: resource.ownerName,
+            })),
+          },
+          ...auditContext,
+        }, tx);
       },
       {
         maxWait: 15_000,

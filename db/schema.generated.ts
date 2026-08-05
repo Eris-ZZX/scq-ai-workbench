@@ -1219,6 +1219,32 @@ export const AiResourceRoleAudit = pgTable('ai_resource_role_audits', {
 	'ai_resource_role_audits_created_at_idx': index('ai_resource_role_audits_created_at_idx').on(AiResourceRoleAudit.createdAt),
 }));
 
+export const AiResourceAuditLog = pgTable('ai_resource_audit_logs', {
+	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
+	actorId: text('actor_id'),
+	actorUsernameSnapshot: text('actor_username_snapshot').notNull(),
+	action: text('action').notNull(),
+	module: text('module').notNull().default('AI_RESOURCE'),
+	targetType: text('target_type').notNull(),
+	targetId: text('target_id'),
+	resourceId: text('resource_id'),
+	reviewId: text('review_id'),
+	result: text('result').notNull(),
+	reason: text('reason'),
+	beforeData: text('before_data'),
+	afterData: text('after_data'),
+	traceId: text('trace_id'),
+	ipAddress: text('ip_address'),
+	userAgent: text('user_agent'),
+	createdAt: timestamp('created_at', { precision: 3, withTimezone: true }).notNull().defaultNow()
+}, (AiResourceAuditLog) => ({
+	'ai_resource_audit_logs_actor_id_idx': index('ai_resource_audit_logs_actor_id_idx').on(AiResourceAuditLog.actorId),
+	'ai_resource_audit_logs_action_idx': index('ai_resource_audit_logs_action_idx').on(AiResourceAuditLog.action),
+	'ai_resource_audit_logs_target_idx': index('ai_resource_audit_logs_target_idx').on(AiResourceAuditLog.targetType, AiResourceAuditLog.targetId),
+	'ai_resource_audit_logs_resource_id_idx': index('ai_resource_audit_logs_resource_id_idx').on(AiResourceAuditLog.resourceId),
+	'ai_resource_audit_logs_created_at_idx': index('ai_resource_audit_logs_created_at_idx').on(AiResourceAuditLog.createdAt),
+}));
+
 export const UserRelations = relations(User, ({ many }) => ({
 	projectMembers: many(ProjectMember, {
 		relationName: 'ProjectMemberToUser'

@@ -7,6 +7,10 @@ const ownerMigration = readFileSync(
   resolve(process.cwd(), 'drizzle', '0003_add_ai_resource_owner.sql'),
   'utf8',
 );
+const auditMigration = readFileSync(
+  resolve(process.cwd(), 'drizzle', '0004_charming_dracula.sql'),
+  'utf8',
+);
 
 describe('initial Drizzle migration contract', () => {
   it('creates all 40 tables and the full-text search support', () => {
@@ -36,5 +40,17 @@ describe('AI resource owner migration contract', () => {
     expect(ownerMigration).toContain('ai_resource_owner_fkey');
     expect(ownerMigration).toContain('ON DELETE RESTRICT');
     expect(ownerMigration).toContain('ai_resources_owner_id_idx');
+  });
+});
+
+describe('AI resource audit migration contract', () => {
+  it('creates an indexed append-only audit log without duplicating prior migrations', () => {
+    expect(auditMigration).toContain('CREATE TABLE "ai_resource_audit_logs"');
+    expect(auditMigration).toContain('"actor_username_snapshot" text NOT NULL');
+    expect(auditMigration).toContain('"before_data" text');
+    expect(auditMigration).toContain('"after_data" text');
+    expect(auditMigration).toContain('ai_resource_audit_logs_created_at_idx');
+    expect(auditMigration).not.toContain('ALTER TABLE "users" ADD COLUMN');
+    expect(auditMigration).not.toContain('ALTER TABLE "ai_resources" ADD COLUMN "owner_id"');
   });
 });

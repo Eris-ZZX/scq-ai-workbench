@@ -4,6 +4,12 @@ import { scheduleReviewSubmitted } from '@/lib/dingtalk/notify-review';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { toJsonString } from '@/modules/ai-resources/json';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+  summarizeResource,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { canEditResource, diffKeys } from '@/modules/ai-resources/policy';
 import { assertAssignableReviewer } from '@/modules/ai-resources/reviewers';
@@ -16,6 +22,7 @@ export async function POST(
 ) {
   try {
     const actor = await requireAiResourceUserApi();
+    const auditContext = getAuditRequestContext(request);
     const { id } = await context.params;
 
     const existing = await db.aiResource.findUnique({ where: { id } });
@@ -68,7 +75,7 @@ export async function POST(
     );
 
     const review = await db.$transaction(async (tx) => {
-      return tx.aiResourceReviewRequest.create({
+      const createdReview = await tx.aiResourceReviewRequest.create({
         data: {
           type: 'UPDATE',
           requesterId: actor.userId,
@@ -79,6 +86,24 @@ export async function POST(
           changedFields: changedFields.join(','),
         },
       });
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.REVIEW_SUBMIT,
+        targetType: 'REVIEW',
+        targetId: createdReview.id,
+        resourceId: id,
+        reviewId: createdReview.id,
+        result: 'SUCCESS',
+        reason: payload.data.updateSummary,
+        before: summarizeResource(existing),
+        after: {
+          ...summarizeResource(proposedData),
+          changedFields,
+        },
+        ...auditContext,
+      }, tx);
+      return createdReview;
     });
 
     scheduleReviewSubmitted(review.id);

@@ -3,17 +3,24 @@ import { db } from '@/lib/database';
 import { scheduleReviewResolved } from '@/lib/dingtalk/notify-review';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { fromJsonObject } from '@/modules/ai-resources/json';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+  summarizeResource,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { canActOnReviewRequest, canReview } from '@/modules/ai-resources/policy';
 import { toDbResourceData } from '@/modules/ai-resources/resource-data';
 import { resolveActiveAiResourceUser } from '@/modules/ai-resources/users';
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
     const actor = await requireAiResourceUserApi();
+    const auditContext = getAuditRequestContext(request);
     if (!canReview(actor)) {
       return NextResponse.json({ error: '你没有审批权限。' }, { status: 403 });
     }
@@ -82,6 +89,34 @@ export async function POST(
         });
 
         const handled = await tx.aiResourceReviewRequest.findUniqueOrThrow({ where: { id: review.id } });
+        await appendAiResourceAuditLog({
+          actorId: actor.userId,
+          actorUsername: actor.username,
+          action: AI_RESOURCE_AUDIT_ACTIONS.REVIEW_APPROVE,
+          targetType: 'REVIEW',
+          targetId: review.id,
+          resourceId: resource.id,
+          reviewId: review.id,
+          result: 'SUCCESS',
+          reason: review.updateSummary,
+          before: { status: 'PENDING' },
+          after: { status: 'APPROVED', reviewerId: actor.userId },
+          ...auditContext,
+        }, tx);
+        await appendAiResourceAuditLog({
+          actorId: actor.userId,
+          actorUsername: actor.username,
+          action: AI_RESOURCE_AUDIT_ACTIONS.RESOURCE_ARCHIVE,
+          targetType: 'RESOURCE',
+          targetId: resource.id,
+          resourceId: resource.id,
+          reviewId: review.id,
+          result: 'SUCCESS',
+          reason: review.updateSummary,
+          before: summarizeResource(existing),
+          after: summarizeResource(resource),
+          ...auditContext,
+        }, tx);
         return { resource, review: handled };
       }
 
@@ -139,6 +174,35 @@ export async function POST(
         },
       });
 
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.REVIEW_APPROVE,
+        targetType: 'REVIEW',
+        targetId: review.id,
+        resourceId: resource.id,
+        reviewId: review.id,
+        result: 'SUCCESS',
+        reason: review.updateSummary,
+        before: { status: 'PENDING' },
+        after: { status: 'APPROVED', reviewerId: actor.userId },
+        ...auditContext,
+      }, tx);
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: review.type === 'CREATE'
+          ? AI_RESOURCE_AUDIT_ACTIONS.RESOURCE_CREATE
+          : AI_RESOURCE_AUDIT_ACTIONS.RESOURCE_UPDATE,
+        targetType: 'RESOURCE',
+        targetId: resource.id,
+        resourceId: resource.id,
+        reviewId: review.id,
+        result: 'SUCCESS',
+        reason: review.updateSummary,
+        after: summarizeResource(resource),
+        ...auditContext,
+      }, tx);
       return { resource, review: handled };
     });
 

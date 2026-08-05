@@ -4110,6 +4110,97 @@ export const modelMetadata = {
         ]
       }
     }
+  },
+  "AiResourceAuditLog": {
+    "table": "ai_resource_audit_logs",
+    "fields": {
+      "id": {
+        "column": "id",
+        "type": "String",
+        "nullable": false
+      },
+      "actorId": {
+        "column": "actor_id",
+        "type": "String",
+        "nullable": true
+      },
+      "actorUsernameSnapshot": {
+        "column": "actor_username_snapshot",
+        "type": "String",
+        "nullable": false
+      },
+      "action": {
+        "column": "action",
+        "type": "String",
+        "nullable": false
+      },
+      "module": {
+        "column": "module",
+        "type": "String",
+        "nullable": false
+      },
+      "targetType": {
+        "column": "target_type",
+        "type": "String",
+        "nullable": false
+      },
+      "targetId": {
+        "column": "target_id",
+        "type": "String",
+        "nullable": true
+      },
+      "resourceId": {
+        "column": "resource_id",
+        "type": "String",
+        "nullable": true
+      },
+      "reviewId": {
+        "column": "review_id",
+        "type": "String",
+        "nullable": true
+      },
+      "result": {
+        "column": "result",
+        "type": "String",
+        "nullable": false
+      },
+      "reason": {
+        "column": "reason",
+        "type": "String",
+        "nullable": true
+      },
+      "beforeData": {
+        "column": "before_data",
+        "type": "String",
+        "nullable": true
+      },
+      "afterData": {
+        "column": "after_data",
+        "type": "String",
+        "nullable": true
+      },
+      "traceId": {
+        "column": "trace_id",
+        "type": "String",
+        "nullable": true
+      },
+      "ipAddress": {
+        "column": "ip_address",
+        "type": "String",
+        "nullable": true
+      },
+      "userAgent": {
+        "column": "user_agent",
+        "type": "String",
+        "nullable": true
+      },
+      "createdAt": {
+        "column": "created_at",
+        "type": "DateTime",
+        "nullable": false
+      }
+    },
+    "relations": {}
   }
 } as const;
 

@@ -11,5 +11,6 @@ export {
   AiResourceComment,
   AiResourceMembership,
   AiResourceRoleAudit,
+  AiResourceAuditLog,
 } from '../schema.generated';
 

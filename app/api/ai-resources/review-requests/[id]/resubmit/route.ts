@@ -4,6 +4,11 @@ import { scheduleReviewSubmitted, onReworkHandled } from '@/lib/dingtalk/notify-
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { toJsonString } from '@/modules/ai-resources/json';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceUserApi } from '@/modules/ai-resources/guards';
 import { canResubmitReview, diffKeys } from '@/modules/ai-resources/policy';
 import { assertAssignableReviewer } from '@/modules/ai-resources/reviewers';
@@ -16,6 +21,7 @@ export async function POST(
 ) {
   try {
     const actor = await requireAiResourceUserApi();
+    const auditContext = getAuditRequestContext(request);
     const { id } = await context.params;
 
     const existing = await db.aiResourceReviewRequest.findUnique({ where: { id } });
@@ -40,19 +46,36 @@ export async function POST(
 
       await onReworkHandled(existing.id);
 
-      const review = await db.aiResourceReviewRequest.update({
-        where: { id },
-        data: {
-          status: 'PENDING',
-          rejectReason: null,
-          reviewedAt: null,
-          reviewerId,
-          updateSummary,
-          dingtalkTodoId: null,
-          dingtalkTodoUnionId: null,
-          dingtalkReworkTodoId: null,
-          dingtalkReworkTodoUnionId: null,
-        },
+      const review = await db.$transaction(async (tx) => {
+        const updatedReview = await tx.aiResourceReviewRequest.update({
+          where: { id },
+          data: {
+            status: 'PENDING',
+            rejectReason: null,
+            reviewedAt: null,
+            reviewerId,
+            updateSummary,
+            dingtalkTodoId: null,
+            dingtalkTodoUnionId: null,
+            dingtalkReworkTodoId: null,
+            dingtalkReworkTodoUnionId: null,
+          },
+        });
+        await appendAiResourceAuditLog({
+          actorId: actor.userId,
+          actorUsername: actor.username,
+          action: AI_RESOURCE_AUDIT_ACTIONS.REVIEW_RESUBMIT,
+          targetType: 'REVIEW',
+          targetId: id,
+          resourceId: existing.resourceId,
+          reviewId: id,
+          result: 'SUCCESS',
+          reason: updateSummary,
+          before: { status: 'REJECTED', reviewerId: existing.reviewerId },
+          after: { status: 'PENDING', reviewerId },
+          ...auditContext,
+        }, tx);
+        return updatedReview;
       });
 
       scheduleReviewSubmitted(review.id);
@@ -109,21 +132,40 @@ export async function POST(
 
     await onReworkHandled(existing.id);
 
-    const claimed = await db.aiResourceReviewRequest.updateMany({
-      where: { id, status: 'REJECTED', requesterId: actor.userId },
-      data: {
-        status: 'PENDING',
-        rejectReason: null,
-        reviewedAt: null,
-        reviewerId: payload.data.reviewerId,
-        proposedData: toJsonString(proposedData),
-        updateSummary: payload.data.updateSummary,
-        changedFields,
-        dingtalkTodoId: null,
-        dingtalkTodoUnionId: null,
-        dingtalkReworkTodoId: null,
-        dingtalkReworkTodoUnionId: null,
-      },
+    const claimed = await db.$transaction(async (tx) => {
+      const updated = await tx.aiResourceReviewRequest.updateMany({
+        where: { id, status: 'REJECTED', requesterId: actor.userId },
+        data: {
+          status: 'PENDING',
+          rejectReason: null,
+          reviewedAt: null,
+          reviewerId: payload.data.reviewerId,
+          proposedData: toJsonString(proposedData),
+          updateSummary: payload.data.updateSummary,
+          changedFields,
+          dingtalkTodoId: null,
+          dingtalkTodoUnionId: null,
+          dingtalkReworkTodoId: null,
+          dingtalkReworkTodoUnionId: null,
+        },
+      });
+      if (updated.count > 0) {
+        await appendAiResourceAuditLog({
+          actorId: actor.userId,
+          actorUsername: actor.username,
+          action: AI_RESOURCE_AUDIT_ACTIONS.REVIEW_RESUBMIT,
+          targetType: 'REVIEW',
+          targetId: id,
+          resourceId: existing.resourceId,
+          reviewId: id,
+          result: 'SUCCESS',
+          reason: payload.data.updateSummary,
+          before: { status: 'REJECTED', changedFields: existing.changedFields },
+          after: { status: 'PENDING', changedFields },
+          ...auditContext,
+        }, tx);
+      }
+      return updated;
     });
 
     if (claimed.count === 0) {

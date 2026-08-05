@@ -46,6 +46,9 @@ const { mockGetSession, mockRequireAdmin, mockJson, mockAssertAiAdmin, mockDatab
       create: vi.fn(),
       update: vi.fn(),
     },
+    aiResourceAuditLog: {
+      create: vi.fn(),
+    },
     observabilityEvent: {
       create: vi.fn(),
     },
@@ -88,6 +91,7 @@ describe('/api/admin/platform-users', () => {
     mockDatabase.$transaction.mockImplementation(async (callback: (tx: typeof mockDatabase) => unknown) => callback(mockDatabase));
     mockDatabase.user.findUnique.mockResolvedValue(serializedUser);
     mockDatabase.observabilityEvent.create.mockResolvedValue({});
+    mockDatabase.aiResourceAuditLog.create.mockResolvedValue({});
   });
 
   it('rejects a non-admin before reading any permission data', async () => {

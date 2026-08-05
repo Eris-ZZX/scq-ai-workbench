@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/database';
-import type { AiResourceType } from '@/modules/ai-resources/constants';
+import { isAiResourceStatus, type AiResourceStatus, type AiResourceType } from '@/modules/ai-resources/constants';
 import { requireAiResourceRole } from '@/modules/ai-resources/guards';
 import { resourceTypeLabel } from '@/modules/ai-resources/labels';
 import { parseList } from '@/modules/ai-resources/list-fields';
@@ -13,7 +13,7 @@ const PAGE_SIZE = 50;
 export default async function AdminResourcesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; status?: string }>;
 }) {
   try {
     await requireAiResourceRole('admin');
@@ -23,10 +23,13 @@ export default async function AdminResourcesPage({
 
   const params = await searchParams;
   const { page, pageSize, skip } = parsePagination(params, { pageSize: PAGE_SIZE });
+  const status = isAiResourceStatus(params.status ?? '') ? params.status as AiResourceStatus : undefined;
+  const where = status ? { status } : undefined;
 
   const [total, resources] = await Promise.all([
-    db.aiResource.count(),
+    db.aiResource.count({ where }),
     db.aiResource.findMany({
+      where,
       include: {
         createdBy: { select: { username: true } },
         owner: { select: { username: true } },
@@ -50,6 +53,7 @@ export default async function AdminResourcesPage({
             新增资源
           </Link>
         </div>
+        {status ? <span className="subtle">当前筛选：{statusLabel(status)}</span> : null}
       </section>
 
       <section className="panel admin-detail-panel">
@@ -109,12 +113,12 @@ export default async function AdminResourcesPage({
             </span>
             <div className="meta">
               {page > 1 ? (
-                <Link className="button" href={pageHref(page - 1)}>
+                <Link className="button" href={pageHref(page - 1, status)}>
                   上一页
                 </Link>
               ) : null}
               {page < totalPages ? (
-                <Link className="button" href={pageHref(page + 1)}>
+                <Link className="button" href={pageHref(page + 1, status)}>
                   下一页
                 </Link>
               ) : null}
@@ -126,8 +130,16 @@ export default async function AdminResourcesPage({
   );
 }
 
-function pageHref(page: number) {
-  return page > 1 ? `/ai-resources/admin/resources?page=${page}` : '/ai-resources/admin/resources';
+function pageHref(page: number, status?: AiResourceStatus) {
+  const query = new URLSearchParams();
+  if (page > 1) query.set('page', String(page));
+  if (status) query.set('status', status);
+  const suffix = query.toString();
+  return suffix ? `/ai-resources/admin/resources?${suffix}` : '/ai-resources/admin/resources';
+}
+
+function statusLabel(status: AiResourceStatus) {
+  return { DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' }[status];
 }
 
 function formatDate(value: Date) {

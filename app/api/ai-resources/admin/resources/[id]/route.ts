@@ -3,6 +3,12 @@ import { db } from '@/lib/database';
 import { scheduleResourceBroadcast } from '@/lib/dingtalk/notify-review';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
+import {
+  AI_RESOURCE_AUDIT_ACTIONS,
+  appendAiResourceAuditLog,
+  getAuditRequestContext,
+  summarizeResource,
+} from '@/modules/ai-resources/audit';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 import { diffKeys } from '@/modules/ai-resources/policy';
 import { toDbResourceData, withResolvedResourceOwner } from '@/modules/ai-resources/resource-data';
@@ -14,6 +20,7 @@ export async function PATCH(
 ) {
   try {
     const actor = await requireAiResourceRoleApi('admin');
+    const auditContext = getAuditRequestContext(request);
     const { id } = await context.params;
 
     const existing = await db.aiResource.findUnique({ where: { id } });
@@ -81,6 +88,19 @@ export async function PATCH(
           changedFields: changedFields.join(','),
         },
       });
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.RESOURCE_UPDATE,
+        targetType: 'RESOURCE',
+        targetId: id,
+        resourceId: id,
+        result: 'SUCCESS',
+        reason: payload.data.updateSummary,
+        before: summarizeResource(existing),
+        after: summarizeResource(resource),
+        ...auditContext,
+      }, tx);
 
       return resource;
     });
@@ -109,6 +129,7 @@ export async function DELETE(
 ) {
   try {
     const actor = await requireAiResourceRoleApi('admin');
+    const auditContext = getAuditRequestContext(request);
     const { id } = await context.params;
 
     const payload = archiveResourceSchema.safeParse(await request.json().catch(() => null));
@@ -147,6 +168,19 @@ export async function DELETE(
           changedFields: 'status',
         },
       });
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.RESOURCE_ARCHIVE,
+        targetType: 'RESOURCE',
+        targetId: id,
+        resourceId: id,
+        result: 'SUCCESS',
+        reason: `归档资源：${existing.name}`,
+        before: summarizeResource(existing),
+        after: summarizeResource(updated),
+        ...auditContext,
+      }, tx);
 
       return updated;
     });
@@ -158,11 +192,12 @@ export async function DELETE(
 }
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
     const actor = await requireAiResourceRoleApi('admin');
+    const auditContext = getAuditRequestContext(request);
     const { id } = await context.params;
 
     const existing = await db.aiResource.findUnique({ where: { id } });
@@ -194,6 +229,19 @@ export async function POST(
           changedFields: 'status',
         },
       });
+      await appendAiResourceAuditLog({
+        actorId: actor.userId,
+        actorUsername: actor.username,
+        action: AI_RESOURCE_AUDIT_ACTIONS.RESOURCE_RESTORE,
+        targetType: 'RESOURCE',
+        targetId: id,
+        resourceId: id,
+        result: 'SUCCESS',
+        reason: `恢复资源：${existing.name}`,
+        before: summarizeResource(existing),
+        after: summarizeResource(updated),
+        ...auditContext,
+      }, tx);
 
       return updated;
     });
