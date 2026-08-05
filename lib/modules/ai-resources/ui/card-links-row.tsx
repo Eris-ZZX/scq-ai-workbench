@@ -8,7 +8,13 @@ const GAP = 6;
 const ELLIPSIS_WIDTH = 16;
 
 /** 首页卡片链接行：只展示能完整放下的链接；有溢出时显示不可点击的省略号。 */
-export function CardLinksRow({ links }: { links: ResourceLinkItem[] }) {
+export function CardLinksRow({
+  links,
+  resourceId,
+}: {
+  links: ResourceLinkItem[];
+  resourceId: string;
+}) {
   const rowRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(links.length);
@@ -73,9 +79,9 @@ export function CardLinksRow({ links }: { links: ResourceLinkItem[] }) {
       }}
     >
       <div ref={measureRef} className="resource-card-links-measure" aria-hidden>
-        <QuickLinks links={links} />
+        <QuickLinks links={links} resourceId={resourceId} />
       </div>
-      {visible.length ? <QuickLinks links={visible} /> : null}
+      {visible.length ? <QuickLinks links={visible} resourceId={resourceId} /> : null}
       {hasMore ? (
         <span className="resource-card-links-ellipsis" aria-hidden>
           …

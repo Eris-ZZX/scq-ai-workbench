@@ -2,13 +2,16 @@
 
 import { ExternalLink } from 'lucide-react';
 import { parseResourceLinks, type ResourceLinkItem } from '@/modules/ai-resources/resource-links';
+import { recordResourceView } from '@/modules/ai-resources/ui/view-tracker';
 
 export function QuickLinks({
   resourceUrl,
   links,
+  resourceId,
 }: {
   resourceUrl?: string | null;
   links?: ResourceLinkItem[];
+  resourceId?: string;
 }) {
   const items = links ?? parseResourceLinks(resourceUrl);
   if (!items.length) return null;
@@ -29,12 +32,14 @@ export function QuickLinks({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (resourceId) recordResourceView(resourceId);
             window.open(link.url, '_blank', 'noopener,noreferrer');
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
               e.stopPropagation();
+              if (resourceId) recordResourceView(resourceId);
               window.open(link.url, '_blank', 'noopener,noreferrer');
             }
           }}

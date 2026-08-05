@@ -14,6 +14,7 @@ import {
   ResourceEngagementToggles,
 } from '@/modules/ai-resources/ui/resource-engagement';
 import { CardLinksRow } from '@/modules/ai-resources/ui/card-links-row';
+import { recordResourceView } from '@/modules/ai-resources/ui/view-tracker';
 
 type ResourceAttachment = {
   name: string;
@@ -116,6 +117,7 @@ export function ResourceCard({
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        recordResourceView(resource.id);
                         window.open(openHref, '_blank', 'noopener,noreferrer');
                       }}
                       onMouseDown={(e) => {
@@ -126,6 +128,7 @@ export function ResourceCard({
                         if (e.key === 'Enter') {
                           e.preventDefault();
                           e.stopPropagation();
+                          recordResourceView(resource.id);
                           window.open(openHref, '_blank', 'noopener,noreferrer');
                         }
                       }}
@@ -134,7 +137,7 @@ export function ResourceCard({
                       <span className="link-pill-label">打开页面</span>
                     </span>
                   ) : null}
-                  {links.length ? <CardLinksRow links={links} /> : null}
+                  {links.length ? <CardLinksRow links={links} resourceId={resource.id} /> : null}
                 </div>
               ) : (
                 <span className="resource-card-muted">无链接</span>

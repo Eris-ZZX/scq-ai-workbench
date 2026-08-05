@@ -17,7 +17,7 @@ import {
 } from '@/modules/ai-resources/ui/resource-engagement';
 import { ResourceComments } from '@/modules/ai-resources/ui/resource-comments';
 import { UpdateHistoryDialog } from '@/modules/ai-resources/ui/update-history-dialog';
-import { ViewTracker } from '@/modules/ai-resources/ui/view-tracker';
+import { recordResourceView, ViewTracker } from '@/modules/ai-resources/ui/view-tracker';
 
 export default async function ResourceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireAiResourceUser();
@@ -98,6 +98,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
               href={hostedHtmlOpenPath(resource.id)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => recordResourceView(resource.id)}
             >
               <ExternalLink size={16} />
               打开页面
@@ -210,6 +211,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
                       target="_blank"
                       rel="noreferrer"
                       title={resourceUrl.url}
+                      onClick={() => recordResourceView(resource.id)}
                       key={`${index}-${resourceUrl.label}-${resourceUrl.url}`}
                     >
                       <FolderOpen size={14} />
