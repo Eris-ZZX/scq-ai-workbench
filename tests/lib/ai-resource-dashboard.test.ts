@@ -14,6 +14,13 @@ const { mockDatabase } = vi.hoisted(() => ({
     aiResourceUpdateLog: {
       findMany: vi.fn(),
     },
+    aiResourceMembership: {
+      count: vi.fn(),
+    },
+    user: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -48,6 +55,26 @@ describe('AI resource dashboard', () => {
       { action: 'CREATE', result: 'APPROVED', createdAt: new Date() },
       { action: 'UPDATE', result: 'DONE', createdAt: new Date() },
     ]);
+    mockDatabase.aiResourceMembership.count.mockResolvedValue(2);
+    mockDatabase.user.count.mockImplementation(async ({ where }: { where?: { status?: string } } = {}) => {
+      if (where?.status === 'active') return 3;
+      if (where?.status === 'disabled') return 1;
+      return 4;
+    });
+    mockDatabase.user.findMany.mockResolvedValue([
+      {
+        positionBinding: [{ positionRole: { name: 'NPQ' } }],
+        dingtalkDepartments: [{ department: { name: '品质工程部' } }],
+      },
+      {
+        positionBinding: [{ positionRole: { name: 'PQE' } }],
+        dingtalkDepartments: [{ department: { name: '工艺质量组' } }],
+      },
+      {
+        positionBinding: [],
+        dingtalkDepartments: [],
+      },
+    ]);
   });
 
   it('returns current summary, capped period, trend and top resources', async () => {
@@ -67,5 +94,14 @@ describe('AI resource dashboard', () => {
     expect(dashboard.trend).toHaveLength(90);
     expect(dashboard.trend.at(-1)).toMatchObject({ created: 1, updated: 1, approved: 2 });
     expect(dashboard.topResources[0]?.name).toBe('Popular resource');
+    expect(dashboard.userSummary).toEqual([
+      { label: '全部用户', count: 4 },
+      { label: '活跃用户', count: 3 },
+      { label: '停用用户', count: 1 },
+      { label: 'AI资源库成员', count: 2 },
+    ]);
+    expect(dashboard.groupDistribution).toContainEqual({ label: '品质工程部', count: 1 });
+    expect(dashboard.groupDistribution).toContainEqual({ label: '未同步组织', count: 1 });
+    expect(dashboard.positionDistribution).toContainEqual({ label: '未绑定岗位', count: 1 });
   });
 });

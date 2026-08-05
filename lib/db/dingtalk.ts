@@ -1,6 +1,7 @@
 // lib/db/dingtalk.ts — 钉钉用户数据库操作
 import { db, isUniqueViolation } from '@/lib/database';
 import { DUMMY_HASH } from './auth';
+import { syncUserDingTalkDepartments } from '@/lib/dingtalk/organization';
 import crypto from 'crypto';
 
 export interface DingTalkProfile {
@@ -20,6 +21,10 @@ export interface DingTalkProfile {
   supervisorDingtalkUserId?: string;
   /** 直属上级姓名 */
   supervisorName?: string;
+  /** 钉钉通讯录部门 ID */
+  departmentIds?: string[];
+  /** 用户在各部门中的排序，用于选择主小组 */
+  departmentOrders?: Record<string, number>;
 }
 
 /** 按钉钉 unionId 查找已有的钉钉用户（组合唯一约束） */
@@ -91,22 +96,32 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
   };
 
   try {
-    return await tryCreate(baseUsername);
+    const created = await tryCreate(baseUsername);
+    await syncProfileDepartments(created.id, profile);
+    return created;
   } catch (err: unknown) {
     if (!isUniqueConflict(err)) throw err;
 
     // 并发创建同一 unionId：直接返回已有用户
     const existingByExternal = await findDingTalkUser(profile.unionId);
-    if (existingByExternal) return existingByExternal;
+    if (existingByExternal) {
+      await syncProfileDepartments(existingByExternal.id, profile);
+      return existingByExternal;
+    }
 
     // 用户名冲突：换后缀重试；若仍撞 external 唯一则再查一次
     const suffix = crypto.randomBytes(3).toString('hex');
     try {
-      return await tryCreate(`${baseUsername}_${suffix}`);
+      const created = await tryCreate(`${baseUsername}_${suffix}`);
+      await syncProfileDepartments(created.id, profile);
+      return created;
     } catch (retryErr: unknown) {
       if (!isUniqueConflict(retryErr)) throw retryErr;
       const raced = await findDingTalkUser(profile.unionId);
-      if (raced) return raced;
+      if (raced) {
+        await syncProfileDepartments(raced.id, profile);
+        return raced;
+      }
       throw retryErr;
     }
   }
@@ -125,4 +140,14 @@ export async function syncDingTalkUser(userId: string, profile: DingTalkProfile)
       syncAt: new Date(),
     },
   });
+  await syncProfileDepartments(userId, profile);
+}
+
+async function syncProfileDepartments(userId: string, profile: DingTalkProfile) {
+  if (!profile.departmentIds) return;
+  try {
+    await syncUserDingTalkDepartments(userId, profile.departmentIds, profile.departmentOrders);
+  } catch (error) {
+    console.error('[dingtalk] organization sync failed:', error);
+  }
 }

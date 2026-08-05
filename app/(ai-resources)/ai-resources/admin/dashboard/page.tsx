@@ -14,7 +14,7 @@ const statusLabel: Record<string, string> = {
 export default async function AiResourceDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ days?: string; start?: string; end?: string }>;
 }) {
   try {
     await requireAiResourceRole('admin');
@@ -23,8 +23,15 @@ export default async function AiResourceDashboardPage({
   }
 
   const params = await searchParams;
-  const requestedDays = Number(params.days ?? 30);
-  const dashboard = await getAiResourceDashboard(requestedDays);
+  const dashboard = await getAiResourceDashboard({
+    days: params.days === 'all' ? 'all' : Number(params.days ?? 30),
+    start: params.start,
+    end: params.end,
+  });
+  const hasCustomRange = Boolean(params.start || params.end);
+  const rangeDescription = dashboard.range.all
+    ? '全部时间'
+    : `${dashboard.range.start ?? '最近'} 至 ${dashboard.range.end ?? '今天'}`;
   const maxTrendValue = Math.max(
     1,
     ...dashboard.trend.map((item) => item.created + item.updated + item.approved),
@@ -33,20 +40,35 @@ export default async function AiResourceDashboardPage({
   return (
     <main className="main">
       <section className="page-head compact">
-        <div>
-          <p className="subtle">AI 资源库管理</p>
-          <h1>资源运营看板</h1>
-        </div>
-        <div className="meta">
-          {[7, 30, 90].map((days) => (
-            <Link
-              key={days}
-              className={`button${dashboard.days === days ? ' primary' : ''}`}
-              href={`/ai-resources/admin/dashboard?days=${days}`}
-            >
-              近 {days} 天
-            </Link>
-          ))}
+        <div className="dashboard-toolbar">
+          <div className="dashboard-quick-actions" aria-label="快捷时间范围">
+            {[
+              { value: '7', label: '7天' },
+              { value: '30', label: '30天' },
+              { value: 'all', label: '全部' },
+            ].map((shortcut) => (
+              <Link
+                key={shortcut.value}
+                className={`button${!hasCustomRange && (shortcut.value === 'all' ? dashboard.range.all : dashboard.days === Number(shortcut.value)) ? ' primary' : ''}`}
+                href={`/ai-resources/admin/dashboard?days=${shortcut.value}`}
+              >
+                {shortcut.label}
+              </Link>
+            ))}
+          </div>
+          <form className="dashboard-range-picker" method="get">
+            <label>
+              开始日期
+              <input name="start" type="date" defaultValue={params.start ?? ''} />
+            </label>
+            <span className="dashboard-range-separator">至</span>
+            <label>
+              结束日期
+              <input name="end" type="date" defaultValue={params.end ?? ''} />
+            </label>
+            <button className="button primary" type="submit">查询</button>
+          </form>
+          <span className="dashboard-range-description">统计区间：{rangeDescription}</span>
           <Link className="button" href="/ai-resources/admin">
             返回后台
           </Link>
@@ -61,6 +83,26 @@ export default async function AiResourceDashboardPage({
         <Stat label="近期开通" value={dashboard.trend.reduce((sum, item) => sum + item.created, 0)} />
         <Stat label="近期更新" value={dashboard.trend.reduce((sum, item) => sum + item.updated, 0)} />
       </section>
+
+      <div className="admin-dashboard-grid admin-dashboard-grid-three">
+        <DistributionTable
+          title="用户数量"
+          subtitle="平台账号与 AI 资源库成员"
+          rows={dashboard.userSummary}
+        />
+        <DistributionTable
+          title="用户所在小组"
+          subtitle="按钉钉组织主部门统计"
+          rows={dashboard.groupDistribution}
+          showPercent
+        />
+        <DistributionTable
+          title="岗位分布"
+          subtitle="按活跃用户当前岗位统计"
+          rows={dashboard.positionDistribution}
+          showPercent
+        />
+      </div>
 
       <div className="admin-dashboard-grid">
         <section className="panel">
@@ -88,7 +130,7 @@ export default async function AiResourceDashboardPage({
               <p className="subtle">按资源更新记录统计</p>
             </div>
           </div>
-          <div className="dashboard-trend" aria-label={`近 ${dashboard.days} 天资源趋势`}>
+          <div className="dashboard-trend" aria-label={`${rangeDescription}资源趋势`}>
             {dashboard.trend.map((item) => {
               const total = item.created + item.updated + item.approved;
               const height = Math.max(4, Math.round((total / maxTrendValue) * 100));
@@ -101,6 +143,7 @@ export default async function AiResourceDashboardPage({
                 </div>
               );
             })}
+            {dashboard.trend.length === 0 ? <div className="empty">所选时间段暂无记录。</div> : null}
           </div>
           <div className="admin-dashboard-summary">
             <span>新增 {dashboard.trend.reduce((sum, item) => sum + item.created, 0)}</span>
@@ -164,6 +207,57 @@ export default async function AiResourceDashboardPage({
         </section>
       </div>
     </main>
+  );
+}
+
+function DistributionTable({
+  title,
+  subtitle,
+  rows,
+  showPercent = false,
+}: {
+  title: string;
+  subtitle: string;
+  rows: Array<{ label: string; count: number }>;
+  showPercent?: boolean;
+}) {
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  return (
+    <section className="panel dashboard-distribution-panel">
+      <div className="panel-head">
+        <div>
+          <h2>{title}</h2>
+          <p className="subtle">{subtitle}</p>
+        </div>
+      </div>
+      <div className="dashboard-distribution-table-wrap">
+        <table className="dashboard-distribution-table">
+          <thead>
+            <tr>
+              <th scope="col">{showPercent ? '小组 / 岗位' : '统计项'}</th>
+              <th scope="col">人数</th>
+              {showPercent ? <th scope="col">占比</th> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <td>{row.label}</td>
+                <td>{row.count.toLocaleString('zh-CN')}</td>
+                {showPercent ? (
+                  <td>{total > 0 ? `${Math.round((row.count / total) * 100)}%` : '0%'}</td>
+                ) : null}
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={showPercent ? 3 : 2} className="empty">暂无数据</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

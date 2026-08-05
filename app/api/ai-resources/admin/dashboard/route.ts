@@ -6,8 +6,14 @@ import { getAiResourceDashboard } from '@/modules/ai-resources/dashboard';
 export async function GET(request: NextRequest) {
   try {
     await requireAiResourceRoleApi('admin');
-    const rawDays = Number(new URL(request.url).searchParams.get('days') ?? 30);
-    return NextResponse.json(await getAiResourceDashboard(rawDays));
+    const params = request.nextUrl.searchParams;
+    const rawDays = params.get('days');
+    const days = rawDays === 'all' ? 'all' : Number(rawDays ?? 30);
+    return NextResponse.json(await getAiResourceDashboard({
+      days,
+      start: params.get('start') ?? undefined,
+      end: params.get('end') ?? undefined,
+    }));
   } catch (error) {
     return aiResourceErrorResponse(error);
   }

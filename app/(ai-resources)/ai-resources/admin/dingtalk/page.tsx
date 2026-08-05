@@ -2,6 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { dingtalkNotifyEnvStatus } from '@/lib/dingtalk/config';
 import { getDingTalkNotificationSettings } from '@/lib/dingtalk/settings';
+import {
+  getDingTalkOrganizationSyncStatus,
+  type DingTalkOrganizationSyncStatus,
+} from '@/lib/dingtalk/organization';
 import { requireAiResourceRole } from '@/modules/ai-resources/guards';
 import { AdminDingTalkPanel } from '@/modules/ai-resources/ui/admin-dingtalk-panel';
 
@@ -19,10 +23,16 @@ export default async function AdminDingTalkPage() {
     reviewApproved: true,
     publish: true,
   };
+  let initialOrganizationSync: DingTalkOrganizationSyncStatus = { status: 'idle' };
   try {
     initialNotifications = await getDingTalkNotificationSettings();
   } catch (error) {
     console.error('[dingtalk] read notification settings on page failed:', error);
+  }
+  try {
+    initialOrganizationSync = await getDingTalkOrganizationSyncStatus();
+  } catch (error) {
+    console.error('[dingtalk] read organization sync status on page failed:', error);
   }
 
   return (
@@ -41,6 +51,7 @@ export default async function AdminDingTalkPage() {
         <AdminDingTalkPanel
           initialNotifications={initialNotifications}
           initialEnv={initialEnv}
+          initialOrganizationSync={initialOrganizationSync}
         />
       </section>
     </main>

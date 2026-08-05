@@ -1,5 +1,7 @@
 export {
   User,
+  DingTalkDepartment,
+  UserDingTalkDepartment,
   UserPosition,
   PositionRole,
   ProjectRole,

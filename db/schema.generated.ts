@@ -32,6 +32,44 @@ export const User = pgTable('users', {
 	'users_supervisor_dingtalk_user_id_idx': index('users_supervisor_dingtalk_user_id_idx').on(User.supervisorDingtalkUserId),
 }));
 
+export const DingTalkDepartment = pgTable('dingtalk_departments', {
+	id: text('id').notNull().primaryKey(),
+	name: text('name').notNull(),
+	parentId: text('parent_id'),
+	syncAt: timestamp('sync_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
+}, (DingTalkDepartment) => ({
+	'dingtalk_departments_parent_id_idx': index('dingtalk_departments_parent_id_idx').on(DingTalkDepartment.parentId),
+	'dingtalk_departments_sync_at_idx': index('dingtalk_departments_sync_at_idx').on(DingTalkDepartment.syncAt),
+}));
+
+export const UserDingTalkDepartment = pgTable('user_dingtalk_departments', {
+	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
+	userId: text('user_id').notNull(),
+	departmentId: text('department_id').notNull(),
+	isPrimary: boolean('is_primary').notNull().default(false),
+	syncAt: timestamp('sync_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
+}, (UserDingTalkDepartment) => ({
+	'UserDingTalkDepartment_user_fkey': foreignKey({
+		name: 'user_dingtalk_department_user_fkey',
+		columns: [UserDingTalkDepartment.userId],
+		foreignColumns: [User.id]
+	})
+		.onDelete('cascade')
+		.onUpdate('cascade'),
+	'UserDingTalkDepartment_department_fkey': foreignKey({
+		name: 'user_dingtalk_department_department_fkey',
+		columns: [UserDingTalkDepartment.departmentId],
+		foreignColumns: [DingTalkDepartment.id]
+	})
+		.onDelete('cascade')
+		.onUpdate('cascade'),
+	'UserDingTalkDepartment_user_department_unique_idx': uniqueIndex('user_dingtalk_departments_user_department_key')
+		.on(UserDingTalkDepartment.userId, UserDingTalkDepartment.departmentId),
+	'user_dingtalk_departments_user_id_idx': index('user_dingtalk_departments_user_id_idx').on(UserDingTalkDepartment.userId),
+	'user_dingtalk_departments_department_id_idx': index('user_dingtalk_departments_department_id_idx').on(UserDingTalkDepartment.departmentId),
+	'user_dingtalk_departments_primary_idx': index('user_dingtalk_departments_primary_idx').on(UserDingTalkDepartment.userId, UserDingTalkDepartment.isPrimary),
+}));
+
 export const Project = pgTable('projects', {
 	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
 	name: text('name').notNull(),
@@ -1249,6 +1287,9 @@ export const UserRelations = relations(User, ({ many }) => ({
 	projectMembers: many(ProjectMember, {
 		relationName: 'ProjectMemberToUser'
 	}),
+	dingtalkDepartments: many(UserDingTalkDepartment, {
+		relationName: 'UserToDingTalkDepartment'
+	}),
 	createdTasks: many(Task, {
 		relationName: 'TaskCreator'
 	}),
@@ -1329,6 +1370,25 @@ export const UserRelations = relations(User, ({ many }) => ({
 	}),
 	aiResourceMigrationRuns: many(AiResourceMigrationRun, {
 		relationName: 'AiResourceMigrationOperator'
+	})
+}));
+
+export const DingTalkDepartmentRelations = relations(DingTalkDepartment, ({ many }) => ({
+	userDepartments: many(UserDingTalkDepartment, {
+		relationName: 'DingTalkDepartmentToUser'
+	})
+}));
+
+export const UserDingTalkDepartmentRelations = relations(UserDingTalkDepartment, ({ one }) => ({
+	user: one(User, {
+		relationName: 'UserToDingTalkDepartment',
+		fields: [UserDingTalkDepartment.userId],
+		references: [User.id]
+	}),
+	department: one(DingTalkDepartment, {
+		relationName: 'DingTalkDepartmentToUser',
+		fields: [UserDingTalkDepartment.departmentId],
+		references: [DingTalkDepartment.id]
 	})
 }));
 

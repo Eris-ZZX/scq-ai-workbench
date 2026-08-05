@@ -449,6 +449,19 @@ export const modelMetadata = {
         "remoteFields": [
           "operatorId"
         ]
+      },
+      "dingtalkDepartments": {
+        "model": "UserDingTalkDepartment",
+        "list": true,
+        "nullable": false,
+        "relationName": "UserToDingTalkDepartment",
+        "localFields": [],
+        "referenceFields": [
+          "id"
+        ],
+        "remoteFields": [
+          "userId"
+        ]
       }
     }
   },
@@ -4201,6 +4214,102 @@ export const modelMetadata = {
       }
     },
     "relations": {}
+  },
+  "DingTalkDepartment": {
+    "table": "dingtalk_departments",
+    "fields": {
+      "id": {
+        "column": "id",
+        "type": "String",
+        "nullable": false
+      },
+      "name": {
+        "column": "name",
+        "type": "String",
+        "nullable": false
+      },
+      "parentId": {
+        "column": "parent_id",
+        "type": "String",
+        "nullable": true
+      },
+      "syncAt": {
+        "column": "sync_at",
+        "type": "DateTime",
+        "nullable": false
+      }
+    },
+    "relations": {
+      "userDepartments": {
+        "model": "UserDingTalkDepartment",
+        "list": true,
+        "nullable": false,
+        "relationName": "DingTalkDepartmentToUser",
+        "localFields": [],
+        "referenceFields": [
+          "id"
+        ],
+        "remoteFields": [
+          "departmentId"
+        ]
+      }
+    }
+  },
+  "UserDingTalkDepartment": {
+    "table": "user_dingtalk_departments",
+    "fields": {
+      "id": {
+        "column": "id",
+        "type": "String",
+        "nullable": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "String",
+        "nullable": false
+      },
+      "departmentId": {
+        "column": "department_id",
+        "type": "String",
+        "nullable": false
+      },
+      "isPrimary": {
+        "column": "is_primary",
+        "type": "Boolean",
+        "nullable": false
+      },
+      "syncAt": {
+        "column": "sync_at",
+        "type": "DateTime",
+        "nullable": false
+      }
+    },
+    "relations": {
+      "user": {
+        "model": "User",
+        "list": false,
+        "nullable": false,
+        "relationName": "UserToDingTalkDepartment",
+        "localFields": [
+          "userId"
+        ],
+        "referenceFields": [
+          "id"
+        ]
+      },
+      "department": {
+        "model": "DingTalkDepartment",
+        "list": false,
+        "nullable": false,
+        "relationName": "DingTalkDepartmentToUser",
+        "localFields": [
+          "departmentId"
+        ],
+        "referenceFields": [
+          "id"
+        ]
+      }
+    }
   }
 } as const;
 

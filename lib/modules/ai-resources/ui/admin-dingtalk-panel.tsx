@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import type { DingTalkNotifyEnvStatus } from '@/lib/dingtalk/config';
 import type { DingTalkNotificationCategory } from '@/lib/dingtalk/settings';
+import type { DingTalkOrganizationSyncStatus } from '@/lib/dingtalk/organization';
 import { getErrorMessage } from '@/modules/ai-resources/api-errors';
 
 type NotificationSettings = Record<DingTalkNotificationCategory, boolean>;
@@ -10,6 +11,7 @@ type NotificationSettings = Record<DingTalkNotificationCategory, boolean>;
 type Props = {
   initialNotifications: NotificationSettings;
   initialEnv: DingTalkNotifyEnvStatus;
+  initialOrganizationSync: DingTalkOrganizationSyncStatus;
 };
 
 const NOTIFICATION_DEFINITIONS: Array<{
@@ -44,14 +46,22 @@ const NOTIFICATION_DEFINITIONS: Array<{
   },
 ];
 
-export function AdminDingTalkPanel({ initialNotifications, initialEnv }: Props) {
+export function AdminDingTalkPanel({
+  initialNotifications,
+  initialEnv,
+  initialOrganizationSync,
+}: Props) {
   const [notifications, setNotifications] = useState<NotificationSettings>(initialNotifications);
   const [env, setEnv] = useState<DingTalkNotifyEnvStatus>(initialEnv);
+  const [organizationSync, setOrganizationSync] = useState<DingTalkOrganizationSyncStatus>(
+    initialOrganizationSync,
+  );
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [testingCategory, setTestingCategory] = useState<DingTalkNotificationCategory | null>(
     null,
   );
+  const [syncingOrganization, setSyncingOrganization] = useState(false);
   const [pending, startTransition] = useTransition();
 
   async function reload() {
@@ -65,6 +75,11 @@ export function AdminDingTalkPanel({ initialNotifications, initialEnv }: Props) 
       setNotifications(body.notifications);
     }
     if (body.env) setEnv(body.env);
+    const organizationRes = await fetch('/api/ai-resources/admin/dingtalk/organization', { cache: 'no-store' });
+    const organizationBody = await organizationRes.json().catch(() => null);
+    if (organizationRes.ok && organizationBody?.status) {
+      setOrganizationSync(organizationBody.status);
+    }
     setError('');
   }
 
@@ -99,6 +114,31 @@ export function AdminDingTalkPanel({ initialNotifications, initialEnv }: Props) 
     });
   }
 
+  function syncOrganization() {
+    setMessage('');
+    setError('');
+    setSyncingOrganization(true);
+    startTransition(async () => {
+      try {
+        const res = await fetch('/api/ai-resources/admin/dingtalk/organization', {
+          method: 'POST',
+        });
+        const body = await res.json().catch(() => null);
+        if (body?.status) setOrganizationSync(body.status);
+        if (!res.ok) {
+          setError(getErrorMessage(body, '钉钉组织同步失败'));
+          return;
+        }
+        const result = body.status;
+        setMessage(
+          `组织同步完成：${result.departmentCount ?? 0} 个部门，匹配 ${result.matchedUserCount ?? 0} 个用户。`,
+        );
+      } finally {
+        setSyncingOrganization(false);
+      }
+    });
+  }
+
   function sendTest(category: DingTalkNotificationCategory) {
     setMessage('');
     setError('');
@@ -125,6 +165,47 @@ export function AdminDingTalkPanel({ initialNotifications, initialEnv }: Props) 
 
   return (
     <div className="dingtalk-settings">
+      <div className="dingtalk-settings-block">
+        <h2>组织同步</h2>
+        <p className="subtle">
+          从钉钉通讯录同步部门和用户组织关系，看板小组统计按每个用户的最末级主部门计算。
+        </p>
+        <div className="dingtalk-organization-sync">
+          <div>
+            <strong>
+              {organizationSync.status === 'running'
+                ? '同步中'
+                : organizationSync.status === 'success'
+                  ? '最近同步成功'
+                  : organizationSync.status === 'failed'
+                    ? '最近同步失败'
+                    : '尚未同步'}
+            </strong>
+            <span className="subtle">
+              {organizationSync.finishedAt
+                ? ` · ${formatSyncTime(organizationSync.finishedAt)}`
+                : organizationSync.error
+                  ? ` · ${organizationSync.error}`
+                  : ''}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="button primary"
+            disabled={pending || syncingOrganization || organizationSync.status === 'running'}
+            onClick={syncOrganization}
+          >
+            {syncingOrganization || organizationSync.status === 'running' ? '同步中…' : '同步钉钉组织'}
+          </button>
+        </div>
+        {organizationSync.status === 'success' ? (
+          <p className="subtle">
+            已同步 {organizationSync.departmentCount ?? 0} 个部门，目录用户 {organizationSync.directoryUserCount ?? 0} 人，
+            匹配系统用户 {organizationSync.matchedUserCount ?? 0} 人。
+          </p>
+        ) : null}
+      </div>
+
       <div className="dingtalk-settings-block">
         <h2>通知类别</h2>
         <p className="subtle">
@@ -183,7 +264,7 @@ export function AdminDingTalkPanel({ initialNotifications, initialEnv }: Props) 
         </ul>
         <p className="subtle">
           登录用的 Client ID/Secret 可复用；还需补 AgentId 与 APP_BASE_URL。修改 `.env` 后请重启
-          `npm run dev`。开放平台需开通待办写权限与工作通知权限。
+          `npm run dev`。开放平台需开通待办写权限、工作通知权限，以及通讯录部门信息和部门成员读取权限。
         </p>
       </div>
 
@@ -191,4 +272,9 @@ export function AdminDingTalkPanel({ initialNotifications, initialEnv }: Props) 
       {error ? <p className="dingtalk-feedback bad">{error}</p> : null}
     </div>
   );
+}
+
+function formatSyncTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN');
 }

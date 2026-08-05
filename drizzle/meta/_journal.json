@@ -36,6 +36,13 @@
       "when": 1785889872886,
       "tag": "0004_charming_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785890000000,
+      "tag": "0005_dingtalk_organization",
+      "breakpoints": true
     }
   ]
 }
