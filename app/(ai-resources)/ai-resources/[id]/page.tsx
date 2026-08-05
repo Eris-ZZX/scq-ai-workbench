@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { CalendarDays, Edit3, ExternalLink, FolderOpen, UserRound } from 'lucide-react';
+import { CalendarDays, Edit3, FolderOpen, UserRound } from 'lucide-react';
 import { db } from '@/lib/database';
 import type { AiResourceType } from '@/modules/ai-resources/constants';
 import { requireAiResourceUser } from '@/modules/ai-resources/guards';
@@ -16,8 +16,9 @@ import {
   ResourceEngagementToggles,
 } from '@/modules/ai-resources/ui/resource-engagement';
 import { ResourceComments } from '@/modules/ai-resources/ui/resource-comments';
+import { ResourceViewLink } from '@/modules/ai-resources/ui/resource-view-link';
 import { UpdateHistoryDialog } from '@/modules/ai-resources/ui/update-history-dialog';
-import { recordResourceView, ViewTracker } from '@/modules/ai-resources/ui/view-tracker';
+import { ViewTracker } from '@/modules/ai-resources/ui/view-tracker';
 
 export default async function ResourceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireAiResourceUser();
@@ -93,16 +94,12 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
         <div className="meta">
           <ResourceEngagementToggles />
           {hostedHtml ? (
-            <a
+            <ResourceViewLink
               className="button primary"
               href={hostedHtmlOpenPath(resource.id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => recordResourceView(resource.id)}
-            >
-              <ExternalLink size={16} />
-              打开页面
-            </a>
+              resourceId={resource.id}
+              label="打开页面"
+            />
           ) : null}
           {canEditResource(actor, resource) ? (
             <Link className={hostedHtml ? 'button' : 'button primary'} href={`/ai-resources/${resource.id}/edit`}>
@@ -187,15 +184,12 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
               <p className="subtle" style={{ margin: 0 }}>
                 {hostedHtml.originalName}
               </p>
-              <a
+              <ResourceViewLink
                 className="button primary"
                 href={hostedHtmlOpenPath(resource.id)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ExternalLink size={16} />
-                打开页面
-              </a>
+                resourceId={resource.id}
+                label="打开页面"
+              />
             </section>
           ) : null}
 
@@ -205,18 +199,15 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
               <div className="path-list">
                 {resourceUrls.map((resourceUrl, index) =>
                   isOpenableLink(resourceUrl.url) ? (
-                    <a
+                    <ResourceViewLink
                       className="resource-link-button"
                       href={resourceUrl.url}
-                      target="_blank"
-                      rel="noreferrer"
                       title={resourceUrl.url}
-                      onClick={() => recordResourceView(resource.id)}
+                      resourceId={resource.id}
+                      label={resourceUrl.label}
+                      icon="folder"
                       key={`${index}-${resourceUrl.label}-${resourceUrl.url}`}
-                    >
-                      <FolderOpen size={14} />
-                      <span>{resourceUrl.label}</span>
-                    </a>
+                    />
                   ) : (
                     <span
                       className="resource-link-button"
