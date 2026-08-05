@@ -35,16 +35,26 @@ jobs:
         env:
           TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST }}
           TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER }}
+          AUTHING_ISSUER: ${{ secrets.AUTHING_ISSUER }}
+          AUTHING_CLIENT_ID: ${{ secrets.AUTHING_CLIENT_ID }}
+          AUTHING_CLIENT_SECRET: ${{ secrets.AUTHING_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           test -n "$TEST_SERVER_HOST"
           test -n "$TEST_SERVER_USER"
+          test -n "$AUTHING_ISSUER"
+          test -n "$AUTHING_CLIENT_ID"
+          test -n "$AUTHING_CLIENT_SECRET"
+          remote_authing_env=$(
+            printf 'AUTHING_ISSUER=%q AUTHING_CLIENT_ID=%q AUTHING_CLIENT_SECRET=%q' \
+              "$AUTHING_ISSUER" "$AUTHING_CLIENT_ID" "$AUTHING_CLIENT_SECRET"
+          )
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o ServerAliveInterval=30 \
-            "$TEST_SERVER_USER@$TEST_SERVER_HOST" 'bash -s' <<'REMOTE'
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST" "$remote_authing_env bash -s" <<'REMOTE'
           set -euo pipefail
           ROOT=/opt/qe-workbench-it
           SOURCE="$ROOT/source"
@@ -52,6 +62,18 @@ jobs:
           BRANCH=dev
 
           mkdir -p "$ROOT"
+          CURRENT_ENV="$ROOT/current/.env"
+          if [ ! -f "$CURRENT_ENV" ]; then
+            echo 'DEPLOY_FAILED missing current runtime .env'
+            exit 1
+          fi
+          ENV_TMP=$(mktemp)
+          grep -v -E '^(AUTHING_ISSUER|AUTHING_CLIENT_ID|AUTHING_CLIENT_SECRET)=' "$CURRENT_ENV" > "$ENV_TMP" || true
+          printf 'AUTHING_ISSUER=%s\nAUTHING_CLIENT_ID=%s\nAUTHING_CLIENT_SECRET=%s\n' \
+            "$AUTHING_ISSUER" "$AUTHING_CLIENT_ID" "$AUTHING_CLIENT_SECRET" >> "$ENV_TMP"
+          chmod 600 "$ENV_TMP"
+          mv "$ENV_TMP" "$CURRENT_ENV"
+
           if [ ! -d "$SOURCE/.git" ]; then
             git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$SOURCE"
           fi
