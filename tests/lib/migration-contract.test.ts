@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { analyzeMigrationContent } from '../../scripts/check-migrations.mjs';
 
 const migration = readFileSync(resolve(process.cwd(), 'drizzle', '0000_initial.sql'), 'utf8');
 const ownerMigration = readFileSync(
@@ -52,5 +53,68 @@ describe('AI resource audit migration contract', () => {
     expect(auditMigration).toContain('ai_resource_audit_logs_created_at_idx');
     expect(auditMigration).not.toContain('ALTER TABLE "users" ADD COLUMN');
     expect(auditMigration).not.toContain('ALTER TABLE "ai_resources" ADD COLUMN "owner_id"');
+  });
+});
+
+describe('migration safety preflight', () => {
+  it('blocks high-risk destructive statements', () => {
+    const result = analyzeMigrationContent(
+      'ALTER TABLE "users" DROP COLUMN "legacy_name";',
+      '0005_remove_legacy_name.sql',
+    );
+
+    expect(result.blocked).toEqual([
+      expect.objectContaining({
+        code: 'drop-column',
+        line: 1,
+        severity: 'block',
+      }),
+    ]);
+  });
+
+  it('reports non-null changes for review without blocking known backfill migrations', () => {
+    const result = analyzeMigrationContent(
+      [
+        'UPDATE "users" SET "display_name" = \'unknown\' WHERE "display_name" IS NULL;',
+        'ALTER TABLE "users" ALTER COLUMN "display_name" SET NOT NULL;',
+      ].join('\n'),
+      '0006_backfill_display_name.sql',
+    );
+
+    expect(result.blocked).toHaveLength(0);
+    expect(result.review).toEqual([
+      expect.objectContaining({
+        code: 'set-not-null',
+        line: 2,
+        severity: 'review',
+      }),
+    ]);
+  });
+
+  it('blocks non-null changes without a preceding backfill', () => {
+    const result = analyzeMigrationContent(
+      'ALTER TABLE "users" ALTER COLUMN "display_name" SET NOT NULL;',
+      '0006_require_display_name.sql',
+    );
+
+    expect(result.blocked).toEqual([
+      expect.objectContaining({
+        code: 'set-not-null',
+        line: 1,
+        severity: 'block',
+      }),
+    ]);
+  });
+
+  it('ignores destructive words in SQL comments', () => {
+    const result = analyzeMigrationContent(
+      [
+        '-- DROP TABLE "old_table";',
+        'CREATE TABLE "new_table" ("id" text PRIMARY KEY);',
+      ].join('\n'),
+      '0007_add_new_table.sql',
+    );
+
+    expect(result.findings).toHaveLength(0);
   });
 });

@@ -57,11 +57,23 @@ pnpm start
 数据库相关：
 
 ```bash
-pnpm db:generate   # 生成 migration（提交产物；生产禁止 drizzle-kit push）
+pnpm db:generate   # 从 db/schema.ts 生成版本化 migration
+pnpm db:check      # 预检 migration，拦截未确认的破坏性变更
 pnpm db:migrate
 pnpm db:bootstrap
 ```
 
-生产启动由 `instrumentation.ts` 自动完成：等待 PostgreSQL → advisory lock → migration → 幂等 bootstrap → MinIO bucket → 解锁。构建阶段不连接数据库或 MinIO。
+数据库变更约定：
+
+1. 修改 `db/schema.ts`，它是数据库结构的设计源。
+2. 执行 `pnpm db:generate`，把生成的 `drizzle/*.sql` 和 `drizzle/meta/` 一起提交。
+3. 执行 `pnpm db:check`，确认新增 migration 没有未经审查的破坏性操作。
+4. 先在测试库执行 `pnpm db:migrate`，验证数据回填、索引和约束，再部署生产。
+
+`drizzle/` 是生产发布产物，不能只改 `db/schema.ts` 而不生成 migration，也不能在生产启动时依赖 `drizzle-kit push` 自动 diff。新增字段、索引和表应使用版本化 migration；删除字段、删除表、清空数据、修改列类型等操作必须先完成数据备份和人工审查。
+
+`pnpm db:check` 默认会拦截 `DROP TABLE`、`DROP COLUMN`、`DROP CONSTRAINT`、`TRUNCATE`、危险类型变更以及没有先回填数据的 `SET NOT NULL`。确需执行已审查的破坏性 migration 时，显式设置 `QE_ALLOW_DESTRUCTIVE_MIGRATIONS=1` 后再运行检查或构建；不要把该变量长期写入生产环境。
+
+生产启动由 `instrumentation.ts` 自动完成：等待 PostgreSQL → advisory lock → migration → 幂等 bootstrap → MinIO bucket → 解锁。每个阶段都有重试和日志；迁移、bootstrap 或 bucket 初始化在重试耗尽后会阻止应用进入 ready 状态。构建阶段不连接数据库或 MinIO，构建前会自动执行 migration 预检。
 
 部署与运维细节见 [application-runbook.md](00-docs/deployment/application-runbook.md)。
