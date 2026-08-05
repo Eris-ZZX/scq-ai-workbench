@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { defaultSecureCookie } from '@/platform/auth/auth.jwt';
 import {
   authingConfig,
   authingRedirectUri,
@@ -16,7 +17,9 @@ const TRANSIENT_COOKIE_OPTIONS = {
   sameSite: 'lax' as const,
   maxAge: 600,
   path: '/',
-  secure: process.env.NODE_ENV === 'production',
+  // 跟随 APP_BASE_URL 判断（http 直连的测试服务器不能用 Secure cookie，
+  // 否则浏览器不保存 state/verifier/nonce，回调必然失败）
+  secure: defaultSecureCookie(),
 };
 
 export async function GET(request: NextRequest) {
