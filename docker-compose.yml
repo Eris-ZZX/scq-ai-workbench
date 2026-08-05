@@ -95,7 +95,7 @@ services:
       DWS_MAX_ATTEMPTS: ${DWS_MAX_ATTEMPTS:-5}
       DWS_WORKER_ONCE: ${DWS_WORKER_ONCE:-false}
     volumes:
-      - ${DWS_CONFIG_DIR:?DWS_CONFIG_DIR is required}:/run/dws
+      - ${DWS_CONFIG_DIR:-/opt/qe-workbench-it/dws-config}:/run/dws
 
 volumes:
   qe_pgdata:
