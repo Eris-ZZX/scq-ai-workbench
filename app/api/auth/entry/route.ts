@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { getSession } from '@/platform/auth/auth.config';
+import { authingEnabled, authingRequired } from '@/platform/auth/authing.config';
 import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 import { getRequestUrl } from '@/platform/auth/request-url';
-import { AUTH_RETURN_COOKIE, resolveReturnPath } from '@/platform/auth/return-path';
-import { defaultSecureCookie } from '@/platform/auth/auth.jwt';
+import { resolveReturnPath } from '@/platform/auth/return-path';
 
 /**
  * GET /api/auth/entry?next=/ai-resources/review/xxx
  * - Already logged in → redirect to next
- * - Otherwise → start DingTalk OAuth, then return to next
+ * - Otherwise → start Authing OIDC, then return to next
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -20,16 +19,17 @@ export async function GET(request: Request) {
     return NextResponse.redirect(getRequestUrl(request, next), { status: 303 });
   }
 
-  const jar = await cookies();
-  jar.set(AUTH_RETURN_COOKIE, next, {
-    httpOnly: true,
-    secure: defaultSecureCookie(),
-    sameSite: 'lax',
-    maxAge: 600,
-    path: '/',
-  });
+  if (!authingEnabled()) {
+    return NextResponse.redirect(
+      getRequestUrl(
+        request,
+        authingRequired() ? '/login?error=authing_config' : '/login',
+      ),
+      { status: 303 },
+    );
+  }
 
-  const dingtalkUrl = getRequestUrl(request, '/api/auth/dingtalk');
-  dingtalkUrl.searchParams.set('next', next);
-  return NextResponse.redirect(dingtalkUrl, { status: 303 });
+  const authingUrl = getRequestUrl(request, '/api/auth/authing');
+  authingUrl.searchParams.set('next', next);
+  return NextResponse.redirect(authingUrl, { status: 303 });
 }

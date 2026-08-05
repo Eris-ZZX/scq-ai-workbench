@@ -105,7 +105,7 @@ export async function PATCH(
       return resource;
     });
 
-    scheduleResourceBroadcast({
+    await scheduleResourceBroadcast({
       kind: 'UPDATE',
       resourceId: result.id,
       name: result.name,

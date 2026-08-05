@@ -1,5 +1,7 @@
 export {
   User,
+  UserIdentity,
+  ExternalJob,
   DingTalkDepartment,
   UserDingTalkDepartment,
   UserPosition,

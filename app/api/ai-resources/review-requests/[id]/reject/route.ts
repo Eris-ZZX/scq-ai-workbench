@@ -97,7 +97,7 @@ export async function POST(
       return handled;
     });
 
-    scheduleReviewResolved(result.id, { publish: false });
+    await scheduleReviewResolved(result.id, { publish: false });
     return NextResponse.json({ review: result });
   } catch (error) {
     return aiResourceErrorResponse(error);

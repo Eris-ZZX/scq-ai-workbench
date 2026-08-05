@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/database';
-import { dingtalkNotifyEnvStatus } from '@/lib/dingtalk/config';
+import { getLatestExternalJob, listExternalJobs } from '@/lib/external-jobs';
+import { getDwsWorkerStatus } from '@/lib/dws/status';
 import { sendTestNotifyToUser } from '@/lib/dingtalk/notify-review';
 import {
-  DINGTALK_NOTIFICATION_CATEGORIES,
-  getDingTalkNotificationSettings,
-  setDingTalkNotificationEnabled,
-  type DingTalkNotificationCategory,
-} from '@/lib/dingtalk/settings';
+  EXTERNAL_NOTIFICATION_CATEGORIES,
+  getExternalNotificationSettings,
+  setExternalNotificationEnabled,
+  type ExternalNotificationCategory,
+} from '@/lib/external-notifications/settings';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import {
@@ -18,7 +19,7 @@ import {
 } from '@/modules/ai-resources/audit';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 
-const categorySchema = z.enum(DINGTALK_NOTIFICATION_CATEGORIES);
+const categorySchema = z.enum(EXTERNAL_NOTIFICATION_CATEGORIES);
 const putSchema = z.object({
   category: categorySchema.optional(),
   enabled: z.boolean().optional(),
@@ -29,7 +30,7 @@ const putSchema = z.object({
 export async function GET() {
   try {
     await requireAiResourceRoleApi('admin');
-    const env = dingtalkNotifyEnvStatus();
+    const worker = await getDwsWorkerStatus();
     let notifications = {
       reviewSubmitted: true,
       reviewRejected: true,
@@ -37,14 +38,16 @@ export async function GET() {
       publish: true,
     };
     try {
-      notifications = await getDingTalkNotificationSettings();
+      notifications = await getExternalNotificationSettings();
     } catch (error) {
-      console.error('[dingtalk] read notification settings failed:', error);
+      console.error('[external] read notification settings failed:', error);
     }
     return NextResponse.json({
       notifications,
       publishNotifyEnabled: notifications.publish,
-      env,
+      worker,
+      latestJobs: await getLatestExternalJob(),
+      jobs: await listExternalJobs({ limit: 25 }),
       audience: 'app_members',
     });
   } catch (error) {
@@ -69,10 +72,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: '缺少通知类别或开关状态。' }, { status: 400 });
     }
 
-    const beforeSettings = await getDingTalkNotificationSettings();
+    const beforeSettings = await getExternalNotificationSettings();
     await db.$transaction(async (tx) => {
-      await setDingTalkNotificationEnabled(
-        category as DingTalkNotificationCategory,
+      await setExternalNotificationEnabled(
+        category as ExternalNotificationCategory,
         enabled,
         actor.userId,
         tx,
@@ -80,20 +83,22 @@ export async function PUT(request: NextRequest) {
       await appendAiResourceAuditLog({
         actorId: actor.userId,
         actorUsername: actor.username,
-        action: AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_SETTINGS_UPDATE,
-        targetType: 'DINGTALK_SETTINGS',
+      action: AI_RESOURCE_AUDIT_ACTIONS.EXTERNAL_NOTIFICATIONS_SETTINGS_UPDATE,
+      targetType: 'EXTERNAL_NOTIFICATIONS_SETTINGS',
         targetId: category,
         result: 'SUCCESS',
-        before: { category, enabled: beforeSettings[category as DingTalkNotificationCategory] },
+        before: { category, enabled: beforeSettings[category as ExternalNotificationCategory] },
         after: { category, enabled },
         ...auditContext,
       }, tx);
     });
-    const notifications = await getDingTalkNotificationSettings();
+    const notifications = await getExternalNotificationSettings();
     return NextResponse.json({
       notifications,
       publishNotifyEnabled: notifications.publish,
-      env: dingtalkNotifyEnvStatus(),
+      worker: await getDwsWorkerStatus(),
+      latestJobs: await getLatestExternalJob(),
+      jobs: await listExternalJobs({ limit: 25 }),
       audience: 'app_members',
     });
   } catch (error) {
@@ -125,8 +130,8 @@ export async function POST(request: NextRequest) {
       await appendAiResourceAuditLog({
         actorId: actor.userId,
         actorUsername: actor.username,
-        action: AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_TEST,
-        targetType: 'DINGTALK_SETTINGS',
+        action: AI_RESOURCE_AUDIT_ACTIONS.EXTERNAL_NOTIFICATIONS_TEST,
+        targetType: 'EXTERNAL_NOTIFICATIONS_SETTINGS',
         targetId: category.data,
         result: 'FAILED',
         reason: result.error ?? '发送失败',
@@ -138,8 +143,8 @@ export async function POST(request: NextRequest) {
     await appendAiResourceAuditLog({
       actorId: actor.userId,
       actorUsername: actor.username,
-      action: AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_TEST,
-      targetType: 'DINGTALK_SETTINGS',
+      action: AI_RESOURCE_AUDIT_ACTIONS.EXTERNAL_NOTIFICATIONS_TEST,
+      targetType: 'EXTERNAL_NOTIFICATIONS_SETTINGS',
       targetId: category.data,
       result: 'SUCCESS',
       reason: '管理员手动发送测试通知',

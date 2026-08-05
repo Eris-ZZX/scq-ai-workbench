@@ -48,13 +48,13 @@ export default async function AdminPage() {
             <span className="admin-feature-action">进入</span>
           </Link>
 
-          <Link className="admin-feature-card" href="/ai-resources/admin/dingtalk">
+          <Link className="admin-feature-card" href="/ai-resources/admin/notifications">
             <span className="admin-feature-icon">
               <BellRing size={24} />
             </span>
             <span className="admin-feature-body">
-              <strong>钉钉通知</strong>
-              <span>配置审批待办与资源上线工作通知（应用内正式通道）。</span>
+              <strong>外部通知 / DWS</strong>
+              <span>配置审批待办与资源上线通知，并查看 Worker 状态。</span>
             </span>
             <span className="admin-feature-action">进入</span>
           </Link>

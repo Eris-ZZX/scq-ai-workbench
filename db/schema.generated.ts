@@ -7,6 +7,7 @@ import { boolean, foreignKey, index, integer, pgTable, text, timestamp, uniqueIn
 export const User = pgTable('users', {
 	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
 	username: text('username').notNull().unique(),
+	displayName: text('display_name'),
 	passwordHash: text('password_hash').notNull(),
 	email: text('email').unique(),
 	avatar: text('avatar'),
@@ -20,6 +21,9 @@ export const User = pgTable('users', {
 	dingtalkUserId: text('dingtalk_user_id'),
 	supervisorDingtalkUserId: text('supervisor_dingtalk_user_id'),
 	supervisorName: text('supervisor_name'),
+	directoryUserId: text('directory_user_id'),
+	directorySupervisorUserId: text('directory_supervisor_user_id'),
+	directorySupervisorName: text('directory_supervisor_name'),
 	syncAt: timestamp('sync_at', { precision: 3, withTimezone: true })
 }, (User) => ({
 	'User_externalSource_externalId_unique_idx': uniqueIndex('user_external_source_external_id_key')
@@ -30,6 +34,56 @@ export const User = pgTable('users', {
 	'users_status_idx': index('users_status_idx').on(User.status),
 	'users_dingtalk_user_id_idx': index('users_dingtalk_user_id_idx').on(User.dingtalkUserId),
 	'users_supervisor_dingtalk_user_id_idx': index('users_supervisor_dingtalk_user_id_idx').on(User.supervisorDingtalkUserId),
+	'users_directory_user_id_key': uniqueIndex('users_directory_user_id_key').on(User.directoryUserId),
+	'users_directory_supervisor_user_id_idx': index('users_directory_supervisor_user_id_idx').on(User.directorySupervisorUserId),
+}));
+
+export const UserIdentity = pgTable('user_identities', {
+	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
+	userId: text('user_id').notNull(),
+	provider: text('provider').notNull(),
+	issuer: text('issuer').notNull(),
+	subject: text('subject').notNull(),
+	username: text('username'),
+	displayName: text('display_name'),
+	email: text('email'),
+	avatar: text('avatar'),
+	lastLoginAt: timestamp('last_login_at', { precision: 3, withTimezone: true }),
+	lastSyncAt: timestamp('last_sync_at', { precision: 3, withTimezone: true }),
+	createdAt: timestamp('created_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
+	updatedAt: timestamp('updated_at', { precision: 3, withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (UserIdentity) => ({
+	'UserIdentity_user_fkey': foreignKey({
+		name: 'user_identity_user_fkey',
+		columns: [UserIdentity.userId],
+		foreignColumns: [User.id],
+	})
+		.onDelete('cascade')
+		.onUpdate('cascade'),
+	'user_identities_provider_issuer_subject_key': uniqueIndex('user_identities_provider_issuer_subject_key')
+		.on(UserIdentity.provider, UserIdentity.issuer, UserIdentity.subject),
+	'user_identities_user_provider_issuer_key': uniqueIndex('user_identities_user_provider_issuer_key')
+		.on(UserIdentity.userId, UserIdentity.provider, UserIdentity.issuer),
+	'user_identities_user_id_idx': index('user_identities_user_id_idx').on(UserIdentity.userId),
+}));
+
+export const ExternalJob = pgTable('external_job_outbox', {
+	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
+	kind: text('kind').notNull(),
+	idempotencyKey: text('idempotency_key').notNull().unique(),
+	payload: text('payload').notNull(),
+	status: text('status').notNull().default("pending"),
+	attempts: integer('attempts').notNull().default(0),
+	availableAt: timestamp('available_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
+	lockedAt: timestamp('locked_at', { precision: 3, withTimezone: true }),
+	lockedBy: text('locked_by'),
+	lastError: text('last_error'),
+	result: text('result'),
+	createdAt: timestamp('created_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
+	updatedAt: timestamp('updated_at', { precision: 3, withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (ExternalJob) => ({
+	'external_job_outbox_status_available_idx': index('external_job_outbox_status_available_idx').on(ExternalJob.status, ExternalJob.availableAt),
+	'external_job_outbox_locked_at_idx': index('external_job_outbox_locked_at_idx').on(ExternalJob.lockedAt),
 }));
 
 export const DingTalkDepartment = pgTable('dingtalk_departments', {
@@ -1012,6 +1066,12 @@ export const AiResourceReviewRequest = pgTable('ai_resource_review_requests', {
 	dingtalkTodoUnionId: text('dingtalk_todo_union_id'),
 	dingtalkReworkTodoId: text('dingtalk_rework_todo_id'),
 	dingtalkReworkTodoUnionId: text('dingtalk_rework_todo_union_id'),
+	externalTodoProvider: text('external_todo_provider'),
+	externalTodoId: text('external_todo_id'),
+	externalTodoAssigneeId: text('external_todo_assignee_id'),
+	externalReworkTodoProvider: text('external_rework_todo_provider'),
+	externalReworkTodoId: text('external_rework_todo_id'),
+	externalReworkTodoAssigneeId: text('external_rework_todo_assignee_id'),
 	requesterId: text('requester_id').notNull(),
 	reviewerId: text('reviewer_id')
 }, (AiResourceReviewRequest) => ({
@@ -1284,6 +1344,9 @@ export const AiResourceAuditLog = pgTable('ai_resource_audit_logs', {
 }));
 
 export const UserRelations = relations(User, ({ many }) => ({
+	identities: many(UserIdentity, {
+		relationName: 'UserToUserIdentity'
+	}),
 	projectMembers: many(ProjectMember, {
 		relationName: 'ProjectMemberToUser'
 	}),
@@ -1370,6 +1433,14 @@ export const UserRelations = relations(User, ({ many }) => ({
 	}),
 	aiResourceMigrationRuns: many(AiResourceMigrationRun, {
 		relationName: 'AiResourceMigrationOperator'
+	})
+}));
+
+export const UserIdentityRelations = relations(UserIdentity, ({ one }) => ({
+	user: one(User, {
+		relationName: 'UserToUserIdentity',
+		fields: [UserIdentity.userId],
+		references: [User.id]
 	})
 }));
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Plus, RefreshCw, Search, UserRound } from 'lucide-react';
-import type { DingTalkOrganizationSyncStatus } from '@/lib/dingtalk/organization';
+import type { DirectorySyncStatus } from '@/lib/dws/directory-sync';
 
 type Position = { id: string; name: string; roleName?: string | null };
 type Organization = { id: string; name: string; parentId: string | null };
@@ -11,6 +11,7 @@ type Organization = { id: string; name: string; parentId: string | null };
 type PlatformUser = {
   id: string;
   username: string;
+  displayName: string | null;
   email: string | null;
   platformRole: string;
   workbenchRole: string;
@@ -20,7 +21,7 @@ type PlatformUser = {
   dingtalkUserId: string | null;
   syncAt: string | null;
   position: { id: string; positionRoleId: string; positionRole: Position } | null;
-  supervisor: { dingtalkUserId: string | null; name: string | null };
+  supervisor: { directoryUserId: string | null; name: string | null };
   organization: Organization | null;
   aiResourceRole: string | null;
   projectCount: number;
@@ -45,7 +46,10 @@ const emptyCreate = {
 };
 
 function sourceLabel(source: string) {
-  return source === 'dingtalk' ? '钉钉' : '本地';
+  if (source === 'authing') return 'Authing';
+  if (source === 'dws') return 'DWS';
+  if (source === 'dingtalk') return '钉钉（历史）';
+  return '本地';
 }
 
 function formatSyncTime(value?: string) {
@@ -69,7 +73,7 @@ export default function PlatformUsersPage() {
   const [message, setMessage] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreate);
-  const [organizationSync, setOrganizationSync] = useState<DingTalkOrganizationSyncStatus>({ status: 'idle' });
+  const [organizationSync, setOrganizationSync] = useState<DirectorySyncStatus>({ status: 'idle', startedAt: '' });
   const [syncingOrganization, setSyncingOrganization] = useState(false);
 
   const visibleUsers = useMemo(
@@ -116,8 +120,14 @@ export default function PlatformUsersPage() {
     try {
       const response = await fetch('/api/admin/platform-users/organization', { cache: 'no-store' });
       const payload = await response.json().catch(() => null);
-      if (response.ok && payload?.status) {
-        setOrganizationSync(payload.status);
+      if (response.ok) {
+        if (payload?.job?.status === 'pending') {
+          setOrganizationSync({ status: 'queued', startedAt: payload.job.createdAt ?? '' });
+        } else if (payload?.job?.status === 'processing') {
+          setOrganizationSync({ status: 'running', startedAt: payload.job.createdAt ?? '' });
+        } else if (payload?.status) {
+          setOrganizationSync(payload.status);
+        }
       }
     } catch {
       // The user list remains usable when the status endpoint is temporarily unavailable.
@@ -190,17 +200,21 @@ export default function PlatformUsersPage() {
     try {
       const response = await fetch('/api/admin/platform-users/organization', { method: 'POST' });
       const payload = await response.json().catch(() => null);
-      if (payload?.status) setOrganizationSync(payload.status);
+      if (response.status === 202) {
+        setOrganizationSync({ status: 'queued', startedAt: new Date().toISOString() });
+      } else if (payload?.status && typeof payload.status === 'object') {
+        setOrganizationSync(payload.status);
+      }
       if (!response.ok) {
-        setError(payload?.error ?? '钉钉组织同步失败。');
+        setError(payload?.error ?? '组织目录同步失败。');
         return;
       }
-      setMessage(
-        `组织同步完成：${payload.status?.departmentCount ?? 0} 个部门，匹配 ${payload.status?.matchedUserCount ?? 0} 个用户。`,
-      );
-      await load();
+      setMessage(response.status === 202
+        ? '组织目录同步任务已创建，将由独立 DWS Worker 执行。'
+        : `组织同步完成：${payload.status?.departmentCount ?? 0} 个部门，匹配 ${payload.status?.matchedUserCount ?? 0} 个用户。`);
+      await loadOrganizationSyncStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '钉钉组织同步失败。');
+      setError(err instanceof Error ? err.message : '组织目录同步失败。');
     } finally {
       setSyncingOrganization(false);
       setSaving(false);
@@ -245,7 +259,9 @@ export default function PlatformUsersPage() {
             <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
               <option value="">全部来源</option>
               <option value="local">本地</option>
-              <option value="dingtalk">钉钉</option>
+              <option value="authing">Authing</option>
+              <option value="dws">DWS</option>
+              <option value="dingtalk">钉钉（历史）</option>
             </select>
             <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={platformRoleFilter} onChange={(event) => setPlatformRoleFilter(event.target.value)}>
               <option value="">全部平台角色</option>
@@ -277,9 +293,9 @@ export default function PlatformUsersPage() {
               type="button"
               className="inline-flex h-9 items-center gap-1 rounded border border-primary bg-primary/5 px-3 text-sm text-primary hover:bg-primary/10 disabled:opacity-50"
               onClick={() => void syncOrganization()}
-              disabled={saving || syncingOrganization || organizationSync.status === 'running'}
+              disabled={saving || syncingOrganization || organizationSync.status === 'running' || organizationSync.status === 'queued'}
             >
-              {syncingOrganization || organizationSync.status === 'running' ? '同步中…' : '同步钉钉组织'}
+              {syncingOrganization || organizationSync.status === 'running' || organizationSync.status === 'queued' ? '同步排队中…' : '同步组织目录'}
             </button>
             <button
               type="button"
@@ -302,7 +318,9 @@ export default function PlatformUsersPage() {
               ? `最近成功 · ${formatSyncTime(organizationSync.finishedAt)} · ${organizationSync.departmentCount ?? 0} 个部门 · 匹配 ${organizationSync.matchedUserCount ?? 0} 个用户`
               : organizationSync.status === 'failed'
                 ? `最近失败 · ${formatSyncTime(organizationSync.finishedAt)} · ${organizationSync.error ?? '请检查服务端日志'}`
-                : '尚未同步'}
+            : organizationSync.status === 'queued'
+              ? '任务已排队，等待 DWS Worker'
+              : '尚未同步'}
         </p>
       </section>
 
@@ -393,14 +411,14 @@ export default function PlatformUsersPage() {
                 <div className="rounded border border-border bg-muted/20 p-3">
                   <div className="mb-2 text-sm font-semibold text-foreground">组织属性</div>
                   <div className="flex gap-3 overflow-x-auto">
-                    <ReadOnlyField label="组织小组（钉钉同步）">
+                    <ReadOnlyField label="组织小组（目录同步）">
                       {selectedUser.organization?.name || '未同步组织'}
                     </ReadOnlyField>
-                    <ReadOnlyField label="岗位（钉钉同步）">
+                    <ReadOnlyField label="岗位（目录同步）">
                       {selectedUser.position?.positionRole.name || '尚未获取'}
                     </ReadOnlyField>
-                    <ReadOnlyField label="直接上级（钉钉同步）">
-                      {selectedUser.supervisor.name || selectedUser.supervisor.dingtalkUserId || '尚未获取'}
+                    <ReadOnlyField label="直接上级（目录同步）">
+                      {selectedUser.supervisor.name || selectedUser.supervisor.directoryUserId || '尚未获取'}
                     </ReadOnlyField>
                   </div>
                 </div>

@@ -159,38 +159,36 @@ async function testPublicAndAuth() {
   return me;
 }
 
-async function testDingTalk() {
-  const entry = await request('/api/auth/dingtalk?next=%2Fportal', {
+async function testAuthingEntry() {
+  const legacy = await request('/api/auth/dingtalk?next=%2Fportal', {
+    authenticated: false,
+    expected: [302, 303, 307, 308],
+  });
+  assert(new URL(legacy.headers.get('location'), required('SMOKE_BASE_URL')).pathname === '/login', 'Legacy DingTalk endpoint did not return the migration login');
+  pass('legacy DingTalk endpoint migration response');
+
+  if (process.env.SMOKE_EXPECT_AUTHING !== 'true') return;
+  const issuer = required('AUTHING_ISSUER').replace(/\/+$/, '');
+  const discoveryResponse = await fetch(`${issuer}/.well-known/openid-configuration`, {
+    signal: AbortSignal.timeout(30_000),
+  });
+  const discovery = await discoveryResponse.json();
+  assert(discoveryResponse.ok && typeof discovery.authorization_endpoint === 'string', 'Authing discovery is unavailable');
+
+  const entry = await request('/api/auth/authing?next=%2Fportal', {
     authenticated: false,
     expected: [302, 303, 307, 308],
   });
   const location = new URL(entry.headers.get('location'));
-  assert(location.protocol === 'https:' && location.hostname === 'login.dingtalk.com', 'DingTalk entry did not redirect to the official login host');
-  assert(location.pathname === '/oauth2/auth', 'DingTalk OAuth path is incompatible');
-  assert(location.searchParams.get('response_type') === 'code', 'DingTalk response_type is incompatible');
-  assert(location.searchParams.get('scope') === 'openid', 'DingTalk scope is incompatible');
-  const redirectUri = new URL(required('DINGTALK_REDIRECT_URI'));
-  const publicBase = new URL(required('APP_BASE_URL'));
-  assert(location.searchParams.get('redirect_uri') === redirectUri.href, 'DingTalk redirect URI does not match deployment configuration');
-  assert(redirectUri.origin === publicBase.origin, 'DingTalk redirect URI and APP_BASE_URL must use the same public origin');
-  assert(redirectUri.pathname === '/api/auth/dingtalk/callback', 'DingTalk redirect URI path is incompatible');
-  assert((location.searchParams.get('state') ?? '').length === 64, 'DingTalk OAuth state is missing or malformed');
+  assert(location.href.startsWith(discovery.authorization_endpoint), 'Authing entry did not redirect to the discovered authorization endpoint');
+  assert(location.searchParams.get('response_type') === 'code', 'Authing response_type is incompatible');
+  assert(location.searchParams.get('scope')?.includes('openid'), 'Authing scope is missing openid');
+  assert(location.searchParams.get('code_challenge_method') === 'S256', 'Authing PKCE method is incompatible');
   const cookies = cookieHeaders(entry).join(';');
-  assert(cookies.includes('dingtalk_oauth_state='), 'DingTalk state cookie is missing');
-  assert(cookies.includes('auth_return_to='), 'DingTalk return-path cookie is missing');
-  pass('DingTalk OAuth entry and state contract');
-
-  const agentId = Number(required('DINGTALK_AGENT_ID'));
-  assert(Number.isSafeInteger(agentId) && agentId > 0, 'DingTalk agent ID is invalid');
-
-  const tokenUrl = new URL('https://oapi.dingtalk.com/gettoken');
-  tokenUrl.searchParams.set('appkey', required('DINGTALK_CLIENT_ID'));
-  tokenUrl.searchParams.set('appsecret', required('DINGTALK_CLIENT_SECRET'));
-  const response = await fetch(tokenUrl, { signal: AbortSignal.timeout(30_000) });
-  const tokenResult = await response.json().catch(() => null);
-  assert(response.ok, `DingTalk credential endpoint returned HTTP ${response.status}`);
-  assert(tokenResult?.errcode === 0 && typeof tokenResult.access_token === 'string', `DingTalk credentials were rejected (errcode ${tokenResult?.errcode ?? 'unknown'})`);
-  pass('DingTalk enterprise credentials');
+  assert(cookies.includes('authing_state='), 'Authing state cookie is missing');
+  assert(cookies.includes('authing_verifier='), 'Authing PKCE verifier cookie is missing');
+  assert(cookies.includes('authing_nonce='), 'Authing nonce cookie is missing');
+  pass('Authing OIDC discovery, PKCE, state and nonce contract');
 }
 
 async function testProjectFlow() {
@@ -386,7 +384,7 @@ async function cleanupObjects() {
 
 async function main() {
   const me = await testPublicAndAuth();
-  await testDingTalk();
+  await testAuthingEntry();
   await testProjectFlow();
   await testAiAndMinio(me);
   await testLogout();

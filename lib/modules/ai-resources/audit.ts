@@ -16,6 +16,9 @@ export const AI_RESOURCE_AUDIT_ACTIONS = {
   REVIEW_DISCARD: 'review.discard',
   RESOURCE_IMPORT: 'resource.import',
   PERMISSION_UPDATE: 'permission.update',
+  EXTERNAL_NOTIFICATIONS_SETTINGS_UPDATE: 'external.notifications.settings.update',
+  EXTERNAL_NOTIFICATIONS_TEST: 'external.notifications.test',
+  DWS_DIRECTORY_SYNC: 'dws.directory.sync',
   DINGTALK_SETTINGS_UPDATE: 'dingtalk.settings.update',
   DINGTALK_TEST: 'dingtalk.test',
 } as const;

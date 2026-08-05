@@ -34,7 +34,7 @@ export async function GET() {
   return NextResponse.json(positions);
 }
 
-const READ_ONLY_ERROR = '岗位由钉钉通讯录同步，不能手动新增、修改或删除。';
+const READ_ONLY_ERROR = '岗位由 DWS 组织目录同步，不能手动新增、修改或删除。';
 
 export async function POST() {
   const r = await checkAdmin();

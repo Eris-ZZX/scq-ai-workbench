@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { DUMMY_HASH, findByUsername, verifyPassword } from '@/lib/db/auth';
 import { createSession } from '@/platform/auth/auth.config';
+import { authingEnabled, authingRequired } from '@/platform/auth/authing.config';
 import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 import { getRequestUrl } from '@/platform/auth/request-url';
 import { resolveReturnPath } from '@/platform/auth/return-path';
@@ -55,6 +56,9 @@ function fail(formMode: boolean, request: Request, error: string, status: number
 
 export async function POST(request: Request) {
   const { body, formMode } = await readLoginBody(request);
+  if (authingEnabled() || authingRequired()) {
+    return fail(formMode, request, '当前系统已切换为 Authing 登录', 403);
+  }
   if (!body) {
     return fail(formMode, request, '无效的请求体', 400);
   }

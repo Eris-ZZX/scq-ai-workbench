@@ -78,7 +78,7 @@ export async function POST(
         return updatedReview;
       });
 
-      scheduleReviewSubmitted(review.id);
+      await scheduleReviewSubmitted(review.id);
       return NextResponse.json({ review });
     }
 
@@ -173,7 +173,7 @@ export async function POST(
     }
 
     const review = await db.aiResourceReviewRequest.findUniqueOrThrow({ where: { id } });
-    scheduleReviewSubmitted(review.id);
+    await scheduleReviewSubmitted(review.id);
     return NextResponse.json({ review });
   } catch (error) {
     return aiResourceErrorResponse(error);

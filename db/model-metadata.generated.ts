@@ -14,6 +14,11 @@ export const modelMetadata = {
         "type": "String",
         "nullable": false
       },
+      "displayName": {
+        "column": "display_name",
+        "type": "String",
+        "nullable": true
+      },
       "passwordHash": {
         "column": "password_hash",
         "type": "String",
@@ -79,6 +84,21 @@ export const modelMetadata = {
         "type": "String",
         "nullable": true
       },
+      "directoryUserId": {
+        "column": "directory_user_id",
+        "type": "String",
+        "nullable": true
+      },
+      "directorySupervisorUserId": {
+        "column": "directory_supervisor_user_id",
+        "type": "String",
+        "nullable": true
+      },
+      "directorySupervisorName": {
+        "column": "directory_supervisor_name",
+        "type": "String",
+        "nullable": true
+      },
       "syncAt": {
         "column": "sync_at",
         "type": "DateTime",
@@ -86,6 +106,19 @@ export const modelMetadata = {
       }
     },
     "relations": {
+      "identities": {
+        "model": "UserIdentity",
+        "list": true,
+        "nullable": false,
+        "relationName": "UserToUserIdentity",
+        "localFields": [],
+        "referenceFields": [
+          "id"
+        ],
+        "remoteFields": [
+          "userId"
+        ]
+      },
       "projectMembers": {
         "model": "ProjectMember",
         "list": true,
@@ -3541,6 +3574,36 @@ export const modelMetadata = {
         "type": "String",
         "nullable": true
       },
+      "externalTodoProvider": {
+        "column": "external_todo_provider",
+        "type": "String",
+        "nullable": true
+      },
+      "externalTodoId": {
+        "column": "external_todo_id",
+        "type": "String",
+        "nullable": true
+      },
+      "externalTodoAssigneeId": {
+        "column": "external_todo_assignee_id",
+        "type": "String",
+        "nullable": true
+      },
+      "externalReworkTodoProvider": {
+        "column": "external_rework_todo_provider",
+        "type": "String",
+        "nullable": true
+      },
+      "externalReworkTodoId": {
+        "column": "external_rework_todo_id",
+        "type": "String",
+        "nullable": true
+      },
+      "externalReworkTodoAssigneeId": {
+        "column": "external_rework_todo_assignee_id",
+        "type": "String",
+        "nullable": true
+      },
       "requesterId": {
         "column": "requester_id",
         "type": "String",
@@ -4209,6 +4272,161 @@ export const modelMetadata = {
       },
       "createdAt": {
         "column": "created_at",
+        "type": "DateTime",
+        "nullable": false
+      }
+    },
+    "relations": {}
+  },
+  "UserIdentity": {
+    "table": "user_identities",
+    "fields": {
+      "id": {
+        "column": "id",
+        "type": "String",
+        "nullable": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "String",
+        "nullable": false
+      },
+      "provider": {
+        "column": "provider",
+        "type": "String",
+        "nullable": false
+      },
+      "issuer": {
+        "column": "issuer",
+        "type": "String",
+        "nullable": false
+      },
+      "subject": {
+        "column": "subject",
+        "type": "String",
+        "nullable": false
+      },
+      "username": {
+        "column": "username",
+        "type": "String",
+        "nullable": true
+      },
+      "displayName": {
+        "column": "display_name",
+        "type": "String",
+        "nullable": true
+      },
+      "email": {
+        "column": "email",
+        "type": "String",
+        "nullable": true
+      },
+      "avatar": {
+        "column": "avatar",
+        "type": "String",
+        "nullable": true
+      },
+      "lastLoginAt": {
+        "column": "last_login_at",
+        "type": "DateTime",
+        "nullable": true
+      },
+      "lastSyncAt": {
+        "column": "last_sync_at",
+        "type": "DateTime",
+        "nullable": true
+      },
+      "createdAt": {
+        "column": "created_at",
+        "type": "DateTime",
+        "nullable": false
+      },
+      "updatedAt": {
+        "column": "updated_at",
+        "type": "DateTime",
+        "nullable": false
+      }
+    },
+    "relations": {
+      "user": {
+        "model": "User",
+        "list": false,
+        "nullable": false,
+        "relationName": "UserToUserIdentity",
+        "localFields": [
+          "userId"
+        ],
+        "referenceFields": [
+          "id"
+        ]
+      }
+    }
+  },
+  "ExternalJob": {
+    "table": "external_job_outbox",
+    "fields": {
+      "id": {
+        "column": "id",
+        "type": "String",
+        "nullable": false
+      },
+      "kind": {
+        "column": "kind",
+        "type": "String",
+        "nullable": false
+      },
+      "idempotencyKey": {
+        "column": "idempotency_key",
+        "type": "String",
+        "nullable": false
+      },
+      "payload": {
+        "column": "payload",
+        "type": "String",
+        "nullable": false
+      },
+      "status": {
+        "column": "status",
+        "type": "String",
+        "nullable": false
+      },
+      "attempts": {
+        "column": "attempts",
+        "type": "Int",
+        "nullable": false
+      },
+      "availableAt": {
+        "column": "available_at",
+        "type": "DateTime",
+        "nullable": false
+      },
+      "lockedAt": {
+        "column": "locked_at",
+        "type": "DateTime",
+        "nullable": true
+      },
+      "lockedBy": {
+        "column": "locked_by",
+        "type": "String",
+        "nullable": true
+      },
+      "lastError": {
+        "column": "last_error",
+        "type": "String",
+        "nullable": true
+      },
+      "result": {
+        "column": "result",
+        "type": "String",
+        "nullable": true
+      },
+      "createdAt": {
+        "column": "created_at",
+        "type": "DateTime",
+        "nullable": false
+      },
+      "updatedAt": {
+        "column": "updated_at",
         "type": "DateTime",
         "nullable": false
       }

@@ -19,8 +19,10 @@ const actionLabels: Record<string, string> = {
   [AI_RESOURCE_AUDIT_ACTIONS.REVIEW_DISCARD]: '放弃重提',
   [AI_RESOURCE_AUDIT_ACTIONS.RESOURCE_IMPORT]: '批量导入',
   [AI_RESOURCE_AUDIT_ACTIONS.PERMISSION_UPDATE]: '权限变更',
-  [AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_SETTINGS_UPDATE]: '通知设置变更',
-  [AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_TEST]: '测试通知',
+  [AI_RESOURCE_AUDIT_ACTIONS.EXTERNAL_NOTIFICATIONS_SETTINGS_UPDATE]: '外部通知设置变更',
+  [AI_RESOURCE_AUDIT_ACTIONS.EXTERNAL_NOTIFICATIONS_TEST]: '外部通知测试',
+  [AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_SETTINGS_UPDATE]: '通知设置变更（历史）',
+  [AI_RESOURCE_AUDIT_ACTIONS.DINGTALK_TEST]: '测试通知（历史）',
 };
 
 const resultLabels: Record<string, string> = {
@@ -33,7 +35,7 @@ const targetTypeLabels: Record<string, string> = {
   RESOURCE: '资源',
   REVIEW: '审批单',
   MEMBERSHIP: '应用权限',
-  DINGTALK_SETTINGS: '钉钉设置',
+  DINGTALK_SETTINGS: '外部通知设置（历史）',
   IMPORT: '批量导入',
 };
 

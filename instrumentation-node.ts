@@ -6,6 +6,7 @@ import type { PoolClient } from 'pg';
 import { bootstrapDatabase } from './db/bootstrap';
 import { getPool } from './db/client';
 import { ensureStorageBucket } from './lib/storage';
+import { assertAuthingConfiguration, authingRequired } from './lib/platform/auth/authing.config';
 
 const STARTUP_LOCK_ID = '7152427805246271';
 const globalRuntime = globalThis as typeof globalThis & {
@@ -87,6 +88,10 @@ export async function retryPhase<T>(
 async function initialize() {
   installCrashHandlers();
   console.info('[startup] initialization begin');
+  if (authingRequired()) {
+    assertAuthingConfiguration();
+    console.info('[startup] Authing configuration validated');
+  }
   const lockClient = await waitForDatabase();
   let locked = false;
   try {

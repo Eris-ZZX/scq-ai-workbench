@@ -1,19 +1,27 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import type { DingTalkNotifyEnvStatus } from '@/lib/dingtalk/config';
-import type { DingTalkNotificationCategory } from '@/lib/dingtalk/settings';
+import type { DwsWorkerStatus } from '@/lib/dws/status';
+import type { ExternalNotificationCategory } from '@/lib/dingtalk/settings';
 import { getErrorMessage } from '@/modules/ai-resources/api-errors';
 
-type NotificationSettings = Record<DingTalkNotificationCategory, boolean>;
+type NotificationSettings = Record<ExternalNotificationCategory, boolean>;
+type ExternalJobSummary = {
+  id: string;
+  kind: string;
+  status: string;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+};
 
 type Props = {
   initialNotifications: NotificationSettings;
-  initialEnv: DingTalkNotifyEnvStatus;
+  initialWorker: DwsWorkerStatus;
 };
 
 const NOTIFICATION_DEFINITIONS: Array<{
-  category: DingTalkNotificationCategory;
+  category: ExternalNotificationCategory;
   title: string;
   description: string;
   audience: string;
@@ -40,34 +48,36 @@ const NOTIFICATION_DEFINITIONS: Array<{
     category: 'publish',
     title: '资源发布与更新广播',
     description: '资源审批通过后，向资源库成员发送发布或更新通知。',
-    audience: '已绑定钉钉的 AI 资源库成员',
+    audience: '已匹配 DWS userId 的 AI 资源库成员',
   },
 ];
 
 export function AdminDingTalkPanel({
   initialNotifications,
-  initialEnv,
+  initialWorker,
 }: Props) {
   const [notifications, setNotifications] = useState<NotificationSettings>(initialNotifications);
-  const [env, setEnv] = useState<DingTalkNotifyEnvStatus>(initialEnv);
+  const [worker, setWorker] = useState<DwsWorkerStatus>(initialWorker);
+  const [jobs, setJobs] = useState<ExternalJobSummary[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [testingCategory, setTestingCategory] = useState<DingTalkNotificationCategory | null>(
+  const [testingCategory, setTestingCategory] = useState<ExternalNotificationCategory | null>(
     null,
   );
   const [pending, startTransition] = useTransition();
 
   async function reload() {
-    const res = await fetch('/api/ai-resources/admin/settings/dingtalk', { cache: 'no-store' });
+    const res = await fetch('/api/ai-resources/admin/settings/notifications', { cache: 'no-store' });
     const body = await res.json().catch(() => null);
     if (!res.ok) {
-      setError(getErrorMessage(body, '加载钉钉配置失败'));
+      setError(getErrorMessage(body, '加载外部通知配置失败'));
       return;
     }
     if (body.notifications) {
       setNotifications(body.notifications);
     }
-    if (body.env) setEnv(body.env);
+    if (body.worker) setWorker(body.worker);
+    if (Array.isArray(body.jobs)) setJobs(body.jobs);
     setError('');
   }
 
@@ -77,11 +87,11 @@ export function AdminDingTalkPanel({
     });
   }, []);
 
-  function save(category: DingTalkNotificationCategory, next: boolean) {
+  function save(category: ExternalNotificationCategory, next: boolean) {
     setMessage('');
     setError('');
     startTransition(async () => {
-      const res = await fetch('/api/ai-resources/admin/settings/dingtalk', {
+      const res = await fetch('/api/ai-resources/admin/settings/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category, enabled: next }),
@@ -96,19 +106,20 @@ export function AdminDingTalkPanel({
       } else {
         setNotifications((current) => ({ ...current, [category]: next }));
       }
-      if (body.env) setEnv(body.env);
+      if (body.worker) setWorker(body.worker);
+      if (Array.isArray(body.jobs)) setJobs(body.jobs);
       const definition = NOTIFICATION_DEFINITIONS.find((item) => item.category === category);
       setMessage(`${definition?.title ?? '通知'}已${next ? '开启' : '关闭'}。`);
     });
   }
 
-  function sendTest(category: DingTalkNotificationCategory) {
+  function sendTest(category: ExternalNotificationCategory) {
     setMessage('');
     setError('');
     setTestingCategory(category);
     startTransition(async () => {
       try {
-        const res = await fetch('/api/ai-resources/admin/settings/dingtalk', {
+        const res = await fetch('/api/ai-resources/admin/settings/notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'test', category }),
@@ -119,7 +130,7 @@ export function AdminDingTalkPanel({
           return;
         }
         const definition = NOTIFICATION_DEFINITIONS.find((item) => item.category === category);
-        setMessage(`${definition?.title ?? '通知'}测试消息已发送，请在钉钉「工作通知」中查看。`);
+        setMessage(`${definition?.title ?? '通知'}测试任务已创建，将由 DWS Worker 投递。`);
       } finally {
         setTestingCategory(null);
       }
@@ -172,22 +183,41 @@ export function AdminDingTalkPanel({
       </div>
 
       <div className="dingtalk-settings-block">
-        <h2>环境检查</h2>
+        <h2>DWS Worker 状态</h2>
         <ul className="dingtalk-env-list">
-          <li className={env.hasCredentials ? 'ok' : 'bad'}>
-            DINGTALK_CLIENT_ID / SECRET：{env.hasCredentials ? '已配置' : '未配置'}
+          <li className={worker.healthy ? 'ok' : 'bad'}>
+            Worker 心跳：{worker.healthy ? '正常' : '未连接或已过期'}
           </li>
-          <li className={env.hasAgentId ? 'ok' : 'bad'}>
-            DINGTALK_AGENT_ID：{env.hasAgentId ? '已配置' : '未配置'}
+          <li className={worker.appBaseUrlConfigured ? 'ok' : 'bad'}>
+            APP_BASE_URL：{worker.appBaseUrlConfigured ? '已配置' : '未配置'}
           </li>
-          <li className={env.hasAppBaseUrl ? 'ok' : 'bad'}>
-            APP_BASE_URL：{env.hasAppBaseUrl ? '已配置' : '未配置'}
-          </li>
+          <li className="ok">DWS 凭证：仅由独立 Worker 管理</li>
         </ul>
         <p className="subtle">
-          登录用的 Client ID/Secret 可复用；还需补 AgentId 与 APP_BASE_URL。修改 `.env` 后请重启
-          `npm run dev`。开放平台需开通待办写权限、工作通知权限，以及通讯录部门信息和部门成员读取权限。
+          Web 服务只创建任务，不读取 DWS 登录态，也不会在请求中启动 dws-cli。
+          目录匹配和通知失败会保留在任务列表中，需由 Worker 重试或人工处理。
         </p>
+      </div>
+
+      <div className="dingtalk-settings-block">
+        <h2>最近外部任务</h2>
+        {jobs.length ? (
+          <ul className="space-y-2 text-xs">
+            {jobs.slice(0, 10).map((job) => (
+              <li className="rounded border border-border px-3 py-2" key={job.id}>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span>{job.kind}</span>
+                  <span className={job.status === 'failed' ? 'text-red-700' : job.status === 'succeeded' ? 'text-green-700' : 'text-amber-700'}>
+                    {job.status} · 尝试 {job.attempts}
+                  </span>
+                </div>
+                {job.lastError ? <p className="mt-1 text-red-700">{job.lastError}</p> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="subtle">暂无外部任务。</p>
+        )}
       </div>
 
       {message ? <p className="dingtalk-feedback ok">{message}</p> : null}

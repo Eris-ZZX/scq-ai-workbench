@@ -92,7 +92,7 @@ export default async function AiResourceDashboardPage({
         />
         <DistributionTable
           title="用户所在小组"
-          subtitle="按钉钉组织主部门统计"
+          subtitle="按 DWS 组织目录主部门统计"
           rows={dashboard.groupDistribution}
           showPercent
         />

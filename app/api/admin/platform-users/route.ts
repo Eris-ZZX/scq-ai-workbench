@@ -32,6 +32,7 @@ function userWhere(query: string) {
 const userSelect = {
   id: true,
   username: true,
+  displayName: true,
   email: true,
   avatar: true,
   platformRole: true,
@@ -42,6 +43,9 @@ const userSelect = {
   dingtalkUserId: true,
   supervisorDingtalkUserId: true,
   supervisorName: true,
+  directoryUserId: true,
+  directorySupervisorUserId: true,
+  directorySupervisorName: true,
   syncAt: true,
   createdAt: true,
   updatedAt: true,
@@ -81,13 +85,14 @@ function serializeUser(user: any) {
 
   return {
     ...user,
-    source: user.externalSource || 'local',
+    source: user.externalSource || (user.directoryUserId ? 'dws' : 'local'),
     platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
     workbenchRole: user.role,
     supervisor: {
-      dingtalkUserId: user.supervisorDingtalkUserId ?? null,
-      name: user.supervisorName ?? null,
+      directoryUserId: user.directorySupervisorUserId ?? user.supervisorDingtalkUserId ?? null,
+      name: user.directorySupervisorName ?? user.supervisorName ?? null,
     },
+    directoryUserId: user.directoryUserId ?? null,
     organization: organizationBinding?.department ?? null,
     position,
     aiResourceRole: aiMembership?.role ?? null,

@@ -64,6 +64,10 @@ MINIO_HOST_PORT=9100
 MINIO_CONSOLE_HOST_PORT=9101
 
 ADMIN_INITIAL_PASSWORD=...   # 仅空库首次创建 admin 需要
+
+AUTHING_ISSUER=https://authing.example.com/oidc
+AUTHING_CLIENT_ID=...
+AUTHING_CLIENT_SECRET=...
 ```
 
 `app` 容器内会使用 Compose 网络连接 `db` / `minio`（见 `docker-compose.yml`）。若不用 Compose 而直连外部库，则还需配置：
@@ -75,23 +79,20 @@ MINIO_PORT=443
 MINIO_USE_SSL=true
 ```
 
-钉钉按需配置，并保证回调与公网入口一致：
+Authing 应用的回调地址须登记为：
 
-```dotenv
-DINGTALK_CLIENT_ID=
-DINGTALK_CLIENT_SECRET=
-DINGTALK_REDIRECT_URI=https://qe.example.com/api/auth/dingtalk/callback
-DINGTALK_AGENT_ID=
+```text
+https://qe.example.com/api/auth/authing/callback
 ```
 
-不使用 Authing。管理员账号存在后，不会再用 `ADMIN_INITIAL_PASSWORD` 重置密码；该值勿写入日志或文档明文。
+Authing 只负责身份认证；平台角色、工作台角色、AI 资源角色、项目成员关系和禁用状态仍由本地数据库维护。管理员账号存在后，不会再用 `ADMIN_INITIAL_PASSWORD` 重置密码；该值勿写入日志或文档明文。
 
 ## 公网入口与安全组
 
 - 应用对公网暴露 **TCP `APP_HOST_PORT`（默认 3000）**。
 - PostgreSQL / MinIO 端口应只绑定 `127.0.0.1`（Compose 默认如此），不要对公网开放。
 - 在云厂商安全组 / 防火墙放行应用端口；宿主机 `firewalld`/`nftables` 若启用，需同步放行。
-- 更新 `APP_BASE_URL` 与 `DINGTALK_REDIRECT_URI` 后需重建/重启 `app`，并在钉钉开放平台同步回调地址。
+- 更新 `APP_BASE_URL` 或 `AUTHING_*` 后需重建/重启 `app`，并在 Authing 应用同步回调地址。
 
 ## 容器部署（Linux）
 
@@ -105,6 +106,9 @@ docker compose up -d db minio
 
 # 构建并启动应用（profile: app）
 docker compose --profile app up -d --build
+
+# 受控 Worker 主机另行配置 DWS_CONFIG_DIR 后：
+docker compose --profile worker up -d --build dws-worker
 ```
 
 查看状态：
@@ -166,8 +170,8 @@ pnpm build
 - 空库首次启动与 `admin` 创建；
 - 两实例并发启动（advisory lock）；
 - MinIO 上传、下载、托管 HTML、缺对象 404；
-- 本地 `admin` 登录；
-- 钉钉扫码、岗位同步、通知/待办 smoke（若启用）。
+- Authing 登录、重复回调、禁用账号阻断；
+- DWS 组织目录同步、岗位/主管匹配、通知/待办 outbox 和 Worker 失败重试。
 
 ## 常用排障
 
@@ -175,5 +179,6 @@ pnpm build
 |------|------|
 | 公网打不开、本机 `curl 127.0.0.1:3000` 正常 | 安全组 / 防火墙未放行应用端口 |
 | 容器反复重启 | `docker compose logs app`；查 `DATABASE_URL`/MinIO/JWT/`ADMIN_INITIAL_PASSWORD` |
-| 钉钉回调失败 | `DINGTALK_REDIRECT_URI` 与 `APP_BASE_URL`、开放平台配置不一致 |
+| Authing 回调失败 | `AUTHING_ISSUER`、OIDC discovery、`APP_BASE_URL` 与 Authing 回调白名单不一致 |
+| DWS 任务持续失败 | 查看 `external_job_outbox` 和管理后台任务错误；确认 Worker 专用账号、`DWS_CONFIG_DIR`、`dws schema` 权限和组织可见范围 |
 | 上传页在 `http://公网IP:端口` 白屏/加载失败 | 确认已部署含非安全上下文 ID 回退的版本；硬刷新缓存 |

@@ -14,7 +14,9 @@
     "db:check": "node scripts/check-migrations.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:bootstrap": "tsx db/bootstrap.ts"
+    "db:bootstrap": "tsx db/bootstrap.ts",
+    "dws:worker": "tsx scripts/dws-worker.ts",
+    "authing:migrate-identities": "tsx scripts/migrate-authing-identities.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
