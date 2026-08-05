@@ -58,6 +58,14 @@ const userSelect = {
   projectMembers: {
     select: { id: true },
   },
+  dingtalkDepartments: {
+    where: { isPrimary: true },
+    select: {
+      department: {
+        select: { id: true, name: true, parentId: true },
+      },
+    },
+  },
 } as const;
 
 function serializeUser(user: any) {
@@ -67,6 +75,9 @@ function serializeUser(user: any) {
   const aiMembership = Array.isArray(user.aiResourceMembership)
     ? user.aiResourceMembership[0] ?? null
     : user.aiResourceMembership ?? null;
+  const organizationBinding = Array.isArray(user.dingtalkDepartments)
+    ? user.dingtalkDepartments[0] ?? null
+    : user.dingtalkDepartments ?? null;
 
   return {
     ...user,
@@ -77,6 +88,7 @@ function serializeUser(user: any) {
       dingtalkUserId: user.supervisorDingtalkUserId ?? null,
       name: user.supervisorName ?? null,
     },
+    organization: organizationBinding?.department ?? null,
     position,
     aiResourceRole: aiMembership?.role ?? null,
     aiResourceMembershipId: aiMembership?.id ?? null,
@@ -85,6 +97,7 @@ function serializeUser(user: any) {
     aiResourceMembership: undefined,
     role: undefined,
     projectMembers: undefined,
+    dingtalkDepartments: undefined,
   };
 }
 

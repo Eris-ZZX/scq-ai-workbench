@@ -79,9 +79,11 @@ const serializedUser = {
   positionBinding: undefined,
   aiResourceMembership: undefined,
   position: null,
+  organization: null,
   aiResourceRole: null,
   projectCount: 0,
   role: undefined,
+  dingtalkDepartments: undefined,
 };
 
 describe('/api/admin/platform-users', () => {
@@ -97,10 +99,46 @@ describe('/api/admin/platform-users', () => {
   it('rejects a non-admin before reading any permission data', async () => {
     mockRequireAdmin.mockResolvedValueOnce({ error: '需要系统管理员权限', status: 403 });
 
-    const response = (await GET(new Request('http://localhost/api/admin/platform-users') as never)) as unknown as MockResponse;
+    const response = (await GET({
+      nextUrl: { searchParams: new URLSearchParams() },
+    } as never)) as unknown as MockResponse;
 
     expect(response.status).toBe(403);
     expect(mockDatabase.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('serializes the primary DingTalk organization and preserves missing organization as null', async () => {
+    mockDatabase.user.findMany.mockResolvedValueOnce([
+      {
+        ...serializedUser,
+        id: 'user-with-org',
+        dingtalkDepartments: [{
+          department: { id: 'dept-1', name: '质量工程部', parentId: 'root' },
+        }],
+      },
+      {
+        ...serializedUser,
+        id: 'user-without-org',
+        dingtalkDepartments: [],
+      },
+    ]);
+
+    const response = (await GET({
+      nextUrl: { searchParams: new URLSearchParams() },
+    } as never)) as unknown as MockResponse;
+    const body = response.data as { users: Array<{ id: string; organization: unknown }> };
+
+    expect(response.status).toBe(200);
+    expect(body.users).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'user-with-org',
+        organization: { id: 'dept-1', name: '质量工程部', parentId: 'root' },
+      }),
+      expect.objectContaining({
+        id: 'user-without-org',
+        organization: null,
+      }),
+    ]));
   });
 
   it('protects the last active platform administrator', async () => {

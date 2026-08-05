@@ -24,7 +24,7 @@ export default async function PortalUsersPage() {
             </div>
             <h1 className="mt-1 text-2xl font-semibold text-foreground">用户与权限管理</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              分别维护平台角色、AI 资源库角色和质量工作台角色；项目权限请在质量工作台项目管理中维护。
+              统一维护所有分支应用共用的平台用户、钉钉组织信息和应用角色；项目权限请在质量工作台项目管理中维护。
             </p>
           </div>
         </header>

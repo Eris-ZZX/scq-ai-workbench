@@ -2787,24 +2787,6 @@ h3 {
   font-size: 16px;
 }
 
-.dingtalk-organization-sync {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  background: #fff;
-}
-
-.dingtalk-organization-sync > div {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
 .dingtalk-notification-list {
   display: grid;
   gap: 12px;
@@ -2881,11 +2863,6 @@ h3 {
   .admin-stat-grid,
   .admin-dashboard-grid {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .dingtalk-organization-sync {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .dingtalk-notification-card-head,

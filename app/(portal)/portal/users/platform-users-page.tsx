@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Plus, RefreshCw, Search, UserRound } from 'lucide-react';
+import type { DingTalkOrganizationSyncStatus } from '@/lib/dingtalk/organization';
 
 type Position = { id: string; name: string; roleName?: string | null };
+type Organization = { id: string; name: string; parentId: string | null };
 
 type PlatformUser = {
   id: string;
@@ -19,6 +21,7 @@ type PlatformUser = {
   syncAt: string | null;
   position: { id: string; positionRoleId: string; positionRole: Position } | null;
   supervisor: { dingtalkUserId: string | null; name: string | null };
+  organization: Organization | null;
   aiResourceRole: string | null;
   projectCount: number;
 };
@@ -45,6 +48,12 @@ function sourceLabel(source: string) {
   return source === 'dingtalk' ? '钉钉' : '本地';
 }
 
+function formatSyncTime(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN');
+}
+
 export default function PlatformUsersPage() {
   const [data, setData] = useState<PlatformData | null>(null);
   const [selectedId, setSelectedId] = useState('');
@@ -60,6 +69,8 @@ export default function PlatformUsersPage() {
   const [message, setMessage] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreate);
+  const [organizationSync, setOrganizationSync] = useState<DingTalkOrganizationSyncStatus>({ status: 'idle' });
+  const [syncingOrganization, setSyncingOrganization] = useState(false);
 
   const visibleUsers = useMemo(
     () => (data?.users ?? []).filter((user) => (
@@ -93,10 +104,23 @@ export default function PlatformUsersPage() {
       setSelectedId((current) => (
         next.users.some((user) => user.id === current) ? current : next.users[0]?.id ?? ''
       ));
+      void loadOrganizationSyncStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载用户失败。');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadOrganizationSyncStatus() {
+    try {
+      const response = await fetch('/api/admin/platform-users/organization', { cache: 'no-store' });
+      const payload = await response.json().catch(() => null);
+      if (response.ok && payload?.status) {
+        setOrganizationSync(payload.status);
+      }
+    } catch {
+      // The user list remains usable when the status endpoint is temporarily unavailable.
     }
   }
 
@@ -154,6 +178,31 @@ export default function PlatformUsersPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建用户失败。');
     } finally {
+      setSaving(false);
+    }
+  }
+
+  async function syncOrganization() {
+    setSaving(true);
+    setSyncingOrganization(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await fetch('/api/admin/platform-users/organization', { method: 'POST' });
+      const payload = await response.json().catch(() => null);
+      if (payload?.status) setOrganizationSync(payload.status);
+      if (!response.ok) {
+        setError(payload?.error ?? '钉钉组织同步失败。');
+        return;
+      }
+      setMessage(
+        `组织同步完成：${payload.status?.departmentCount ?? 0} 个部门，匹配 ${payload.status?.matchedUserCount ?? 0} 个用户。`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '钉钉组织同步失败。');
+    } finally {
+      setSyncingOrganization(false);
       setSaving(false);
     }
   }
@@ -226,6 +275,14 @@ export default function PlatformUsersPage() {
             </button>
             <button
               type="button"
+              className="inline-flex h-9 items-center gap-1 rounded border border-primary bg-primary/5 px-3 text-sm text-primary hover:bg-primary/10 disabled:opacity-50"
+              onClick={() => void syncOrganization()}
+              disabled={saving || syncingOrganization || organizationSync.status === 'running'}
+            >
+              {syncingOrganization || organizationSync.status === 'running' ? '同步中…' : '同步钉钉组织'}
+            </button>
+            <button
+              type="button"
               className="inline-flex h-9 items-center gap-1 rounded bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
               onClick={() => setShowCreate((current) => !current)}
               disabled={saving}
@@ -237,6 +294,16 @@ export default function PlatformUsersPage() {
         </div>
         {error ? <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
         {message ? <div className="mt-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{message}</div> : null}
+        <p className="mt-3 text-xs text-muted-foreground">
+          组织同步：
+          {organizationSync.status === 'running'
+            ? '同步中'
+            : organizationSync.status === 'success'
+              ? `最近成功 · ${formatSyncTime(organizationSync.finishedAt)} · ${organizationSync.departmentCount ?? 0} 个部门 · 匹配 ${organizationSync.matchedUserCount ?? 0} 个用户`
+              : organizationSync.status === 'failed'
+                ? `最近失败 · ${formatSyncTime(organizationSync.finishedAt)} · ${organizationSync.error ?? '请检查服务端日志'}`
+                : '尚未同步'}
+        </p>
       </section>
 
       {showCreate ? (
@@ -287,6 +354,8 @@ export default function PlatformUsersPage() {
                       {' · '}
                       工作台：{user.workbenchRole === 'admin' ? '应用管理员' : user.workbenchRole === 'manager' ? '项目管理者' : '用户'}
                       {' · '}
+                      组织：{user.organization?.name || '未同步组织'}
+                      {' · '}
                       {user.position?.positionRole.name || '未绑定岗位'}
                       {' · '}
                       {user.projectCount} 个项目
@@ -321,6 +390,20 @@ export default function PlatformUsersPage() {
               </div>
 
               <div className="space-y-3">
+                <div className="rounded border border-border bg-muted/20 p-3">
+                  <div className="mb-2 text-sm font-semibold text-foreground">组织属性</div>
+                  <div className="flex gap-3 overflow-x-auto">
+                    <ReadOnlyField label="组织小组（钉钉同步）">
+                      {selectedUser.organization?.name || '未同步组织'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="岗位（钉钉同步）">
+                      {selectedUser.position?.positionRole.name || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="直接上级（钉钉同步）">
+                      {selectedUser.supervisor.name || selectedUser.supervisor.dingtalkUserId || '尚未获取'}
+                    </ReadOnlyField>
+                  </div>
+                </div>
                 <PermissionCard title="平台角色" description="控制整个质量平台的全局管理权限。">
                   <PermissionField label="平台角色">
                     <select className="h-9 w-full rounded border border-border px-2 text-sm" value={selectedUser.platformRole} disabled={saving} onChange={(event) => void updatePermission('platform', { platformRole: event.target.value })}>
@@ -353,17 +436,6 @@ export default function PlatformUsersPage() {
                     </select>
                   </PermissionField>
                 </PermissionCard>
-              </div>
-              <div className="mt-3 rounded border border-border bg-muted/20 p-3">
-                <div className="mb-2 text-sm font-semibold text-foreground">组织属性</div>
-                <div className="flex gap-3 overflow-x-auto">
-                  <ReadOnlyField label="岗位（钉钉同步）">
-                    {selectedUser.position?.positionRole.name || '尚未获取'}
-                  </ReadOnlyField>
-                  <ReadOnlyField label="直接上级（钉钉同步）">
-                    {selectedUser.supervisor.name || selectedUser.supervisor.dingtalkUserId || '尚未获取'}
-                  </ReadOnlyField>
-                </div>
               </div>
             </div>
           </section>
