@@ -151,7 +151,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
             ELSE email
           END,
           avatar = COALESCE(${identity.avatar}::text, avatar)
-      WHERE id = ${user.id}::uuid
+      WHERE id = ${user.id}
     `;
 
     await transaction.$queryRaw`
