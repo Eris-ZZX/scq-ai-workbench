@@ -69,6 +69,16 @@ export const modelMetadata = {
         "type": "String",
         "nullable": true
       },
+      "jobNumber": {
+        "column": "job_number",
+        "type": "String",
+        "nullable": true
+      },
+      "mobile": {
+        "column": "mobile",
+        "type": "String",
+        "nullable": true
+      },
       "supervisorDingtalkUserId": {
         "column": "supervisor_dingtalk_user_id",
         "type": "String",
