@@ -10,11 +10,14 @@ import {
   findDingTalkUser,
   createDingTalkUser,
   syncDingTalkUser,
-  ensurePositionRole,
-  bindUserPosition,
   type DingTalkProfile,
 } from '@/lib/db/dingtalk';
-import { normalizeDepartmentIds, normalizeDepartmentOrders } from '@/lib/dingtalk/organization';
+import {
+  normalizeDepartmentIds,
+  normalizeDepartmentOrders,
+  ensurePositionRole,
+  bindUserPosition,
+} from '@/lib/dingtalk/organization';
 
 const STATE_COOKIE = 'dingtalk_oauth_state';
 
@@ -142,6 +145,8 @@ export async function GET(request: Request) {
                     errcode: number;
                     result?: {
                       title?: string;
+                      job_number?: string;
+                      mobile?: string;
                       managerUserid?: string;
                       manager_userid?: string;
                       deptIdList?: Array<number | string>;
@@ -153,6 +158,8 @@ export async function GET(request: Request) {
                   if (detail.errcode === 0 && detail.result) {
                     profile.departmentIds = normalizeDepartmentIds(detail.result);
                     profile.departmentOrders = normalizeDepartmentOrders(detail.result);
+                    profile.jobNumber = detail.result.job_number;
+                    profile.mobile = detail.result.mobile;
                     if (detail.result.title) {
                       profile.title = detail.result.title;
                       console.info('[dingtalk] user position synchronized');

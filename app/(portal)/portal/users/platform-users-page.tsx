@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Plus, RefreshCw, Search, UserRound } from 'lucide-react';
-import type { DingTalkOrganizationSyncStatus } from '@/lib/dingtalk/organization';
+import type {
+  DingTalkOrganizationSyncStatus,
+  DingTalkUserRefreshStatus,
+} from '@/lib/dingtalk/organization';
 
 type Position = { id: string; name: string; roleName?: string | null };
 type Organization = { id: string; name: string; parentId: string | null };
@@ -18,6 +21,8 @@ type PlatformUser = {
   source: string;
   externalSource: string | null;
   dingtalkUserId: string | null;
+  jobNumber: string | null;
+  mobile: string | null;
   syncAt: string | null;
   position: { id: string; positionRoleId: string; positionRole: Position } | null;
   supervisor: { dingtalkUserId: string | null; name: string | null };
@@ -71,6 +76,8 @@ export default function PlatformUsersPage() {
   const [createForm, setCreateForm] = useState(emptyCreate);
   const [organizationSync, setOrganizationSync] = useState<DingTalkOrganizationSyncStatus>({ status: 'idle' });
   const [syncingOrganization, setSyncingOrganization] = useState(false);
+  const [userRefresh, setUserRefresh] = useState<DingTalkUserRefreshStatus>({ status: 'idle' });
+  const [refreshingUsers, setRefreshingUsers] = useState(false);
 
   const visibleUsers = useMemo(
     () => (data?.users ?? []).filter((user) => (
@@ -207,6 +214,31 @@ export default function PlatformUsersPage() {
     }
   }
 
+  async function refreshUserInfo() {
+    setSaving(true);
+    setRefreshingUsers(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await fetch('/api/admin/platform-users/refresh', { method: 'POST' });
+      const payload = await response.json().catch(() => null);
+      if (payload?.status) setUserRefresh(payload.status);
+      if (!response.ok) {
+        setError(payload?.error ?? '用户信息刷新失败。');
+        return;
+      }
+      setMessage(
+        `刷新完成：更新 ${payload.status?.updated ?? 0} 个用户，失败 ${payload.status?.failed ?? 0} 个。`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '用户信息刷新失败。');
+    } finally {
+      setRefreshingUsers(false);
+      setSaving(false);
+    }
+  }
+
   if (loading && !data) {
     return <div className="rounded-lg border border-border bg-white p-8 text-sm text-muted-foreground">加载用户与权限...</div>;
   }
@@ -283,6 +315,14 @@ export default function PlatformUsersPage() {
             </button>
             <button
               type="button"
+              className="inline-flex h-9 items-center gap-1 rounded border border-primary bg-primary/5 px-3 text-sm text-primary hover:bg-primary/10 disabled:opacity-50"
+              onClick={() => void refreshUserInfo()}
+              disabled={saving || refreshingUsers || userRefresh.status === 'running'}
+            >
+              {refreshingUsers || userRefresh.status === 'running' ? '刷新中…' : '刷新用户信息'}
+            </button>
+            <button
+              type="button"
               className="inline-flex h-9 items-center gap-1 rounded bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
               onClick={() => setShowCreate((current) => !current)}
               disabled={saving}
@@ -303,6 +343,14 @@ export default function PlatformUsersPage() {
               : organizationSync.status === 'failed'
                 ? `最近失败 · ${formatSyncTime(organizationSync.finishedAt)} · ${organizationSync.error ?? '请检查服务端日志'}`
                 : '尚未同步'}
+          {' · '}用户信息刷新：
+          {userRefresh.status === 'running'
+            ? '刷新中'
+            : userRefresh.status === 'success'
+              ? `最近成功 · ${formatSyncTime(userRefresh.finishedAt)} · 更新 ${userRefresh.updated ?? 0} 个 · 失败 ${userRefresh.failed ?? 0} 个`
+              : userRefresh.status === 'failed'
+                ? `最近失败 · ${formatSyncTime(userRefresh.finishedAt)} · ${userRefresh.error ?? '请检查服务端日志'}`
+                : '尚未刷新'}
         </p>
       </section>
 
@@ -393,6 +441,12 @@ export default function PlatformUsersPage() {
                 <div className="rounded border border-border bg-muted/20 p-3">
                   <div className="mb-2 text-sm font-semibold text-foreground">组织属性</div>
                   <div className="flex gap-3 overflow-x-auto">
+                    <ReadOnlyField label="工号（钉钉同步）">
+                      {selectedUser.jobNumber || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="手机号（钉钉同步）">
+                      {selectedUser.mobile || '尚未获取'}
+                    </ReadOnlyField>
                     <ReadOnlyField label="组织小组（钉钉同步）">
                       {selectedUser.organization?.name || '未同步组织'}
                     </ReadOnlyField>

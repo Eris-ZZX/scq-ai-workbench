@@ -17,6 +17,10 @@ export interface DingTalkProfile {
   title?: string;
   /** 企业通讯录 userid */
   dingtalkUserId?: string;
+  /** 钉钉通讯录工号 */
+  jobNumber?: string;
+  /** 钉钉通讯录手机号 */
+  mobile?: string;
   /** 直属上级企业通讯录 userid */
   supervisorDingtalkUserId?: string;
   /** 直属上级姓名 */
@@ -39,34 +43,6 @@ export async function findDingTalkUser(unionId: string) {
   });
 }
 
-/** 根据钉钉 title 确保存在对应岗位，返回岗位 ID */
-export async function ensurePositionRole(title: string): Promise<string | null> {
-  if (!title.trim()) return null;
-  const t = title.trim();
-
-  const existing = await db.positionRole.findFirst({
-    where: { name: t, isActive: true },
-    select: { id: true },
-  });
-  if (existing) return existing.id;
-
-  const count = await db.positionRole.count();
-  const created = await db.positionRole.create({
-    data: { name: t, sortOrder: count + 100 },
-    select: { id: true },
-  });
-  return created.id;
-}
-
-/** 为用户绑定岗位 */
-export async function bindUserPosition(userId: string, positionRoleId: string) {
-  await db.userPosition.upsert({
-    where: { userId },
-    create: { userId, positionRoleId },
-    update: { positionRoleId },
-  });
-}
-
 function isUniqueConflict(err: unknown): boolean {
   return isUniqueViolation(err);
 }
@@ -85,6 +61,8 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
         externalSource: 'dingtalk',
         externalId: profile.unionId,
         dingtalkUserId: profile.dingtalkUserId ?? null,
+        jobNumber: profile.jobNumber ?? null,
+        mobile: profile.mobile ?? null,
         supervisorDingtalkUserId: profile.supervisorDingtalkUserId ?? null,
         supervisorName: profile.supervisorName ?? null,
         syncAt: new Date(),
@@ -135,6 +113,8 @@ export async function syncDingTalkUser(userId: string, profile: DingTalkProfile)
       email: profile.email ?? undefined,
       avatar: profile.avatarUrl ?? undefined,
       dingtalkUserId: profile.dingtalkUserId ?? undefined,
+      jobNumber: profile.jobNumber ?? undefined,
+      mobile: profile.mobile ?? undefined,
       supervisorDingtalkUserId: profile.supervisorDingtalkUserId ?? undefined,
       supervisorName: profile.supervisorName ?? undefined,
       syncAt: new Date(),

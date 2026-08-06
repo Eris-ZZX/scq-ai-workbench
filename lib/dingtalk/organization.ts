@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { db, type DatabaseClient } from '@/lib/database';
 import { getCorpAccessToken } from './token';
+import { resolveUserIdByUnionId } from './users';
 
 const ROOT_DEPARTMENT_ID = '1';
 const PAGE_SIZE = 100;
@@ -368,4 +369,191 @@ export async function saveDingTalkOrganizationSyncStatus(
       updatedAt: new Date(),
     },
   });
+}
+
+// ---- 用户详情刷新：工号 / 手机号 / 邮箱 / 岗位 / 直接上级 ----
+
+const USER_REFRESH_SETTING_KEY = 'dingtalk.user.refresh';
+
+export type DingTalkUserRefreshStatus = {
+  status: 'idle' | 'running' | 'success' | 'failed';
+  startedAt?: string;
+  finishedAt?: string;
+  actorUsername?: string;
+  total?: number;
+  updated?: number;
+  failed?: number;
+  error?: string;
+};
+
+export async function getDingTalkUserRefreshStatus(): Promise<DingTalkUserRefreshStatus> {
+  const setting = await db.appSetting.findUnique({
+    where: { key: USER_REFRESH_SETTING_KEY },
+    select: { value: true },
+  });
+  if (!setting) return { status: 'idle' };
+  try {
+    return JSON.parse(setting.value) as DingTalkUserRefreshStatus;
+  } catch {
+    return { status: 'idle' };
+  }
+}
+
+export async function saveDingTalkUserRefreshStatus(
+  status: DingTalkUserRefreshStatus,
+  updatedById?: string,
+) {
+  await db.appSetting.upsert({
+    where: { key: USER_REFRESH_SETTING_KEY },
+    create: {
+      key: USER_REFRESH_SETTING_KEY,
+      value: JSON.stringify(status),
+      updatedById: updatedById ?? null,
+    },
+    update: {
+      value: JSON.stringify(status),
+      updatedById: updatedById ?? null,
+      updatedAt: new Date(),
+    },
+  });
+}
+
+/** 根据钉钉 title 确保存在对应岗位，返回岗位 ID */
+export async function ensurePositionRole(title: string): Promise<string | null> {
+  if (!title.trim()) return null;
+  const t = title.trim();
+
+  const existing = await db.positionRole.findFirst({
+    where: { name: t, isActive: true },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const count = await db.positionRole.count();
+  const created = await db.positionRole.create({
+    data: { name: t, sortOrder: count + 100 },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/** 为用户绑定岗位 */
+export async function bindUserPosition(userId: string, positionRoleId: string) {
+  await db.userPosition.upsert({
+    where: { userId },
+    create: { userId, positionRoleId },
+    update: { positionRoleId },
+  });
+}
+
+type DingTalkUserDetail = {
+  userid?: string;
+  name?: string;
+  mobile?: string;
+  email?: string;
+  title?: string;
+  job_number?: string;
+  manager_userid?: string;
+};
+
+async function fetchDingTalkUserDetail(userid: string): Promise<DingTalkUserDetail> {
+  return callDingTalk<DingTalkUserDetail>('/topapi/v2/user/get', {
+    userid,
+    language: 'zh_CN',
+  });
+}
+
+const USER_DETAIL_BATCH_SIZE = 10;
+const USER_DETAIL_BATCH_DELAY_MS = 200;
+
+/**
+ * 全量刷新钉钉用户的工号、手机号、邮箱、岗位、直接上级。
+ * 只处理 externalSource='dingtalk' 的用户；单个用户失败不中断整体。
+ */
+export async function refreshDingTalkUserDetails(): Promise<{ total: number; updated: number; failed: number }> {
+  const localUsers = await db.user.findMany({
+    where: { externalSource: 'dingtalk' },
+    select: { id: true, dingtalkUserId: true, externalId: true },
+  });
+
+  // 补全缺失的钉钉 userid
+  const withUserIds: Array<{ id: string; dingtalkUserId: string }> = [];
+  for (const user of localUsers) {
+    if (user.dingtalkUserId) {
+      withUserIds.push({ id: user.id, dingtalkUserId: user.dingtalkUserId });
+      continue;
+    }
+    if (user.externalId) {
+      const resolved = await resolveUserIdByUnionId(user.externalId);
+      if (resolved) withUserIds.push({ id: user.id, dingtalkUserId: resolved });
+    }
+  }
+
+  // 分批并发拉取详情（限流保护）
+  const details = new Map<string, DingTalkUserDetail>();
+  for (let offset = 0; offset < withUserIds.length; offset += USER_DETAIL_BATCH_SIZE) {
+    const chunk = withUserIds.slice(offset, offset + USER_DETAIL_BATCH_SIZE);
+    await Promise.all(chunk.map(async ({ dingtalkUserId }) => {
+      try {
+        details.set(dingtalkUserId, await fetchDingTalkUserDetail(dingtalkUserId));
+      } catch (error) {
+        console.error(`[dingtalk] 用户详情获取失败: ${dingtalkUserId}`, error);
+      }
+    }));
+    if (offset + USER_DETAIL_BATCH_SIZE < withUserIds.length) {
+      await new Promise((resolve) => setTimeout(resolve, USER_DETAIL_BATCH_DELAY_MS));
+    }
+  }
+
+  // 补拉直接上级姓名
+  const managerIds = [...new Set(
+    Array.from(details.values())
+      .map((detail) => detail.manager_userid)
+      .filter((value): value is string => Boolean(value)),
+  )];
+  const managerNames = new Map<string, string>();
+  for (const managerId of managerIds) {
+    try {
+      const manager = await fetchDingTalkUserDetail(managerId);
+      if (manager.name) managerNames.set(managerId, manager.name);
+    } catch {
+      // 上级详情失败不阻塞主流程
+    }
+  }
+
+  // 写库（有值才更新，避免权限缺失时清空既有数据）
+  let updated = 0;
+  let failed = 0;
+  for (const { id, dingtalkUserId } of withUserIds) {
+    const detail = details.get(dingtalkUserId);
+    if (!detail) {
+      failed += 1;
+      continue;
+    }
+    try {
+      await db.user.update({
+        where: { id },
+        data: {
+          mobile: detail.mobile?.trim() || undefined,
+          email: detail.email?.trim() || undefined,
+          jobNumber: detail.job_number?.trim() || undefined,
+          supervisorDingtalkUserId: detail.manager_userid || undefined,
+          supervisorName: detail.manager_userid
+            ? (managerNames.get(detail.manager_userid) ?? undefined)
+            : undefined,
+          syncAt: new Date(),
+        },
+      });
+      if (detail.title?.trim()) {
+        const roleId = await ensurePositionRole(detail.title);
+        if (roleId) await bindUserPosition(id, roleId);
+      }
+      updated += 1;
+    } catch (error) {
+      console.error(`[dingtalk] 用户信息更新失败: ${id}`, error);
+      failed += 1;
+    }
+  }
+
+  return { total: withUserIds.length, updated, failed };
 }

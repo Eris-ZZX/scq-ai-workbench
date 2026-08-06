@@ -18,6 +18,8 @@ export const User = pgTable('users', {
 	externalSource: text('external_source'),
 	externalId: text('external_id'),
 	dingtalkUserId: text('dingtalk_user_id'),
+	jobNumber: text('job_number'),
+	mobile: text('mobile'),
 	supervisorDingtalkUserId: text('supervisor_dingtalk_user_id'),
 	supervisorName: text('supervisor_name'),
 	syncAt: timestamp('sync_at', { precision: 3, withTimezone: true })
