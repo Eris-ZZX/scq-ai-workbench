@@ -27,16 +27,19 @@ function failureCode(error: unknown) {
   return 'authing';
 }
 
-function redirectFailure(request: NextRequest, code: string) {
+function redirectFailure(code: string) {
+  // 用 APP_BASE_URL 作为重定向基准：容器内 request.url 的 host 是 0.0.0.0，
+  // 直接基于它拼 URL 会把用户带向无法访问的 0.0.0.0:3000。
+  const baseUrl = process.env.APP_BASE_URL?.replace(/\/+$/, '');
   const response = NextResponse.redirect(
-    new URL(`/login?error=${encodeURIComponent(code)}`, request.url),
+    baseUrl ? `${baseUrl}/login?error=${encodeURIComponent(code)}` : `/login?error=${encodeURIComponent(code)}`,
   );
   for (const cookie of TRANSIENT_COOKIES) response.cookies.delete(cookie);
   return response;
 }
 
 export async function GET(request: NextRequest) {
-  if (!authingEnabled()) return redirectFailure(request, 'authing_config');
+  if (!authingEnabled()) return redirectFailure('authing_config');
 
   const jar = request.cookies;
   const returnTo = safeAuthingReturnPath(jar.get('authing_return_to')?.value);
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest) {
   const nonce = jar.get('authing_nonce')?.value;
 
   if (!code || !state || !verifier || !expectedState || state !== expectedState || !nonce) {
-    return redirectFailure(request, 'authing_state');
+    return redirectFailure('authing_state');
   }
 
   try {
@@ -77,11 +80,14 @@ export async function GET(request: NextRequest) {
       platformRole: user.platformRole,
     });
 
-    const response = NextResponse.redirect(new URL(returnTo, request.url));
+    const baseUrl = process.env.APP_BASE_URL?.replace(/\/+$/, '');
+    const response = NextResponse.redirect(
+      baseUrl ? new URL(returnTo, `${baseUrl}/`).toString() : returnTo,
+    );
     for (const cookie of TRANSIENT_COOKIES) response.cookies.delete(cookie);
     return response;
   } catch (error) {
     console.error('[authing] callback failed', error);
-    return redirectFailure(request, failureCode(error));
+    return redirectFailure(failureCode(error));
   }
 }
