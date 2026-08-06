@@ -41,7 +41,6 @@ const userSelect = {
   externalId: true,
   dingtalkUserId: true,
   jobNumber: true,
-  mobile: true,
   supervisorDingtalkUserId: true,
   supervisorName: true,
   syncAt: true,

@@ -449,7 +449,6 @@ export async function bindUserPosition(userId: string, positionRoleId: string) {
 type DingTalkUserDetail = {
   userid?: string;
   name?: string;
-  mobile?: string;
   email?: string;
   title?: string;
   job_number?: string;
@@ -467,7 +466,7 @@ const USER_DETAIL_BATCH_SIZE = 10;
 const USER_DETAIL_BATCH_DELAY_MS = 200;
 
 /**
- * 全量刷新钉钉用户的工号、手机号、邮箱、岗位、直接上级。
+ * 全量刷新钉钉用户的工号、邮箱、岗位、直接上级。
  * 只处理 externalSource='dingtalk' 的用户；单个用户失败不中断整体。
  */
 export async function refreshDingTalkUserDetails(): Promise<{ total: number; updated: number; failed: number }> {
@@ -534,7 +533,6 @@ export async function refreshDingTalkUserDetails(): Promise<{ total: number; upd
       await db.user.update({
         where: { id },
         data: {
-          mobile: detail.mobile?.trim() || undefined,
           email: detail.email?.trim() || undefined,
           jobNumber: detail.job_number?.trim() || undefined,
           supervisorDingtalkUserId: detail.manager_userid || undefined,

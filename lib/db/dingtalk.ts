@@ -19,8 +19,6 @@ export interface DingTalkProfile {
   dingtalkUserId?: string;
   /** 钉钉通讯录工号 */
   jobNumber?: string;
-  /** 钉钉通讯录手机号 */
-  mobile?: string;
   /** 直属上级企业通讯录 userid */
   supervisorDingtalkUserId?: string;
   /** 直属上级姓名 */
@@ -62,7 +60,6 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
         externalId: profile.unionId,
         dingtalkUserId: profile.dingtalkUserId ?? null,
         jobNumber: profile.jobNumber ?? null,
-        mobile: profile.mobile ?? null,
         supervisorDingtalkUserId: profile.supervisorDingtalkUserId ?? null,
         supervisorName: profile.supervisorName ?? null,
         syncAt: new Date(),
@@ -114,7 +111,6 @@ export async function syncDingTalkUser(userId: string, profile: DingTalkProfile)
       avatar: profile.avatarUrl ?? undefined,
       dingtalkUserId: profile.dingtalkUserId ?? undefined,
       jobNumber: profile.jobNumber ?? undefined,
-      mobile: profile.mobile ?? undefined,
       supervisorDingtalkUserId: profile.supervisorDingtalkUserId ?? undefined,
       supervisorName: profile.supervisorName ?? undefined,
       syncAt: new Date(),
