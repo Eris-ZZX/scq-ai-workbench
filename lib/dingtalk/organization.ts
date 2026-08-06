@@ -530,18 +530,23 @@ export async function refreshDingTalkUserDetails(): Promise<{ total: number; upd
       continue;
     }
     try {
-      await db.user.update({
-        where: { id },
-        data: {
-          email: detail.email?.trim() || undefined,
-          jobNumber: detail.job_number?.trim() || undefined,
-          supervisorDingtalkUserId: detail.manager_userid || undefined,
-          supervisorName: detail.manager_userid
-            ? (managerNames.get(detail.manager_userid) ?? undefined)
-            : undefined,
-          syncAt: new Date(),
-        },
-      });
+      // 用原生 SQL 更新，绕过 Drizzle 的 updatedAt $onUpdate 钩子：
+      // 刷新用户信息会更新当前登录用户，若触发 updatedAt 变更，
+      // 会话校验（JWT 签发时间 < updatedAt）会失败导致登录态被弹出。
+      await db.$queryRaw`
+        UPDATE users
+        SET email = COALESCE(${detail.email?.trim() ?? null}::text, email),
+            job_number = COALESCE(${detail.job_number?.trim() ?? null}::text, job_number),
+            supervisor_dingtalk_user_id = COALESCE(
+              ${detail.manager_userid ?? null}::text, supervisor_dingtalk_user_id
+            ),
+            supervisor_name = COALESCE(
+              ${(detail.manager_userid ? (managerNames.get(detail.manager_userid) ?? null) : null)}::text,
+              supervisor_name
+            ),
+            sync_at = now()
+        WHERE id = ${id}
+      `;
       if (detail.title?.trim()) {
         const roleId = await ensurePositionRole(detail.title);
         if (roleId) await bindUserPosition(id, roleId);
