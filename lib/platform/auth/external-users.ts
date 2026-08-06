@@ -143,15 +143,15 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
 
     await transaction.$queryRaw`
       UPDATE users
-      SET display_name = COALESCE(${identity.name}, display_name),
+      SET display_name = COALESCE(${identity.name}::text, display_name),
           email = CASE
-            WHEN ${identity.email} IS NOT NULL
-              AND (email IS NULL OR lower(email) = lower(${identity.email}))
-            THEN ${identity.email}
+            WHEN ${identity.email}::text IS NOT NULL
+              AND (email IS NULL OR lower(email) = lower(${identity.email}::text))
+            THEN ${identity.email}::text
             ELSE email
           END,
-          avatar = COALESCE(${identity.avatar}, avatar)
-      WHERE id = ${user.id}
+          avatar = COALESCE(${identity.avatar}::text, avatar)
+      WHERE id = ${user.id}::uuid
     `;
 
     await transaction.$queryRaw`
