@@ -87,7 +87,10 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-qe}:${POSTGRES_PASSWORD:-dev-only-change-me}@db:5432/${POSTGRES_DB:-qe}
       APP_BASE_URL: ${APP_BASE_URL:-http://app:3000}
+      # HOME 指向挂载卷，使 dws 的 ~/.dws 与 ~/.local/share/dws-cli 登录态持久化
+      HOME: /run/dws
       DWS_CONFIG_DIR: /run/dws
+      DWS_DISABLE_KEYCHAIN: "1"
       DWS_CLI_COMMAND: ${DWS_CLI_COMMAND:-dws}
       DWS_CLI_TIMEOUT_MS: ${DWS_CLI_TIMEOUT_MS:-30000}
       DWS_WORKER_ID: ${DWS_WORKER_ID:-dws-worker}
