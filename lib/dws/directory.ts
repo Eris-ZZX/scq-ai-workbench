@@ -75,7 +75,7 @@ export function normalizeDwsDepartment(
 }
 
 export function normalizeDwsUser(value: Record<string, unknown>): DwsDirectoryUser | null {
-  const id = stringValue(field(value, 'userId', 'userid', 'user_id', 'id'));
+  const id = stringValue(field(value, 'userId', 'userid', 'user_id', 'id', 'orgUserId', 'org_user_id'));
   if (!id) return null;
 
   const departmentIds = normalizeIds(field(
@@ -85,14 +85,41 @@ export function normalizeDwsUser(value: Record<string, unknown>): DwsDirectoryUs
     'deptIdList',
     'dept_id_list',
     'departments',
+    'depts',
   ));
   return {
     id,
     username: stringValue(field(value, 'username', 'jobNumber', 'job_number', 'employeeNo', 'employee_no')),
-    name: stringValue(field(value, 'name', 'displayName', 'display_name', 'nick', 'nickname'))?.trim() || id,
-    email: stringValue(field(value, 'email', 'workEmail', 'work_email', 'orgEmail', 'org_email')),
+    name: stringValue(field(
+      value,
+      'name',
+      'displayName',
+      'display_name',
+      'nick',
+      'nickname',
+      'orgUserName',
+      'org_user_name',
+    ))?.trim() || id,
+    email: stringValue(field(
+      value,
+      'email',
+      'workEmail',
+      'work_email',
+      'orgEmail',
+      'org_email',
+      'orgAuthEmail',
+      'org_auth_email',
+    )),
     avatar: stringValue(field(value, 'avatar', 'avatarUrl', 'avatar_url', 'photo')),
-    title: stringValue(field(value, 'title', 'position', 'jobTitle', 'job_title')),
+    title: stringValue(field(
+      value,
+      'title',
+      'position',
+      'jobTitle',
+      'job_title',
+      'orgTitle',
+      'org_title',
+    )),
     departmentIds,
     departmentOrders: normalizeOrders(field(value, 'departmentOrders', 'deptOrderList', 'dept_order_list')),
     supervisorId: stringValue(field(
@@ -102,8 +129,18 @@ export function normalizeDwsUser(value: Record<string, unknown>): DwsDirectoryUs
       'managerUserId',
       'manager_user_id',
       'managerId',
+      'orgMasterUserId',
+      'org_master_user_id',
     )),
-    supervisorName: stringValue(field(value, 'supervisorName', 'supervisor_name', 'managerName', 'manager_name')),
+    supervisorName: stringValue(field(
+      value,
+      'supervisorName',
+      'supervisor_name',
+      'managerName',
+      'manager_name',
+      'orgMasterDisplayName',
+      'org_master_display_name',
+    )),
   };
 }
 
@@ -191,7 +228,7 @@ export function createDwsDirectoryProvider(cli: DwsCli) {
             parentId,
             ...pagingArgs,
           ]);
-          const children = recordsFrom(payload, ['departments', 'list', 'items']);
+          const children = recordsFrom(payload, ['result', 'departments', 'list', 'items']);
           for (const value of children) {
             const department = normalizeDwsDepartment(value, parentId);
             if (!department) continue;
@@ -221,8 +258,10 @@ export function createDwsDirectoryProvider(cli: DwsCli) {
             department.id,
             ...pagingArgs,
           ]);
-          for (const value of recordsFrom(payload, ['users', 'members', 'list', 'items'])) {
-            const user = normalizeDwsUser(value);
+          for (const value of recordsFrom(payload, ['deptUserList', 'result', 'users', 'members', 'list', 'items'])) {
+            // CLI v1.x 成员包在 userInfo 里（deptUserList[].userInfo）
+            const unwrapped = field(value, 'userInfo', 'user_info', 'user');
+            const user = normalizeDwsUser(unwrapped ? asRecord(unwrapped) : value);
             if (!user) continue;
             if (!user.departmentIds.length) user.departmentIds = [department.id];
             const previous = users.get(user.id);
@@ -243,8 +282,10 @@ export function createDwsDirectoryProvider(cli: DwsCli) {
           '--ids',
           chunk.join(','),
         ]);
-        for (const value of recordsFrom(payload, ['users', 'list', 'items'])) {
-          const user = normalizeDwsUser(value);
+        for (const value of recordsFrom(payload, ['result', 'users', 'list', 'items'])) {
+          // CLI v1.x 用户详情在 orgEmployeeModel 里
+          const unwrapped = field(value, 'orgEmployeeModel', 'userInfo', 'user_info', 'user');
+          const user = normalizeDwsUser(unwrapped ? asRecord(unwrapped) : value);
           if (!user) continue;
           const previous = users.get(user.id);
           users.set(user.id, previous ? mergeUsers(previous, user) : user);
