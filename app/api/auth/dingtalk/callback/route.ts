@@ -107,6 +107,8 @@ export async function GET(request: Request) {
       nick: meData.nick || `dt_${(meData.unionId || meData.openId || 'user').slice(0, 8)}`,
       avatarUrl: meData.avatarUrl ?? undefined,
       email: meData.email ?? undefined,
+      // users/me 用个人 accessToken 调用，配置 Contact.User.Read + Contact.User.mobile 后返回手机号
+      mobile: meData.mobile ?? undefined,
     };
 
     // 第 2.5 步：获取钉钉通讯录职位（title）
