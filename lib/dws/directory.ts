@@ -219,8 +219,6 @@ export function createDwsDirectoryProvider(cli: DwsCli) {
             'list-members',
             '--depts',
             department.id,
-            '--page-size',
-            String(DIRECTORY_PAGE_SIZE),
             ...pagingArgs,
           ]);
           for (const value of recordsFrom(payload, ['users', 'members', 'list', 'items'])) {

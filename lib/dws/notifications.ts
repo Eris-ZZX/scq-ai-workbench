@@ -70,14 +70,14 @@ async function createTodo(
   cli: DwsCli,
   input: { title: string; description: string; executorId: string; priority?: number },
 ) {
+  // CLI v1.x 的 todo task create 不支持 --description，附加信息并入标题
+  const title = input.description ? `${input.title}\n${input.description}` : input.title;
   const response = await cli.run<unknown>([
     'todo',
     'task',
     'create',
     '--title',
-    input.title,
-    '--description',
-    input.description,
+    title,
     '--executors',
     input.executorId,
     '--priority',
