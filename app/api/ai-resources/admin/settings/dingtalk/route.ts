@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { db } from '@/lib/database';
 import { getLatestExternalJob, listExternalJobs } from '@/lib/external-jobs';
 import { getDwsWorkerStatus } from '@/lib/dws/status';
-import { sendTestNotifyToUser } from '@/lib/dingtalk/notify-review';
+import {
+  completeLatestTestTodo,
+  sendTestNotifyToUser,
+  sendTestTodoToUser,
+} from '@/lib/dingtalk/notify-review';
 import {
   EXTERNAL_NOTIFICATION_CATEGORIES,
   getExternalNotificationSettings,
@@ -114,10 +118,6 @@ export async function POST(request: NextRequest) {
       action?: string;
       category?: string;
     };
-    if (body.action !== 'test') {
-      return NextResponse.json({ error: '未知操作。' }, { status: 400 });
-    }
-
     const category = body.category
       ? categorySchema.safeParse(body.category)
       : { success: true as const, data: 'publish' as const };
@@ -125,7 +125,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '通知类别无效。' }, { status: 400 });
     }
 
-    const result = await sendTestNotifyToUser(actor.userId, category.data);
+    let result: { ok: boolean; error?: string; jobId?: string };
+    if (body.action === 'test-todo') {
+      result = await sendTestTodoToUser(actor.userId, category.data);
+    } else if (body.action === 'test-todo-complete') {
+      result = await completeLatestTestTodo();
+    } else if (body.action === 'test') {
+      result = await sendTestNotifyToUser(actor.userId, category.data);
+    } else {
+      return NextResponse.json({ error: '未知操作。' }, { status: 400 });
+    }
+
     if (!result.ok) {
       await appendAiResourceAuditLog({
         actorId: actor.userId,
@@ -134,11 +144,11 @@ export async function POST(request: NextRequest) {
         targetType: 'EXTERNAL_NOTIFICATIONS_SETTINGS',
         targetId: category.data,
         result: 'FAILED',
-        reason: result.error ?? '发送失败',
-        after: { category: category.data, audience: 'self' },
+        reason: result.error ?? '操作失败',
+        after: { category: category.data, audience: 'self', action: body.action },
         ...auditContext,
       }).catch(() => undefined);
-      return NextResponse.json({ error: result.error ?? '发送失败' }, { status: 400 });
+      return NextResponse.json({ error: result.error ?? '操作失败' }, { status: 400 });
     }
     await appendAiResourceAuditLog({
       actorId: actor.userId,
@@ -148,7 +158,7 @@ export async function POST(request: NextRequest) {
       targetId: category.data,
       result: 'SUCCESS',
       reason: '管理员手动发送测试通知',
-      after: { category: category.data, audience: 'self' },
+      after: { category: category.data, audience: 'self', action: body.action },
       ...auditContext,
     });
     return NextResponse.json({ ok: true });

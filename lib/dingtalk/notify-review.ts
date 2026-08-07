@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { db } from '@/lib/database';
-import { enqueueExternalJob, type ExternalJob } from '@/lib/external-jobs';
+import { enqueueExternalJob, listExternalJobs, type ExternalJob } from '@/lib/external-jobs';
 import type { ExternalNotificationCategory } from './settings';
 
 export type ResourceBroadcastInput = {
@@ -157,5 +157,69 @@ export async function sendTestNotifyToUser(
       ok: false,
       error: error instanceof Error ? error.message : '创建测试通知任务失败',
     };
+  }
+}
+
+/** 测试待办：创建一条与正式待办格式一致的待办（末尾【测试】），由 DWS Worker 执行 */
+export async function sendTestTodoToUser(
+  localUserId: string,
+  category: ExternalNotificationCategory = 'publish',
+): Promise<{ ok: boolean; error?: string; jobId?: string }> {
+  try {
+    const job = await enqueueExternalJob({
+      kind: 'todo.test',
+      idempotencyKey: `todo.test:${localUserId}:${category}:${Date.now()}`,
+      payload: {
+        localUserId,
+        category,
+        path: '/ai-resources/admin/notifications',
+      },
+    });
+    return { ok: true, jobId: job.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : '创建测试待办任务失败',
+    };
+  }
+}
+
+/** 完成测试待办：把最近一条测试待办标记为完成（由 DWS Worker 执行） */
+export async function completeLatestTestTodo(): Promise<{ ok: boolean; error?: string; jobId?: string }> {
+  try {
+    // 从 outbox 里找最近的 todo.test 成功任务，取其 taskId
+    const jobs = await listExternalJobs({ limit: 20 });
+    const testTodoJob = jobs.find(
+      (job) => job.kind === 'todo.test' && job.status === 'succeeded' && job.result,
+    );
+    if (!testTodoJob?.result) {
+      return { ok: false, error: '没有找到可完成的测试待办，请先创建一条测试待办。' };
+    }
+    const taskId = extractTaskIdFromResult(testTodoJob.result);
+    if (!taskId) {
+      return { ok: false, error: '测试待办结果缺少 taskId。' };
+    }
+    const job = await enqueueExternalJob({
+      kind: 'todo.test-complete',
+      idempotencyKey: `todo.test-complete:${taskId}:${Date.now()}`,
+      payload: { taskId },
+    });
+    return { ok: true, jobId: job.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : '创建测试完成待办任务失败',
+    };
+  }
+}
+
+function extractTaskIdFromResult(result: unknown): string | null {
+  if (typeof result !== 'string') return null;
+  try {
+    const parsed = JSON.parse(result);
+    const taskId = parsed?.result?.taskId ?? parsed?.taskId;
+    return typeof taskId === 'string' && taskId ? taskId : null;
+  } catch {
+    return null;
   }
 }

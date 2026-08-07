@@ -64,6 +64,10 @@ export function AdminDingTalkPanel({
   const [testingCategory, setTestingCategory] = useState<ExternalNotificationCategory | null>(
     null,
   );
+  const [testingTodoCategory, setTestingTodoCategory] = useState<ExternalNotificationCategory | null>(
+    null,
+  );
+  const [completingTodo, setCompletingTodo] = useState(false);
   const [pending, startTransition] = useTransition();
 
   async function reload() {
@@ -137,6 +141,53 @@ export function AdminDingTalkPanel({
     });
   }
 
+  function sendTestTodo(category: ExternalNotificationCategory) {
+    setMessage('');
+    setError('');
+    setTestingTodoCategory(category);
+    startTransition(async () => {
+      try {
+        const res = await fetch('/api/ai-resources/admin/settings/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'test-todo', category }),
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+          setError(getErrorMessage(body, '测试待办创建失败'));
+          return;
+        }
+        const definition = NOTIFICATION_DEFINITIONS.find((item) => item.category === category);
+        setMessage(`${definition?.title ?? '通知'}测试待办已创建，将由 DWS Worker 投递。`);
+      } finally {
+        setTestingTodoCategory(null);
+      }
+    });
+  }
+
+  function completeTestTodo() {
+    setMessage('');
+    setError('');
+    setCompletingTodo(true);
+    startTransition(async () => {
+      try {
+        const res = await fetch('/api/ai-resources/admin/settings/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'test-todo-complete' }),
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+          setError(getErrorMessage(body, '测试待办完成失败'));
+          return;
+        }
+        setMessage('最近一条测试待办已完成。');
+      } finally {
+        setCompletingTodo(false);
+      }
+    });
+  }
+
   return (
     <div className="dingtalk-settings">
       <div className="dingtalk-settings-block">
@@ -175,11 +226,34 @@ export function AdminDingTalkPanel({
                   >
                     {testing ? '发送中…' : '测试通知'}
                   </button>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={pending || testingTodoCategory === definition.category}
+                    onClick={() => sendTestTodo(definition.category)}
+                  >
+                    {testingTodoCategory === definition.category ? '创建中…' : '测试待办'}
+                  </button>
                 </div>
               </article>
             );
           })}
         </div>
+      </div>
+
+      <div className="dingtalk-settings-block">
+        <h2>测试工具</h2>
+        <p className="subtle">
+          完成最近一条已创建的测试待办（与正式待办相同的完成流程，末尾标记【测试】）。
+        </p>
+        <button
+          type="button"
+          className="button"
+          disabled={pending || completingTodo}
+          onClick={() => void completeTestTodo()}
+        >
+          {completingTodo ? '完成中…' : '完成最近测试待办'}
+        </button>
       </div>
 
       <div className="dingtalk-settings-block">
