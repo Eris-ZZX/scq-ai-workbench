@@ -1,8 +1,3 @@
-ALTER TABLE "users" ADD COLUMN "display_name" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "directory_user_id" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "directory_supervisor_user_id" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "directory_supervisor_name" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "unionid" text;--> statement-breakpoint
 ALTER TABLE "users" ADD COLUMN "phone_number" text;--> statement-breakpoint
 ALTER TABLE "users" ADD COLUMN "phone_number_verified" boolean;--> statement-breakpoint
 ALTER TABLE "users" ADD COLUMN "email_verified" boolean;--> statement-breakpoint
