@@ -73,30 +73,30 @@ export async function getDingTalkUnionId(userId: string): Promise<string | null>
   return readDingTalkUnionId(user);
 }
 
-/** Active AI-resource members who have a DingTalk corp userid (or resolvable unionId). */
+/**
+ * 所有激活的平台用户都是 AI 资源库成员（共用用户表），
+ * 发布通知发给所有有钉钉 userid（或可解析）的用户。
+ */
 export async function listPublishNotifyUserIds(): Promise<string[]> {
-  const members = await db.aiResourceMembership.findMany({
-    where: { user: { status: 'active' } },
+  const users = await db.user.findMany({
+    where: { status: 'active' },
     select: {
-      user: {
-        select: {
-          id: true,
-          dingtalkUserId: true,
-          externalSource: true,
-          externalId: true,
-        },
-      },
+      id: true,
+      dingtalkUserId: true,
+      unionid: true,
+      externalSource: true,
+      externalId: true,
     },
   });
 
   const userIds: string[] = [];
-  for (const row of members) {
-    const u = row.user;
+  for (const u of users) {
     if (u.dingtalkUserId) {
       userIds.push(u.dingtalkUserId);
       continue;
     }
-    if (u.externalSource === 'dingtalk' && u.externalId) {
+    const unionId = await readDingTalkUnionId(u);
+    if (unionId) {
       const resolved = await ensureDingTalkUserId(u.id);
       if (resolved) userIds.push(resolved);
     }

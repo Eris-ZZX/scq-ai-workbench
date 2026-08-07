@@ -98,7 +98,7 @@ describe('AI resource dashboard', () => {
       { label: '全部用户', count: 4 },
       { label: '活跃用户', count: 3 },
       { label: '停用用户', count: 1 },
-      { label: 'AI资源库成员', count: 2 },
+      { label: 'AI资源库成员', count: 3 },
     ]);
     expect(dashboard.groupDistribution).toContainEqual({ label: '品质工程部', count: 1 });
     expect(dashboard.groupDistribution).toContainEqual({ label: '未同步组织', count: 1 });

@@ -113,7 +113,8 @@ function serializeUser(user: any) {
     directoryUserId: user.directoryUserId ?? null,
     organization: organizationBinding?.department ?? null,
     position,
-    aiResourceRole: aiMembership?.role ?? null,
+    // 所有用户默认都是 AI 资源库成员（user 角色），仅提升（reviewer/admin）有成员行
+    aiResourceRole: aiMembership?.role ?? 'user',
     aiResourceMembershipId: aiMembership?.id ?? null,
     projectCount: user.projectMembers?.length ?? 0,
     positionBinding: undefined,
@@ -331,14 +332,21 @@ export async function PATCH(request: Request) {
         await assertNotLastEffectiveAdmin(tx, userId, role as 'user' | 'reviewer' | 'admin');
         const existing = await tx.aiResourceMembership.findUnique({ where: { userId } });
         const fromRole = existing?.role ?? null;
-        await (existing
-          ? tx.aiResourceMembership.update({
-              where: { userId },
-              data: { role, updatedById: auth.session.sub },
-            })
-          : tx.aiResourceMembership.create({
-              data: { userId, role, updatedById: auth.session.sub },
-            }));
+        // 所有用户默认都是 AI 资源库成员（user 角色），表里只存提升记录（reviewer/admin）
+        if (role === 'user') {
+          if (existing) {
+            await tx.aiResourceMembership.delete({ where: { userId } });
+          }
+        } else if (existing) {
+          await tx.aiResourceMembership.update({
+            where: { userId },
+            data: { role, updatedById: auth.session.sub },
+          });
+        } else {
+          await tx.aiResourceMembership.create({
+            data: { userId, role, updatedById: auth.session.sub },
+          });
+        }
         await writePermissionAudit(tx, {
           actorId: auth.session.sub,
           subjectUserId: userId,

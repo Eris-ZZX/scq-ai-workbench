@@ -81,7 +81,8 @@ export async function getAiResourceDashboard(
     db.user.count(),
     db.user.count({ where: { status: 'active' } }),
     db.user.count({ where: { status: 'disabled' } }),
-    db.aiResourceMembership.count({ where: { user: { status: 'active' } } }),
+    // 所有激活用户都是 AI 资源库成员（默认 user 角色）
+    db.user.count({ where: { status: 'active' } }),
     db.user.findMany({
       where: { status: 'active' },
       select: {
