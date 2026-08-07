@@ -13,6 +13,9 @@ RUN corepack enable && corepack prepare pnpm@11.6.0 --activate
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS=--max-old-space-size=768
 ENV NEXT_BUILD_CPUS=1
+# 允许显式放行破坏性迁移（如删除弃用表），默认关闭
+ARG QE_ALLOW_DESTRUCTIVE_MIGRATIONS
+ENV QE_ALLOW_DESTRUCTIVE_MIGRATIONS=${QE_ALLOW_DESTRUCTIVE_MIGRATIONS}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
