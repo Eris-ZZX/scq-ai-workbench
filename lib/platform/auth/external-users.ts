@@ -59,6 +59,15 @@ async function findUsersByEmail(transaction: typeof db, email: string | null) {
   `;
 }
 
+async function findUsersByUnionid(transaction: typeof db, unionid: string | null) {
+  if (!unionid) return [];
+  return transaction.$queryRaw<UserRow[]>`
+    SELECT id, username, display_name, email, avatar, platform_role, role, status
+    FROM users
+    WHERE unionid = ${unionid}
+  `;
+}
+
 export async function upsertAuthingUser(identity: AuthingClaims) {
   const identityKey = authingIdentityKey(identity);
 
@@ -86,6 +95,15 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
         throw new ExternalIdentityError('conflict', 'Authing username 匹配到多个本地账号');
       }
       user = usernameUsers[0] ?? null;
+    }
+
+    if (!user) {
+      // 钉钉来源的本地用户以 unionid 为衔接键，优先于 email 匹配
+      const unionidUsers = await findUsersByUnionid(transaction, identity.unionid);
+      if (unionidUsers.length > 1) {
+        throw new ExternalIdentityError('conflict', 'Authing unionid 匹配到多个本地账号');
+      }
+      user = unionidUsers[0] ?? null;
     }
 
     if (!user) {
