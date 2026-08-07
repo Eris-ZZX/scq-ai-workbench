@@ -22,6 +22,7 @@ type LocalUser = {
   id: string;
   username: string;
   email: string | null;
+  job_number: string | null;
   directory_user_id: string | null;
 };
 
@@ -60,6 +61,7 @@ function matchLocalUser(
   byDirectoryId: Map<string, LocalUser[]>,
   byUsername: Map<string, LocalUser[]>,
   byEmail: Map<string, LocalUser[]>,
+  byJobNumber: Map<string, LocalUser[]>,
 ) {
   const directoryCandidates = byDirectoryId.get(directoryUser.id) ?? [];
   const usernameCandidates = directoryUser.username
@@ -68,11 +70,17 @@ function matchLocalUser(
   const emailCandidates = directoryUser.email
     ? byEmail.get(normalized(directoryUser.email)!) ?? []
     : [];
+  // DWS v1.x 成员无 email，jobNumber（存在 username 字段）匹配本地 job_number
+  const jobNumberCandidates = directoryUser.username
+    ? byJobNumber.get(normalized(directoryUser.username)!) ?? []
+    : [];
   const preferredCandidates = directoryCandidates.length
     ? directoryCandidates
     : usernameCandidates.length
       ? usernameCandidates
-      : emailCandidates;
+      : emailCandidates.length
+        ? emailCandidates
+        : jobNumberCandidates;
   const candidates = new Map<string, LocalUser>();
   for (const candidate of preferredCandidates) {
     candidates.set(candidate.id, candidate);
@@ -97,7 +105,7 @@ async function saveSyncStatus(status: DirectorySyncStatus) {
 
 async function readLocalUsers() {
   return db.$queryRaw<LocalUser[]>`
-    SELECT id, username, email, directory_user_id
+    SELECT id, username, email, job_number, directory_user_id
     FROM users
   `;
 }
@@ -224,12 +232,13 @@ export async function syncDwsDirectory(cli: DwsCli) {
     const byDirectoryId = buildIndex(localUsers, (user) => normalized(user.directory_user_id));
     const byUsername = buildIndex(localUsers, (user) => normalized(user.username));
     const byEmail = buildIndex(localUsers, (user) => normalized(user.email));
+    const byJobNumber = buildIndex(localUsers, (user) => normalized(user.job_number));
     const matches: Array<{ directoryUser: DwsDirectoryUser; user: LocalUser }> = [];
     let unmatchedUserCount = 0;
     let conflictCount = 0;
 
     for (const directoryUser of directoryUsers) {
-      const result = matchLocalUser(directoryUser, byDirectoryId, byUsername, byEmail);
+      const result = matchLocalUser(directoryUser, byDirectoryId, byUsername, byEmail, byJobNumber);
       if (!result.user) {
         unmatchedUserCount += 1;
         if (result.conflict) conflictCount += 1;
