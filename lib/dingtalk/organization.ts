@@ -448,6 +448,7 @@ export async function bindUserPosition(userId: string, positionRoleId: string) {
 
 type DingTalkUserDetail = {
   userid?: string;
+  unionid?: string;
   name?: string;
   email?: string;
   title?: string;
@@ -536,6 +537,7 @@ export async function refreshDingTalkUserDetails(): Promise<{ total: number; upd
       await db.$queryRaw`
         UPDATE users
         SET email = COALESCE(${detail.email?.trim() ?? null}::text, email),
+            unionid = COALESCE(${detail.unionid?.trim() ?? null}::text, unionid),
             job_number = COALESCE(${detail.job_number?.trim() ?? null}::text, job_number),
             supervisor_dingtalk_user_id = COALESCE(
               ${detail.manager_userid ?? null}::text, supervisor_dingtalk_user_id

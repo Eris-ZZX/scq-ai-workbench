@@ -17,6 +17,7 @@ export const User = pgTable('users', {
 	updatedAt: timestamp('updated_at', { precision: 3, withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 	externalSource: text('external_source'),
 	externalId: text('external_id'),
+	unionid: text('unionid'),
 	dingtalkUserId: text('dingtalk_user_id'),
 	jobNumber: text('job_number'),
 	mobile: text('mobile'),

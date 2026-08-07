@@ -64,6 +64,11 @@ export const modelMetadata = {
         "type": "String",
         "nullable": true
       },
+      "unionid": {
+        "column": "unionid",
+        "type": "String",
+        "nullable": true
+      },
       "dingtalkUserId": {
         "column": "dingtalk_user_id",
         "type": "String",

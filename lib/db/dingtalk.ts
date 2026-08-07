@@ -58,6 +58,7 @@ export async function createDingTalkUser(profile: DingTalkProfile) {
         avatar: profile.avatarUrl ?? null,
         externalSource: 'dingtalk',
         externalId: profile.unionId,
+        unionid: profile.unionId,
         dingtalkUserId: profile.dingtalkUserId ?? null,
         jobNumber: profile.jobNumber ?? null,
         supervisorDingtalkUserId: profile.supervisorDingtalkUserId ?? null,
@@ -109,6 +110,7 @@ export async function syncDingTalkUser(userId: string, profile: DingTalkProfile)
     data: {
       email: profile.email ?? undefined,
       avatar: profile.avatarUrl ?? undefined,
+      unionid: profile.unionId ?? undefined,
       dingtalkUserId: profile.dingtalkUserId ?? undefined,
       jobNumber: profile.jobNumber ?? undefined,
       supervisorDingtalkUserId: profile.supervisorDingtalkUserId ?? undefined,
