@@ -4452,77 +4452,7 @@ export const modelMetadata = {
       }
     }
   },
-  "ExternalJob": {
-    "table": "external_job_outbox",
-    "fields": {
-      "id": {
-        "column": "id",
-        "type": "String",
-        "nullable": false
-      },
-      "kind": {
-        "column": "kind",
-        "type": "String",
-        "nullable": false
-      },
-      "idempotencyKey": {
-        "column": "idempotency_key",
-        "type": "String",
-        "nullable": false
-      },
-      "payload": {
-        "column": "payload",
-        "type": "String",
-        "nullable": false
-      },
-      "status": {
-        "column": "status",
-        "type": "String",
-        "nullable": false
-      },
-      "attempts": {
-        "column": "attempts",
-        "type": "Int",
-        "nullable": false
-      },
-      "availableAt": {
-        "column": "available_at",
-        "type": "DateTime",
-        "nullable": false
-      },
-      "lockedAt": {
-        "column": "locked_at",
-        "type": "DateTime",
-        "nullable": true
-      },
-      "lockedBy": {
-        "column": "locked_by",
-        "type": "String",
-        "nullable": true
-      },
-      "lastError": {
-        "column": "last_error",
-        "type": "String",
-        "nullable": true
-      },
-      "result": {
-        "column": "result",
-        "type": "String",
-        "nullable": true
-      },
-      "createdAt": {
-        "column": "created_at",
-        "type": "DateTime",
-        "nullable": false
-      },
-      "updatedAt": {
-        "column": "updated_at",
-        "type": "DateTime",
-        "nullable": false
-      }
-    },
-    "relations": {}
-  },
+
   "DingTalkDepartment": {
     "table": "dingtalk_departments",
     "fields": {

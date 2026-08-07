@@ -1,0 +1,1 @@
+DROP TABLE "external_job_outbox" CASCADE;

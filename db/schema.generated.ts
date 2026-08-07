@@ -86,25 +86,6 @@ export const UserIdentity = pgTable('user_identities', {
 	'user_identities_user_id_idx': index('user_identities_user_id_idx').on(UserIdentity.userId),
 }));
 
-export const ExternalJob = pgTable('external_job_outbox', {
-	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
-	kind: text('kind').notNull(),
-	idempotencyKey: text('idempotency_key').notNull().unique(),
-	payload: text('payload').notNull(),
-	status: text('status').notNull().default("pending"),
-	attempts: integer('attempts').notNull().default(0),
-	availableAt: timestamp('available_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
-	lockedAt: timestamp('locked_at', { precision: 3, withTimezone: true }),
-	lockedBy: text('locked_by'),
-	lastError: text('last_error'),
-	result: text('result'),
-	createdAt: timestamp('created_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
-	updatedAt: timestamp('updated_at', { precision: 3, withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-}, (ExternalJob) => ({
-	'external_job_outbox_status_available_idx': index('external_job_outbox_status_available_idx').on(ExternalJob.status, ExternalJob.availableAt),
-	'external_job_outbox_locked_at_idx': index('external_job_outbox_locked_at_idx').on(ExternalJob.lockedAt),
-}));
-
 export const DingTalkDepartment = pgTable('dingtalk_departments', {
 	id: text('id').notNull().primaryKey(),
 	name: text('name').notNull(),

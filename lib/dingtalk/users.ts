@@ -25,6 +25,17 @@ export async function resolveUserIdByUnionId(unionId: string): Promise<string | 
   return data.result.userid;
 }
 
+/** 取用户的钉钉 unionId：优先读 users.unionid 列（Authing 来源兼容），旧 dingtalk 来源读 external_id */
+async function readDingTalkUnionId(user: {
+  unionid: string | null;
+  externalSource: string | null;
+  externalId: string | null;
+}): Promise<string | null> {
+  if (user.unionid) return user.unionid;
+  if (user.externalSource === 'dingtalk' && user.externalId) return user.externalId;
+  return null;
+}
+
 /** Resolve corp userid for a local user; persist when found. */
 export async function ensureDingTalkUserId(userId: string): Promise<string | null> {
   const user = await db.user.findUnique({
@@ -32,15 +43,18 @@ export async function ensureDingTalkUserId(userId: string): Promise<string | nul
     select: {
       id: true,
       dingtalkUserId: true,
+      unionid: true,
       externalSource: true,
       externalId: true,
     },
   });
   if (!user) return null;
   if (user.dingtalkUserId) return user.dingtalkUserId;
-  if (user.externalSource !== 'dingtalk' || !user.externalId) return null;
 
-  const userid = await resolveUserIdByUnionId(user.externalId);
+  const unionId = await readDingTalkUnionId(user);
+  if (!unionId) return null;
+
+  const userid = await resolveUserIdByUnionId(unionId);
   if (!userid) return null;
 
   await db.user.update({
@@ -53,10 +67,10 @@ export async function ensureDingTalkUserId(userId: string): Promise<string | nul
 export async function getDingTalkUnionId(userId: string): Promise<string | null> {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { externalSource: true, externalId: true },
+    select: { unionid: true, externalSource: true, externalId: true },
   });
-  if (!user || user.externalSource !== 'dingtalk' || !user.externalId) return null;
-  return user.externalId;
+  if (!user) return null;
+  return readDingTalkUnionId(user);
 }
 
 /** Active AI-resource members who have a DingTalk corp userid (or resolvable unionId). */

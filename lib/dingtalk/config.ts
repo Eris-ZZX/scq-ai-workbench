@@ -1,49 +1,68 @@
+import 'dotenv/config';
 import { sanitizeReturnPath } from '@/platform/auth/return-path';
 
-/**
- * Legacy compatibility helpers. DingTalk credentials are intentionally not
- * read anymore; all new external work is executed by the DWS Worker.
- */
-export function getDingTalkAppCredentials(): null {
-  return null;
+export function getDingTalkAppCredentials() {
+  const appKey = process.env.DINGTALK_CLIENT_ID?.trim();
+  const appSecret = process.env.DINGTALK_CLIENT_SECRET?.trim();
+  if (!appKey || !appSecret) return null;
+  return { appKey, appSecret };
 }
 
-export function getDingTalkAgentId(): null {
-  return null;
+export function getDingTalkAgentId(): number | null {
+  const raw = process.env.DINGTALK_AGENT_ID?.trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export function getAppBaseUrl() {
+export function getAppBaseUrl(): string | null {
   const raw = process.env.APP_BASE_URL?.trim();
-  return raw ? raw.replace(/\/+$/, '') : null;
+  if (!raw) return null;
+  return raw.replace(/\/+$/, '');
 }
 
-export function buildAppUrl(path: string) {
+export function buildAppUrl(path: string): string | null {
   const base = getAppBaseUrl();
   if (!base) return null;
-  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalized}`;
 }
 
-export function buildAuthEntryUrl(path: string) {
+/**
+ * HTTPS entry that restores session (or DingTalk SSO) then lands on target.
+ */
+export function buildAuthEntryUrl(path: string): string | null {
   const base = getAppBaseUrl();
+  if (!base) return null;
   const safe = sanitizeReturnPath(path);
-  if (!base || !safe) return null;
-  return `${base}/api/auth/entry?next=${encodeURIComponent(safe)}`;
+  if (!safe) return null;
+  const params = new URLSearchParams({ next: safe });
+  return `${base}/api/auth/entry?${params.toString()}`;
 }
 
-/** @deprecated ActionCard links are no longer emitted. */
-export function buildDingTalkPcBrowserUrl(httpsUrl: string) {
-  return httpsUrl;
+/**
+ * Force DingTalk PC client to open the URL in the system browser
+ * instead of the in-app side panel / workbench container.
+ * @see https://open.dingtalk.com/document/isvapp/unified-routing-protocol
+ */
+export function buildDingTalkPcBrowserUrl(httpsUrl: string): string {
+  return `dingtalk://dingtalkclient/page/link?url=${encodeURIComponent(httpsUrl)}&pc_slide=false`;
 }
 
-export function buildNotifyLinks(path: string) {
+/** PC: system browser; App: HTTPS entry (in-app WebView + SSO). */
+export function buildNotifyLinks(path: string): { pcUrl: string; appUrl: string } | null {
   const appUrl = buildAuthEntryUrl(path);
-  return appUrl ? { pcUrl: appUrl, appUrl } : null;
+  if (!appUrl) return null;
+  return {
+    appUrl,
+    pcUrl: buildDingTalkPcBrowserUrl(appUrl),
+  };
 }
 
 export function dingtalkNotifyEnvStatus() {
   return {
-    hasCredentials: false,
-    hasAgentId: false,
+    hasCredentials: Boolean(getDingTalkAppCredentials()),
+    hasAgentId: Boolean(getDingTalkAgentId()),
     hasAppBaseUrl: Boolean(getAppBaseUrl()),
   };
 }

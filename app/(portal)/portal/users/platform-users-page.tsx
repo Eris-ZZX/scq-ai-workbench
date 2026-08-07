@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Plus, RefreshCw, Search, UserRound } from 'lucide-react';
-import type { DirectorySyncStatus } from '@/lib/dws/directory-sync';
 
 type Position = { id: string; name: string; roleName?: string | null };
 type Organization = { id: string; name: string; parentId: string | null };
@@ -70,12 +69,6 @@ function sourceLabel(source: string) {
   return '本地';
 }
 
-function formatSyncTime(value?: string) {
-  if (!value) return '';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN');
-}
-
 export default function PlatformUsersPage() {
   const [data, setData] = useState<PlatformData | null>(null);
   const [selectedId, setSelectedId] = useState('');
@@ -91,8 +84,6 @@ export default function PlatformUsersPage() {
   const [message, setMessage] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreate);
-  const [organizationSync, setOrganizationSync] = useState<DirectorySyncStatus>({ status: 'idle', startedAt: '' });
-  const [syncingOrganization, setSyncingOrganization] = useState(false);
 
   const visibleUsers = useMemo(
     () => (data?.users ?? []).filter((user) => (
@@ -126,29 +117,10 @@ export default function PlatformUsersPage() {
       setSelectedId((current) => (
         next.users.some((user) => user.id === current) ? current : next.users[0]?.id ?? ''
       ));
-      void loadOrganizationSyncStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载用户失败。');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function loadOrganizationSyncStatus() {
-    try {
-      const response = await fetch('/api/admin/platform-users/organization', { cache: 'no-store' });
-      const payload = await response.json().catch(() => null);
-      if (response.ok) {
-        if (payload?.job?.status === 'pending') {
-          setOrganizationSync({ status: 'queued', startedAt: payload.job.createdAt ?? '' });
-        } else if (payload?.job?.status === 'processing') {
-          setOrganizationSync({ status: 'running', startedAt: payload.job.createdAt ?? '' });
-        } else if (payload?.status) {
-          setOrganizationSync(payload.status);
-        }
-      }
-    } catch {
-      // The user list remains usable when the status endpoint is temporarily unavailable.
     }
   }
 
@@ -206,35 +178,6 @@ export default function PlatformUsersPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建用户失败。');
     } finally {
-      setSaving(false);
-    }
-  }
-
-  async function syncOrganization() {
-    setSaving(true);
-    setSyncingOrganization(true);
-    setError('');
-    setMessage('');
-    try {
-      const response = await fetch('/api/admin/platform-users/organization', { method: 'POST' });
-      const payload = await response.json().catch(() => null);
-      if (response.status === 202) {
-        setOrganizationSync({ status: 'queued', startedAt: new Date().toISOString() });
-      } else if (payload?.status && typeof payload.status === 'object') {
-        setOrganizationSync(payload.status);
-      }
-      if (!response.ok) {
-        setError(payload?.error ?? '组织目录同步失败。');
-        return;
-      }
-      setMessage(response.status === 202
-        ? '组织目录同步任务已创建，将由独立 DWS Worker 执行。'
-        : `组织同步完成：${payload.status?.departmentCount ?? 0} 个部门，匹配 ${payload.status?.matchedUserCount ?? 0} 个用户。`);
-      await loadOrganizationSyncStatus();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '组织目录同步失败。');
-    } finally {
-      setSyncingOrganization(false);
       setSaving(false);
     }
   }
@@ -309,14 +252,6 @@ export default function PlatformUsersPage() {
             </button>
             <button
               type="button"
-              className="inline-flex h-9 items-center gap-1 rounded border border-primary bg-primary/5 px-3 text-sm text-primary hover:bg-primary/10 disabled:opacity-50"
-              onClick={() => void syncOrganization()}
-              disabled={saving || syncingOrganization || organizationSync.status === 'running' || organizationSync.status === 'queued'}
-            >
-              {syncingOrganization || organizationSync.status === 'running' || organizationSync.status === 'queued' ? '同步排队中…' : '同步组织目录'}
-            </button>
-            <button
-              type="button"
               className="inline-flex h-9 items-center gap-1 rounded bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
               onClick={() => setShowCreate((current) => !current)}
               disabled={saving}
@@ -328,18 +263,6 @@ export default function PlatformUsersPage() {
         </div>
         {error ? <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
         {message ? <div className="mt-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{message}</div> : null}
-        <p className="mt-3 text-xs text-muted-foreground">
-          组织同步：
-          {organizationSync.status === 'running'
-            ? '同步中'
-            : organizationSync.status === 'success'
-              ? `最近成功 · ${formatSyncTime(organizationSync.finishedAt)} · ${organizationSync.departmentCount ?? 0} 个部门 · 匹配 ${organizationSync.matchedUserCount ?? 0} 个用户`
-              : organizationSync.status === 'failed'
-                ? `最近失败 · ${formatSyncTime(organizationSync.finishedAt)} · ${organizationSync.error ?? '请检查服务端日志'}`
-            : organizationSync.status === 'queued'
-              ? '任务已排队，等待 DWS Worker'
-              : '尚未同步'}
-        </p>
       </section>
 
       {showCreate ? (

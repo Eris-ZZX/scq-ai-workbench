@@ -61,6 +61,10 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin-change-me}
       MINIO_BUCKET: ${MINIO_BUCKET:-qe-workbench}
+      DINGTALK_CLIENT_ID: ${DINGTALK_CLIENT_ID:-}
+      DINGTALK_CLIENT_SECRET: ${DINGTALK_CLIENT_SECRET:-}
+      DINGTALK_REDIRECT_URI: ${DINGTALK_REDIRECT_URI:-}
+      DINGTALK_AGENT_ID: ${DINGTALK_AGENT_ID:-}
     ports:
       - "${APP_HOST_PORT:-3000}:3000"
     healthcheck:
@@ -73,32 +77,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 60s
-
-  dws-worker:
-    profiles: ["worker"]
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-qe}:${POSTGRES_PASSWORD:-dev-only-change-me}@db:5432/${POSTGRES_DB:-qe}
-      APP_BASE_URL: ${APP_BASE_URL:-http://app:3000}
-      # HOME 指向挂载卷，使 dws 的 ~/.dws 与 ~/.local/share/dws-cli 登录态持久化
-      HOME: /run/dws
-      DWS_CONFIG_DIR: /run/dws
-      DWS_DISABLE_KEYCHAIN: "1"
-      DWS_CLI_COMMAND: ${DWS_CLI_COMMAND:-dws}
-      DWS_CLI_TIMEOUT_MS: ${DWS_CLI_TIMEOUT_MS:-30000}
-      DWS_WORKER_ID: ${DWS_WORKER_ID:-dws-worker}
-      DWS_WORKER_INTERVAL_MS: ${DWS_WORKER_INTERVAL_MS:-5000}
-      DWS_MAX_ATTEMPTS: ${DWS_MAX_ATTEMPTS:-5}
-      DWS_WORKER_ONCE: ${DWS_WORKER_ONCE:-false}
-    volumes:
-      - ${DWS_CONFIG_DIR:-/opt/qe-workbench-it/dws-config}:/run/dws
 
 volumes:
   qe_pgdata:

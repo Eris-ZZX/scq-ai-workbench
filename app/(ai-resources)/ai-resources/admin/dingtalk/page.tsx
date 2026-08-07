@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getDwsWorkerStatus } from '@/lib/dws/status';
 import { getDingTalkNotificationSettings } from '@/lib/dingtalk/settings';
 import { requireAiResourceRole } from '@/modules/ai-resources/guards';
 import { AdminDingTalkPanel } from '@/modules/ai-resources/ui/admin-dingtalk-panel';
@@ -12,7 +11,6 @@ export default async function AdminDingTalkPage() {
     notFound();
   }
 
-  const initialWorker = await getDwsWorkerStatus();
   let initialNotifications = {
     reviewSubmitted: true,
     reviewRejected: true,
@@ -29,7 +27,7 @@ export default async function AdminDingTalkPage() {
     <main className="main">
       <section className="page-head roles-page-head">
         <div>
-          <h1>外部通知 / DWS</h1>
+          <h1>外部通知 / 钉钉</h1>
           <p className="subtle">审批提醒、待办与资源上线工作通知</p>
         </div>
         <Link className="button" href="/ai-resources/admin">
@@ -38,10 +36,7 @@ export default async function AdminDingTalkPage() {
       </section>
 
       <section className="panel admin-detail-panel">
-        <AdminDingTalkPanel
-          initialNotifications={initialNotifications}
-          initialWorker={initialWorker}
-        />
+        <AdminDingTalkPanel initialNotifications={initialNotifications} />
       </section>
     </main>
   );

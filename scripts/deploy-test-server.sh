@@ -84,11 +84,6 @@ for i in $(seq 1 72); do
   sleep 5
 done
 
-echo "=== build and recreate dws-worker ==="
-# DWS worker（登录态持久化在 DWS_CONFIG_DIR 卷；未登录时容器会启动但任务空转，不阻塞部署）
-docker compose --project-name "$PROJECT" --env-file .env -f docker-compose.yml --profile worker build dws-worker
-docker compose --project-name "$PROJECT" --env-file .env -f docker-compose.yml --profile worker up -d --no-build dws-worker || echo 'DWS_WORKER_START_WARNING'
-
 echo '=== compose status ==='
 docker compose --project-name "$PROJECT" --env-file .env -f docker-compose.yml ps
 echo '=== app startup logs ==='

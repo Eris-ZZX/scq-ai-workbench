@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/database';
-import { getLatestExternalJob, listExternalJobs } from '@/lib/external-jobs';
-import { getDwsWorkerStatus } from '@/lib/dws/status';
 import {
-  completeLatestTestTodo,
+  completeTestTodo,
   sendTestNotifyToUser,
   sendTestTodoToUser,
 } from '@/lib/dingtalk/notify-review';
 import {
-  EXTERNAL_NOTIFICATION_CATEGORIES,
-  getExternalNotificationSettings,
-  setExternalNotificationEnabled,
-  type ExternalNotificationCategory,
-} from '@/lib/external-notifications/settings';
+  DINGTALK_NOTIFICATION_CATEGORIES,
+  getDingTalkNotificationSettings,
+  setDingTalkNotificationEnabled,
+  type DingTalkNotificationCategory,
+} from '@/lib/dingtalk/settings';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import {
@@ -23,7 +21,7 @@ import {
 } from '@/modules/ai-resources/audit';
 import { requireAiResourceRoleApi } from '@/modules/ai-resources/guards';
 
-const categorySchema = z.enum(EXTERNAL_NOTIFICATION_CATEGORIES);
+const categorySchema = z.enum(DINGTALK_NOTIFICATION_CATEGORIES);
 const putSchema = z.object({
   category: categorySchema.optional(),
   enabled: z.boolean().optional(),
@@ -34,24 +32,10 @@ const putSchema = z.object({
 export async function GET() {
   try {
     await requireAiResourceRoleApi('admin');
-    const worker = await getDwsWorkerStatus();
-    let notifications = {
-      reviewSubmitted: true,
-      reviewRejected: true,
-      reviewApproved: true,
-      publish: true,
-    };
-    try {
-      notifications = await getExternalNotificationSettings();
-    } catch (error) {
-      console.error('[external] read notification settings failed:', error);
-    }
+    const notifications = await getDingTalkNotificationSettings();
     return NextResponse.json({
       notifications,
       publishNotifyEnabled: notifications.publish,
-      worker,
-      latestJobs: await getLatestExternalJob(),
-      jobs: await listExternalJobs({ limit: 25 }),
       audience: 'app_members',
     });
   } catch (error) {
@@ -76,10 +60,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: '缺少通知类别或开关状态。' }, { status: 400 });
     }
 
-    const beforeSettings = await getExternalNotificationSettings();
+    const beforeSettings = await getDingTalkNotificationSettings();
     await db.$transaction(async (tx) => {
-      await setExternalNotificationEnabled(
-        category as ExternalNotificationCategory,
+      await setDingTalkNotificationEnabled(
+        category as DingTalkNotificationCategory,
         enabled,
         actor.userId,
         tx,
@@ -87,22 +71,19 @@ export async function PUT(request: NextRequest) {
       await appendAiResourceAuditLog({
         actorId: actor.userId,
         actorUsername: actor.username,
-      action: AI_RESOURCE_AUDIT_ACTIONS.EXTERNAL_NOTIFICATIONS_SETTINGS_UPDATE,
-      targetType: 'EXTERNAL_NOTIFICATIONS_SETTINGS',
+        action: AI_RESOURCE_AUDIT_ACTIONS.EXTERNAL_NOTIFICATIONS_SETTINGS_UPDATE,
+        targetType: 'EXTERNAL_NOTIFICATIONS_SETTINGS',
         targetId: category,
         result: 'SUCCESS',
-        before: { category, enabled: beforeSettings[category as ExternalNotificationCategory] },
+        before: { category, enabled: beforeSettings[category as DingTalkNotificationCategory] },
         after: { category, enabled },
         ...auditContext,
       }, tx);
     });
-    const notifications = await getExternalNotificationSettings();
+    const notifications = await getDingTalkNotificationSettings();
     return NextResponse.json({
       notifications,
       publishNotifyEnabled: notifications.publish,
-      worker: await getDwsWorkerStatus(),
-      latestJobs: await getLatestExternalJob(),
-      jobs: await listExternalJobs({ limit: 25 }),
       audience: 'app_members',
     });
   } catch (error) {
@@ -117,6 +98,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => ({}))) as {
       action?: string;
       category?: string;
+      taskId?: string;
     };
     const category = body.category
       ? categorySchema.safeParse(body.category)
@@ -125,11 +107,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '通知类别无效。' }, { status: 400 });
     }
 
-    let result: { ok: boolean; error?: string; jobId?: string };
+    let result: { ok: boolean; error?: string; taskId?: string };
     if (body.action === 'test-todo') {
       result = await sendTestTodoToUser(actor.userId, category.data);
     } else if (body.action === 'test-todo-complete') {
-      result = await completeLatestTestTodo();
+      if (!body.taskId) {
+        return NextResponse.json({ error: '缺少待办 taskId。' }, { status: 400 });
+      }
+      result = await completeTestTodo(body.taskId, actor.userId);
     } else if (body.action === 'test') {
       result = await sendTestNotifyToUser(actor.userId, category.data);
     } else {
@@ -161,7 +146,7 @@ export async function POST(request: NextRequest) {
       after: { category: category.data, audience: 'self', action: body.action },
       ...auditContext,
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, taskId: result.taskId ?? null });
   } catch (error) {
     return aiResourceErrorResponse(error);
   }
