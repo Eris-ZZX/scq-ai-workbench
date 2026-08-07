@@ -20,6 +20,7 @@ type PlatformUser = {
   status: string;
   source: string;
   externalSource: string | null;
+  unionid: string | null;
   dingtalkUserId: string | null;
   jobNumber: string | null;
   syncAt: string | null;
@@ -442,6 +443,9 @@ export default function PlatformUsersPage() {
                   <div className="flex gap-3 overflow-x-auto">
                     <ReadOnlyField label="工号（钉钉同步）">
                       {selectedUser.jobNumber || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="unionid">
+                      {selectedUser.unionid || '尚未获取'}
                     </ReadOnlyField>
                     <ReadOnlyField label="组织小组（钉钉同步）">
                       {selectedUser.organization?.name || '未同步组织'}

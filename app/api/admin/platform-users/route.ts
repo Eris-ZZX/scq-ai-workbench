@@ -39,6 +39,7 @@ const userSelect = {
   status: true,
   externalSource: true,
   externalId: true,
+  unionid: true,
   dingtalkUserId: true,
   jobNumber: true,
   supervisorDingtalkUserId: true,
