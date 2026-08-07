@@ -11,6 +11,8 @@ import {
   processReviewResolved,
   processReviewSubmitted,
   processTestNotification,
+  processTestTodo,
+  processTestTodoComplete,
   type ResourceBroadcastPayload,
 } from './notifications';
 
@@ -89,6 +91,26 @@ export async function processExternalJob(job: ExternalJob, cli: DwsCli = createD
         job.id,
         cli,
       );
+    }
+    case 'todo.test': {
+      const localUserId = stringPayload(job.payload, 'localUserId');
+      const category = stringPayload(job.payload, 'category');
+      const path = stringPayload(job.payload, 'path') ?? '/ai-resources/admin/notifications';
+      if (!localUserId || !category) {
+        throw new DwsNotificationError('测试待办任务 payload 不完整', { retryable: false });
+      }
+      return processTestTodo(
+        { localUserId, category: category as never, path },
+        job.id,
+        cli,
+      );
+    }
+    case 'todo.test-complete': {
+      const taskId = stringPayload(job.payload, 'taskId');
+      if (!taskId) {
+        throw new DwsNotificationError('测试完成待办任务缺少 taskId', { retryable: false });
+      }
+      return processTestTodoComplete({ taskId }, cli);
     }
     default:
       throw new DwsNotificationError(`不支持的外部任务类型：${job.kind}`, { retryable: false });

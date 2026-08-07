@@ -395,8 +395,43 @@ export async function processTestNotification(
   const title = `【AI资源库】外部通知测试：${input.category}`;
   await sendChat(cli, {
     userId: recipientId,
-    text: `## ${title}\n\n这是 DWS Worker 测试消息。\n\n[打开管理页面](${appLink(input.path)})`,
+    text: `## ${title}\n\n这是 DWS Worker 测试消息。\n\n[打开管理页面](${appLink(input.path)})\n\n【测试】`,
     uuid: `${jobId}:test:${recipientId}`,
   });
   return { sent: 1, recipientId };
+}
+
+/** 测试待办：创建一条与正常待办格式一致的待办，末尾标记【测试】 */
+export async function processTestTodo(
+  input: { localUserId: string; category: ExternalNotificationCategory; path: string },
+  jobId: string,
+  cli: DwsCli = createDwsCli(),
+) {
+  void jobId;
+  const recipientId = await dwsUserId(input.localUserId);
+  if (!recipientId) {
+    throw new DwsNotificationError('当前管理员未匹配到 DWS userId，请先同步组织目录', {
+      retryable: false,
+    });
+  }
+  const title = `【AI资源库】测试待办｜${input.category}`;
+  const link = appLink(input.path);
+  const taskId = await createTodo(cli, {
+    title,
+    description: `这是 DWS Worker 测试待办，格式与正式待办一致。\n\n详情：${link}\n\n【测试】`,
+    executorId: recipientId,
+  });
+  return { taskId, recipientId };
+}
+
+/** 测试完成待办：把指定 taskId 的待办标记为完成 */
+export async function processTestTodoComplete(
+  input: { taskId: string },
+  cli: DwsCli = createDwsCli(),
+) {
+  if (!input.taskId) {
+    throw new DwsNotificationError('测试完成待办任务缺少 taskId', { retryable: false });
+  }
+  await completeTodo(cli, input.taskId);
+  return { completed: true, taskId: input.taskId };
 }
