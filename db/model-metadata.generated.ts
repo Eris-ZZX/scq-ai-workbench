@@ -103,6 +103,96 @@ export const modelMetadata = {
         "column": "sync_at",
         "type": "DateTime",
         "nullable": true
+      },
+      "unionid": {
+        "column": "unionid",
+        "type": "String",
+        "nullable": true
+      },
+      "phoneNumber": {
+        "column": "phone_number",
+        "type": "String",
+        "nullable": true
+      },
+      "phoneNumberVerified": {
+        "column": "phone_number_verified",
+        "type": "Boolean",
+        "nullable": true
+      },
+      "emailVerified": {
+        "column": "email_verified",
+        "type": "Boolean",
+        "nullable": true
+      },
+      "address": {
+        "column": "address",
+        "type": "String",
+        "nullable": true
+      },
+      "birthdate": {
+        "column": "birthdate",
+        "type": "String",
+        "nullable": true
+      },
+      "gender": {
+        "column": "gender",
+        "type": "String",
+        "nullable": true
+      },
+      "locale": {
+        "column": "locale",
+        "type": "String",
+        "nullable": true
+      },
+      "nickname": {
+        "column": "nickname",
+        "type": "String",
+        "nullable": true
+      },
+      "preferredUsername": {
+        "column": "preferred_username",
+        "type": "String",
+        "nullable": true
+      },
+      "profile": {
+        "column": "profile",
+        "type": "String",
+        "nullable": true
+      },
+      "website": {
+        "column": "website",
+        "type": "String",
+        "nullable": true
+      },
+      "zoneinfo": {
+        "column": "zoneinfo",
+        "type": "String",
+        "nullable": true
+      },
+      "externalIdAuthing": {
+        "column": "external_id_authing",
+        "type": "String",
+        "nullable": true
+      },
+      "extendedFields": {
+        "column": "extended_fields",
+        "type": "String",
+        "nullable": true
+      },
+      "tenantId": {
+        "column": "tenant_id",
+        "type": "String",
+        "nullable": true
+      },
+      "userpoolId": {
+        "column": "userpool_id",
+        "type": "String",
+        "nullable": true
+      },
+      "roles": {
+        "column": "roles",
+        "type": "String",
+        "nullable": true
       }
     },
     "relations": {

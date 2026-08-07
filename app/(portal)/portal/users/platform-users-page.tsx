@@ -20,6 +20,24 @@ type PlatformUser = {
   externalSource: string | null;
   dingtalkUserId: string | null;
   syncAt: string | null;
+  unionid: string | null;
+  phoneNumber: string | null;
+  phoneNumberVerified: boolean | null;
+  emailVerified: boolean | null;
+  address: string | null;
+  birthdate: string | null;
+  gender: string | null;
+  locale: string | null;
+  nickname: string | null;
+  preferredUsername: string | null;
+  profile: string | null;
+  website: string | null;
+  zoneinfo: string | null;
+  externalIdAuthing: string | null;
+  extendedFields: string | null;
+  tenantId: string | null;
+  userpoolId: string | null;
+  roles: string | null;
   position: { id: string; positionRoleId: string; positionRole: Position } | null;
   supervisor: { directoryUserId: string | null; name: string | null };
   organization: Organization | null;
@@ -419,6 +437,60 @@ export default function PlatformUsersPage() {
                     </ReadOnlyField>
                     <ReadOnlyField label="直接上级（目录同步）">
                       {selectedUser.supervisor.name || selectedUser.supervisor.directoryUserId || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="unionid">
+                      {selectedUser.unionid || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="phone_number">
+                      {selectedUser.phoneNumber || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="phone_number_verified">
+                      {selectedUser.phoneNumberVerified === null || selectedUser.phoneNumberVerified === undefined ? '尚未获取' : String(selectedUser.phoneNumberVerified)}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="email_verified">
+                      {selectedUser.emailVerified === null || selectedUser.emailVerified === undefined ? '尚未获取' : String(selectedUser.emailVerified)}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="address">
+                      {selectedUser.address || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="birthdate">
+                      {selectedUser.birthdate || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="gender">
+                      {selectedUser.gender || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="locale">
+                      {selectedUser.locale || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="nickname">
+                      {selectedUser.nickname || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="preferred_username">
+                      {selectedUser.preferredUsername || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="profile">
+                      {selectedUser.profile || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="website">
+                      {selectedUser.website || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="zoneinfo">
+                      {selectedUser.zoneinfo || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="external_id">
+                      {selectedUser.externalIdAuthing || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="extended_fields">
+                      {selectedUser.extendedFields || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="tenant_id">
+                      {selectedUser.tenantId || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="userpool_id">
+                      {selectedUser.userpoolId || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="roles">
+                      {selectedUser.roles || '尚未获取'}
                     </ReadOnlyField>
                   </div>
                 </div>

@@ -50,6 +50,13 @@
       "when": 1785891000000,
       "tag": "0006_authing_dws_transition",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786072857414,
+      "tag": "0007_dark_the_fallen",
+      "breakpoints": true
     }
   ]
 }

@@ -110,6 +110,24 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           status: 'active',
           externalSource: 'authing',
           externalId: identityKey,
+          unionid: identity.unionid,
+          phoneNumber: identity.phoneNumber,
+          phoneNumberVerified: identity.phoneNumberVerified,
+          emailVerified: identity.emailVerified,
+          address: identity.address,
+          birthdate: identity.birthdate,
+          gender: identity.gender,
+          locale: identity.locale,
+          nickname: identity.nickname,
+          preferredUsername: identity.preferredUsername,
+          profile: identity.profile,
+          website: identity.website,
+          zoneinfo: identity.zoneinfo,
+          externalIdAuthing: identity.externalId,
+          extendedFields: identity.extendedFields,
+          tenantId: identity.tenantId,
+          userpoolId: identity.userpoolId,
+          roles: identity.roles,
         },
       });
       user = {
@@ -150,7 +168,25 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
             THEN ${identity.email}::text
             ELSE email
           END,
-          avatar = COALESCE(${identity.avatar}::text, avatar)
+          avatar = COALESCE(${identity.avatar}::text, avatar),
+          unionid = COALESCE(${identity.unionid}::text, unionid),
+          phone_number = COALESCE(${identity.phoneNumber}::text, phone_number),
+          phone_number_verified = COALESCE(${identity.phoneNumberVerified}, phone_number_verified),
+          email_verified = COALESCE(${identity.emailVerified}, email_verified),
+          address = COALESCE(${identity.address}::text, address),
+          birthdate = COALESCE(${identity.birthdate}::text, birthdate),
+          gender = COALESCE(${identity.gender}::text, gender),
+          locale = COALESCE(${identity.locale}::text, locale),
+          nickname = COALESCE(${identity.nickname}::text, nickname),
+          preferred_username = COALESCE(${identity.preferredUsername}::text, preferred_username),
+          profile = COALESCE(${identity.profile}::text, profile),
+          website = COALESCE(${identity.website}::text, website),
+          zoneinfo = COALESCE(${identity.zoneinfo}::text, zoneinfo),
+          external_id_authing = COALESCE(${identity.externalId}::text, external_id_authing),
+          extended_fields = COALESCE(${identity.extendedFields}::text, extended_fields),
+          tenant_id = COALESCE(${identity.tenantId}::text, tenant_id),
+          userpool_id = COALESCE(${identity.userpoolId}::text, userpool_id),
+          roles = COALESCE(${identity.roles}::text, roles)
       WHERE id = ${user.id}
     `;
 

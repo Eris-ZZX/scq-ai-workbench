@@ -24,7 +24,26 @@ export const User = pgTable('users', {
 	directoryUserId: text('directory_user_id'),
 	directorySupervisorUserId: text('directory_supervisor_user_id'),
 	directorySupervisorName: text('directory_supervisor_name'),
-	syncAt: timestamp('sync_at', { precision: 3, withTimezone: true })
+	syncAt: timestamp('sync_at', { precision: 3, withTimezone: true }),
+	// --- Authing OIDC claims (字段名与 claim 一致，便于对齐) ---
+	unionid: text('unionid'),
+	phoneNumber: text('phone_number'),
+	phoneNumberVerified: boolean('phone_number_verified'),
+	emailVerified: boolean('email_verified'),
+	address: text('address'),
+	birthdate: text('birthdate'),
+	gender: text('gender'),
+	locale: text('locale'),
+	nickname: text('nickname'),
+	preferredUsername: text('preferred_username'),
+	profile: text('profile'),
+	website: text('website'),
+	zoneinfo: text('zoneinfo'),
+	externalIdAuthing: text('external_id_authing'),
+	extendedFields: text('extended_fields'),
+	tenantId: text('tenant_id'),
+	userpoolId: text('userpool_id'),
+	roles: text('roles'),
 }, (User) => ({
 	'User_externalSource_externalId_unique_idx': uniqueIndex('user_external_source_external_id_key')
 		.on(User.externalSource, User.externalId),

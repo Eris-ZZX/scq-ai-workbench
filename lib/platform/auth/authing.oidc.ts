@@ -8,7 +8,8 @@ import {
 import { assertAuthingConfiguration } from './authing.config';
 import { sanitizeReturnPath } from './return-path';
 
-export const AUTHING_SCOPES = 'openid profile email username';
+export const AUTHING_SCOPES =
+  'openid profile email username phone unionid external_id extended_fields roles userpool_id tenant_id';
 
 export type AuthingDiscovery = {
   authorization_endpoint: string;

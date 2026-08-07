@@ -7,11 +7,35 @@ export type AuthingClaims = {
   name: string | null;
   email: string | null;
   avatar: string | null;
+  // 全量 OIDC claims（与 users 表列名一致）
+  unionid: string | null;
+  phoneNumber: string | null;
+  phoneNumberVerified: boolean | null;
+  emailVerified: boolean | null;
+  address: string | null;
+  birthdate: string | null;
+  gender: string | null;
+  locale: string | null;
+  nickname: string | null;
+  preferredUsername: string | null;
+  profile: string | null;
+  website: string | null;
+  zoneinfo: string | null;
+  externalId: string | null;
+  extendedFields: string | null;
+  tenantId: string | null;
+  userpoolId: string | null;
+  roles: string | null;
 };
 
 function claimString(claims: JWTPayload, key: string) {
   const value = claims[key];
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function claimBoolean(claims: JWTPayload, key: string): boolean | null {
+  const value = claims[key];
+  return typeof value === 'boolean' ? value : null;
 }
 
 export function mapAuthingClaims(issuer: string, claims: JWTPayload): AuthingClaims {
@@ -23,6 +47,19 @@ export function mapAuthingClaims(issuer: string, claims: JWTPayload): AuthingCla
   if (!subject) throw new Error('Authing id_token 缺少 sub');
   if (!username) throw new Error('Authing 未返回 username claim，无法登录');
 
+  // extended_fields 是对象，序列化为 JSON 文本存储
+  const extendedFields = claims.extended_fields;
+  const extendedFieldsText = extendedFields && typeof extendedFields === 'object'
+    ? JSON.stringify(extendedFields)
+    : claimString(claims, 'extended_fields');
+
+  const roles = claims.roles;
+  const rolesText = Array.isArray(roles)
+    ? JSON.stringify(roles)
+    : typeof roles === 'string' && roles.trim()
+      ? roles
+      : null;
+
   return {
     issuer,
     subject,
@@ -30,6 +67,24 @@ export function mapAuthingClaims(issuer: string, claims: JWTPayload): AuthingCla
     name: claimString(claims, 'name'),
     email: claimString(claims, 'email'),
     avatar: claimString(claims, 'picture') ?? claimString(claims, 'avatar'),
+    unionid: claimString(claims, 'unionid'),
+    phoneNumber: claimString(claims, 'phone_number'),
+    phoneNumberVerified: claimBoolean(claims, 'phone_number_verified'),
+    emailVerified: claimBoolean(claims, 'email_verified'),
+    address: claimString(claims, 'address'),
+    birthdate: claimString(claims, 'birthdate'),
+    gender: claimString(claims, 'gender'),
+    locale: claimString(claims, 'locale'),
+    nickname: claimString(claims, 'nickname'),
+    preferredUsername: claimString(claims, 'preferred_username'),
+    profile: claimString(claims, 'profile'),
+    website: claimString(claims, 'website'),
+    zoneinfo: claimString(claims, 'zoneinfo'),
+    externalId: claimString(claims, 'external_id'),
+    extendedFields: extendedFieldsText,
+    tenantId: claimString(claims, 'tenant_id'),
+    userpoolId: claimString(claims, 'userpool_id'),
+    roles: rolesText,
   };
 }
 
