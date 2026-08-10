@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DUMMY_HASH } from '@/lib/db/auth';
 import { db } from '@/lib/database';
+import { applyDingTalkOrgProfile } from '@/lib/dingtalk/org-profile';
 import { resolveDingTalkIdentityByUserId } from '@/lib/dingtalk/users';
 import {
   findUserMergeCandidates,
@@ -92,7 +93,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
   const resolvedUnionid = dingTalkIdentity.unionid;
   const resolvedDingTalkUserId = identity.username.trim();
 
-  return db.$transaction(async (transaction) => {
+  const result = await db.$transaction(async (transaction) => {
     const candidates = await findUserMergeCandidates(transaction, {
       issuer: identity.issuer,
       subject: identity.subject,
@@ -242,4 +243,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       mergedUserIds,
     };
   });
+
+  await applyDingTalkOrgProfile(result.id, dingTalkIdentity);
+  return result;
 }

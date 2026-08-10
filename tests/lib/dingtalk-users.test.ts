@@ -30,6 +30,11 @@ describe('DingTalk user identity lookup', () => {
       userid: '017298',
       unionid: 'union-017298',
       jobNumber: '017298',
+      title: null,
+      managerUserId: null,
+      name: null,
+      departmentIds: [],
+      departmentOrders: {},
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -62,6 +67,35 @@ describe('DingTalk user identity lookup', () => {
 
     await expect(resolveDingTalkIdentityByUserId('017298')).resolves.toBeNull();
     await expect(resolveDingTalkIdentityByUserId('017298')).resolves.toBeNull();
+  });
+
+  it('returns title, manager and department ids from the user detail response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      result: {
+        userid: '017298',
+        unionid: 'union-017298',
+        name: '马跃如',
+        title: 'PQE',
+        manager_userid: '013192',
+        job_number: '017298',
+        dept_id_list: [100, 200],
+        dept_order_list: [
+          { dept_id: 100, order: 1 },
+          { dept_id: 200, order: 9 },
+        ],
+      },
+    })));
+
+    await expect(resolveDingTalkIdentityByUserId('017298')).resolves.toEqual({
+      userid: '017298',
+      unionid: 'union-017298',
+      jobNumber: '017298',
+      title: 'PQE',
+      managerUserId: '013192',
+      name: '马跃如',
+      departmentIds: ['100', '200'],
+      departmentOrders: { '100': 1, '200': 9 },
+    });
   });
 });
 

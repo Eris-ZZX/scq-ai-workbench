@@ -159,6 +159,9 @@ export default function PlatformUsersPage() {
         unionid?: string;
         dingtalkUserId?: string;
         mergedUserIds?: string[];
+        positionName?: string | null;
+        supervisor?: { directoryUserId: string | null; name: string | null };
+        organization?: Organization | null;
       } | null;
       if (!response.ok) {
         setError(body?.error ?? '刷新钉钉身份失败。');
@@ -173,6 +176,26 @@ export default function PlatformUsersPage() {
               displayName: body?.displayName ?? user.displayName,
               unionid: body?.unionid ?? user.unionid,
               dingtalkUserId: body?.dingtalkUserId ?? user.dingtalkUserId,
+              organization: body?.organization === undefined
+                ? user.organization
+                : body.organization,
+              supervisor: body?.supervisor
+                ? {
+                  directoryUserId: body.supervisor.directoryUserId,
+                  name: body.supervisor.name,
+                }
+                : user.supervisor,
+              position: body?.positionName
+                ? {
+                  id: user.position?.id ?? `position-${selectedUser.id}`,
+                  positionRoleId: user.position?.positionRoleId ?? `role-${selectedUser.id}`,
+                  positionRole: {
+                    id: user.position?.positionRole.id ?? `role-${selectedUser.id}`,
+                    name: body.positionName,
+                    roleName: user.position?.positionRole.roleName ?? null,
+                  },
+                }
+                : user.position,
             }
             : user
         )),

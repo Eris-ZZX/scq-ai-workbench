@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockResolveIdentity, mockDatabase, mockTransaction } = vi.hoisted(() => ({
+const { mockResolveIdentity, mockDatabase, mockTransaction, mockApplyOrgProfile } = vi.hoisted(() => ({
   mockResolveIdentity: vi.fn(),
+  mockApplyOrgProfile: vi.fn(),
   mockDatabase: {
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -19,6 +20,9 @@ vi.mock('@/lib/db/auth', () => ({ DUMMY_HASH: 'dummy-hash' }));
 vi.mock('@/lib/dingtalk/users', () => ({
   resolveDingTalkIdentityByUserId: mockResolveIdentity,
 }));
+vi.mock('@/lib/dingtalk/org-profile', () => ({
+  applyDingTalkOrgProfile: mockApplyOrgProfile,
+}));
 
 import { upsertAuthingUser } from '@/platform/auth/external-users';
 
@@ -26,6 +30,13 @@ describe('Authing external user DingTalk binding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDatabase.$transaction.mockRejectedValue(new Error('stop before transaction'));
+    mockApplyOrgProfile.mockResolvedValue({
+      positionName: null,
+      supervisorDingtalkUserId: null,
+      supervisorName: null,
+      primaryDepartmentId: null,
+      departmentIds: [],
+    });
   });
 
   it('rejects an Authing username and emp_no mismatch', async () => {
@@ -61,6 +72,10 @@ describe('Authing external user DingTalk binding', () => {
       userid: '017298',
       unionid: 'union-017298',
       jobNumber: '017298',
+      title: 'PQE',
+      managerUserId: '013192',
+      departmentIds: ['100'],
+      departmentOrders: {},
     });
     mockDatabase.$transaction.mockImplementation(async (callback: (transaction: typeof mockTransaction) => unknown) => {
       return callback(mockTransaction);
@@ -130,6 +145,11 @@ describe('Authing external user DingTalk binding', () => {
       displayName: 'Authing Display',
       mergedUserIds: ['dingtalk-user'],
     });
+    expect(mockApplyOrgProfile).toHaveBeenCalledWith('authing-user', expect.objectContaining({
+      title: 'PQE',
+      managerUserId: '013192',
+      departmentIds: ['100'],
+    }));
     expect(mockTransaction.$queryRaw.mock.calls.some(([strings]) =>
       String(strings.join('')).includes("SET status = 'disabled'"),
     )).toBe(true);

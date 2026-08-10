@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockRequireAdmin, mockResolveIdentity, mockDatabase } = vi.hoisted(() => ({
+const { mockRequireAdmin, mockResolveIdentity, mockApplyOrgProfile, mockDatabase } = vi.hoisted(() => ({
   mockRequireAdmin: vi.fn(),
   mockResolveIdentity: vi.fn(),
+  mockApplyOrgProfile: vi.fn(),
   mockDatabase: {
     user: {
+      findUnique: vi.fn(),
+    },
+    dingTalkDepartment: {
       findUnique: vi.fn(),
     },
     $transaction: vi.fn(),
@@ -14,6 +18,9 @@ const { mockRequireAdmin, mockResolveIdentity, mockDatabase } = vi.hoisted(() =>
 vi.mock('@/lib/database', () => ({ db: mockDatabase }));
 vi.mock('@/lib/dingtalk/users', () => ({
   resolveDingTalkIdentityByUserId: mockResolveIdentity,
+}));
+vi.mock('@/lib/dingtalk/org-profile', () => ({
+  applyDingTalkOrgProfile: mockApplyOrgProfile,
 }));
 vi.mock('@/platform/permissions/system-admin', () => ({
   requireSystemAdminApi: mockRequireAdmin,
@@ -40,6 +47,22 @@ describe('/api/admin/platform-users/dingtalk/refresh', () => {
       userid: '017298',
       unionid: 'union-017298',
       jobNumber: '017298',
+      title: 'PQE',
+      managerUserId: '013192',
+      departmentIds: ['100'],
+      departmentOrders: {},
+    });
+    mockApplyOrgProfile.mockResolvedValue({
+      positionName: 'PQE',
+      supervisorDingtalkUserId: '013192',
+      supervisorName: '戴锋',
+      primaryDepartmentId: '100',
+      departmentIds: ['100'],
+    });
+    mockDatabase.dingTalkDepartment.findUnique.mockResolvedValue({
+      id: '100',
+      name: '100',
+      parentId: null,
     });
   });
 
@@ -49,12 +72,27 @@ describe('/api/admin/platform-users/dingtalk/refresh', () => {
 
     expect(response.status).toBe(200);
     expect(mockResolveIdentity).toHaveBeenCalledWith('017298');
+    expect(mockApplyOrgProfile).toHaveBeenCalledWith('local-1', expect.objectContaining({
+      title: 'PQE',
+      managerUserId: '013192',
+      departmentIds: ['100'],
+    }));
     expect(body).toMatchObject({
       matchedBy: 'userid',
       displayName: '马跃如',
       unionid: 'union-017298',
       dingtalkUserId: '017298',
       mergedUserIds: [],
+      positionName: 'PQE',
+      supervisor: {
+        directoryUserId: '013192',
+        name: '戴锋',
+      },
+      organization: {
+        id: '100',
+        name: '100',
+        parentId: null,
+      },
     });
   });
 

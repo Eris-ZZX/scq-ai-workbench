@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
+import { applyDingTalkOrgProfile } from '@/lib/dingtalk/org-profile';
 import { resolveDingTalkIdentityByUserId } from '@/lib/dingtalk/users';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 import { mergeUsersIntoPrimary } from '@/platform/auth/user-merge';
@@ -97,6 +98,20 @@ export async function POST(request: Request) {
       return { displayName, mergedUserIds };
     });
 
+    const orgProfile = await applyDingTalkOrgProfile(userId, identity);
+    let organization: { id: string; name: string; parentId: string | null } | null = null;
+    if (orgProfile.primaryDepartmentId) {
+      const department = await db.dingTalkDepartment.findUnique({
+        where: { id: orgProfile.primaryDepartmentId },
+        select: { id: true, name: true, parentId: true },
+      });
+      organization = department ?? {
+        id: orgProfile.primaryDepartmentId,
+        name: orgProfile.primaryDepartmentId,
+        parentId: null,
+      };
+    }
+
     return NextResponse.json({
       userId,
       username: user.username,
@@ -106,6 +121,12 @@ export async function POST(request: Request) {
       unionid: identity.unionid,
       dingtalkUserId: user.username,
       mergedUserIds: result.mergedUserIds,
+      positionName: orgProfile.positionName,
+      supervisor: {
+        directoryUserId: orgProfile.supervisorDingtalkUserId,
+        name: orgProfile.supervisorName,
+      },
+      organization,
     });
   } catch (error) {
     console.error('[admin/platform-users/dingtalk/refresh]', error);

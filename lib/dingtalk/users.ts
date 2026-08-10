@@ -5,14 +5,63 @@ export type DingTalkIdentity = {
   userid: string;
   unionid: string;
   jobNumber?: string;
+  title?: string | null;
+  managerUserId?: string | null;
+  name?: string | null;
+  departmentIds: string[];
+  departmentOrders: Record<string, number>;
 };
 
 type DingTalkUserDetailResult = {
   userid?: string;
   unionid?: string;
+  name?: string;
+  title?: string;
+  manager_userid?: string;
+  managerUserid?: string;
   job_number?: string | number;
   jobnumber?: string | number;
+  dept_id_list?: Array<number | string>;
+  deptIdList?: Array<number | string>;
+  dept_order_list?: Array<{
+    dept_id?: number | string;
+    deptId?: number | string;
+    order?: number;
+  }> | Record<string, number>;
+  deptOrderList?: Array<{
+    dept_id?: number | string;
+    deptId?: number | string;
+    order?: number;
+  }> | Record<string, number>;
 };
+
+function normalizeDepartmentIds(result: DingTalkUserDetailResult): string[] {
+  const values = result.dept_id_list ?? result.deptIdList ?? [];
+  return Array.from(new Set(values.map((value) => String(value)).filter(Boolean)));
+}
+
+function normalizeDepartmentOrders(result: DingTalkUserDetailResult): Record<string, number> {
+  const values = result.dept_order_list ?? result.deptOrderList;
+  if (!values) return {};
+
+  if (Array.isArray(values)) {
+    return Object.fromEntries(
+      values
+        .filter((item) => item.dept_id !== undefined || item.deptId !== undefined)
+        .map((item) => [
+          String(item.dept_id ?? item.deptId),
+          Number.isFinite(item.order) ? Number(item.order) : 0,
+        ]),
+    );
+  }
+
+  return Object.fromEntries(
+    Object.entries(values).map(([departmentId, order]) => [
+      String(departmentId),
+      Number.isFinite(order) ? Number(order) : 0,
+    ]),
+  );
+}
 
 export async function resolveUserIdByUnionId(unionId: string): Promise<string | null> {
   const token = await getCorpAccessToken();
@@ -87,10 +136,18 @@ export async function resolveDingTalkIdentityByUserId(
 
   if (!result) return null;
   const jobNumber = result.job_number ?? result.jobnumber;
+  const title = result.title?.trim() || null;
+  const managerUserId = (result.manager_userid ?? result.managerUserid)?.trim() || null;
+  const name = result.name?.trim() || null;
   return {
     userid: returnedUserId,
     unionid: unionId,
     jobNumber: jobNumber === undefined ? undefined : String(jobNumber).trim(),
+    title,
+    managerUserId,
+    name,
+    departmentIds: normalizeDepartmentIds(result),
+    departmentOrders: normalizeDepartmentOrders(result),
   };
 }
 
