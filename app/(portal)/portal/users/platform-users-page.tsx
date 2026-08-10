@@ -508,7 +508,7 @@ export default function PlatformUsersPage() {
                     <ReadOnlyField label="岗位（目录同步）">
                       {selectedUser.position?.positionRole.name || '尚未获取'}
                     </ReadOnlyField>
-                    <ReadOnlyField label="直接上级（目录同步）">
+                    <ReadOnlyField label="直接上级（Authing）">
                       {selectedUser.supervisor.name || selectedUser.supervisor.directoryUserId || '尚未获取'}
                     </ReadOnlyField>
                     <ReadOnlyField label="unionid">

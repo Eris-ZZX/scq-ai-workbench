@@ -112,6 +112,7 @@ describe('/api/admin/platform-users', () => {
       {
         ...serializedUser,
         id: 'user-with-org',
+        extendedFields: null,
         dingtalkDepartments: [{
           department: { id: 'dept-1', name: '质量工程部', parentId: 'root' },
         }],
@@ -119,6 +120,7 @@ describe('/api/admin/platform-users', () => {
       {
         ...serializedUser,
         id: 'user-without-org',
+        extendedFields: null,
         dingtalkDepartments: [],
       },
     ]);
@@ -139,6 +141,65 @@ describe('/api/admin/platform-users', () => {
         organization: null,
       }),
     ]));
+  });
+
+  it('resolves supervisor display_name via emp_leader_origin_id to emp_origin_id', async () => {
+    mockDatabase.user.findMany
+      .mockResolvedValueOnce([
+        {
+          ...serializedUser,
+          id: 'user-1',
+          username: '017298',
+          displayName: '马跃如',
+          extendedFields: JSON.stringify({
+            emp_leader_origin_id: '1626178515924779009',
+            emp_origin_id: 'user-origin',
+          }),
+          dingtalkDepartments: [],
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'leader-1',
+          username: '013192',
+          displayName: '戴锋',
+          extendedFields: JSON.stringify({ emp_origin_id: '1626178515924779009' }),
+        },
+      ]);
+
+    const response = (await GET({
+      nextUrl: { searchParams: new URLSearchParams() },
+    } as never)) as unknown as MockResponse;
+    const body = response.data as {
+      users: Array<{ id: string; supervisor: { directoryUserId: string | null; name: string | null } }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.users[0]?.supervisor).toEqual({
+      directoryUserId: '1626178515924779009',
+      name: '戴锋',
+    });
+    expect(mockDatabase.user.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: undefined,
+    }));
+  });
+
+  it('searches users by displayName in addition to username and email', async () => {
+    mockDatabase.user.findMany.mockResolvedValueOnce([]);
+
+    await GET({
+      nextUrl: { searchParams: new URLSearchParams('q=马跃如') },
+    } as never);
+
+    expect(mockDatabase.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        OR: [
+          { username: { contains: '马跃如' } },
+          { displayName: { contains: '马跃如' } },
+          { email: { contains: '马跃如' } },
+        ],
+      },
+    }));
   });
 
   it('protects the last active platform administrator', async () => {

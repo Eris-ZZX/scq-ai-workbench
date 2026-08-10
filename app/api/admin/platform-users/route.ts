@@ -8,6 +8,12 @@ import {
   getAuditRequestContext,
 } from '@/modules/ai-resources/audit';
 import { assertNotLastEffectiveAdmin } from '@/modules/ai-resources/guards';
+import {
+  buildEmpOriginIndex,
+  matchAuthingSupervisor,
+  readAuthingExtendedString,
+  type AuthingSupervisorMatch,
+} from '@/platform/auth/authing-extended-fields';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 
 const PLATFORM_ROLES = new Set(['user', 'admin']);
@@ -24,6 +30,7 @@ function userWhere(query: string) {
   return {
     OR: [
       { username: { contains: query } },
+      { displayName: { contains: query } },
       { email: { contains: query } },
     ],
   };
@@ -90,7 +97,10 @@ const userSelect = {
   },
 } as const;
 
-function serializeUser(user: any) {
+function serializeUser(
+  user: any,
+  supervisorOverride?: AuthingSupervisorMatch | null,
+) {
   const position = Array.isArray(user.positionBinding)
     ? user.positionBinding[0] ?? null
     : user.positionBinding ?? null;
@@ -101,15 +111,22 @@ function serializeUser(user: any) {
     ? user.dingtalkDepartments[0] ?? null
     : user.dingtalkDepartments ?? null;
 
+  const supervisor = supervisorOverride
+    ? {
+      directoryUserId: supervisorOverride.empOriginId,
+      name: supervisorOverride.displayName || supervisorOverride.username,
+    }
+    : {
+      directoryUserId: null,
+      name: null,
+    };
+
   return {
     ...user,
     source: user.externalSource || (user.directoryUserId ? 'dws' : 'local'),
     platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
     workbenchRole: user.role,
-    supervisor: {
-      directoryUserId: user.directorySupervisorUserId ?? user.supervisorDingtalkUserId ?? null,
-      name: user.directorySupervisorName ?? user.supervisorName ?? null,
-    },
+    supervisor,
     directoryUserId: user.directoryUserId ?? null,
     organization: organizationBinding?.department ?? null,
     position,
@@ -123,6 +140,43 @@ function serializeUser(user: any) {
     projectMembers: undefined,
     dingtalkDepartments: undefined,
   };
+}
+
+async function loadAuthingSupervisorIndex(
+  users: Array<{
+    id: string;
+    username: string;
+    displayName: string | null;
+    extendedFields: string | null;
+  }>,
+) {
+  const index = buildEmpOriginIndex(users);
+  const missingLeaderIds = Array.from(new Set(
+    users
+      .map((user) => readAuthingExtendedString(user.extendedFields, 'emp_leader_origin_id'))
+      .filter((leaderId): leaderId is string => leaderId !== null && !index.has(leaderId)),
+  ));
+
+  if (missingLeaderIds.length === 0) return index;
+
+  const candidates = await db.user.findMany({
+    where: {
+      OR: missingLeaderIds.map((leaderId) => ({
+        extendedFields: { contains: leaderId },
+      })),
+    },
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      extendedFields: true,
+    },
+  });
+
+  for (const [empOriginId, match] of buildEmpOriginIndex(candidates)) {
+    if (!index.has(empOriginId)) index.set(empOriginId, match);
+  }
+  return index;
 }
 
 async function writePermissionAudit(
@@ -181,8 +235,16 @@ export async function GET(request: NextRequest) {
     db.aiResourceMembership.count({ where: { role: 'admin', user: { status: 'active' } } }),
   ]);
 
+  const supervisorIndex = await loadAuthingSupervisorIndex(users);
+
   return NextResponse.json({
-    users: users.map(serializeUser),
+    users: users.map((user) => serializeUser(
+      user,
+      matchAuthingSupervisor(
+        readAuthingExtendedString(user.extendedFields, 'emp_leader_origin_id'),
+        supervisorIndex,
+      ),
+    )),
     safeguards: {
       activePlatformAdminCount: platformAdminCount,
       activeWorkbenchAdminCount: workbenchAdminCount,

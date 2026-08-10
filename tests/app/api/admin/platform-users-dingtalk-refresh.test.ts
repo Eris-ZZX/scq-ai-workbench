@@ -7,6 +7,7 @@ const { mockRequireAdmin, mockResolveIdentity, mockApplyOrgProfile, mockDatabase
   mockDatabase: {
     user: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
     dingTalkDepartment: {
       findUnique: vi.fn(),
@@ -36,7 +37,10 @@ describe('/api/admin/platform-users/dingtalk/refresh', () => {
       id: 'local-1',
       username: '017298',
       displayName: '马跃如',
-      extendedFields: JSON.stringify({ emp_no: '017298' }),
+      extendedFields: JSON.stringify({
+        emp_no: '017298',
+        emp_leader_origin_id: '1626178515924779009',
+      }),
     });
     mockDatabase.$transaction.mockImplementation(async (callback: (transaction: {
       $queryRaw: (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown[]>;
@@ -64,6 +68,14 @@ describe('/api/admin/platform-users/dingtalk/refresh', () => {
       name: '100',
       parentId: null,
     });
+    mockDatabase.user.findMany.mockResolvedValue([
+      {
+        id: 'leader-1',
+        username: '013192',
+        displayName: '戴锋',
+        extendedFields: JSON.stringify({ emp_origin_id: '1626178515924779009' }),
+      },
+    ]);
   });
 
   it('resolves identity by Authing username and persists userid plus unionid', async () => {
@@ -85,7 +97,7 @@ describe('/api/admin/platform-users/dingtalk/refresh', () => {
       mergedUserIds: [],
       positionName: 'PQE',
       supervisor: {
-        directoryUserId: '013192',
+        directoryUserId: '1626178515924779009',
         name: '戴锋',
       },
       organization: {

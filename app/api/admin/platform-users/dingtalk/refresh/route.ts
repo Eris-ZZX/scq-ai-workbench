@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 import { applyDingTalkOrgProfile } from '@/lib/dingtalk/org-profile';
 import { resolveDingTalkIdentityByUserId } from '@/lib/dingtalk/users';
+import {
+  buildEmpOriginIndex,
+  matchAuthingSupervisor,
+  readAuthingExtendedString,
+} from '@/platform/auth/authing-extended-fields';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 import { mergeUsersIntoPrimary } from '@/platform/auth/user-merge';
 
@@ -112,6 +117,30 @@ export async function POST(request: Request) {
       };
     }
 
+    const leaderOriginId = readAuthingExtendedString(user.extendedFields, 'emp_leader_origin_id');
+    let supervisor: { directoryUserId: string | null; name: string | null } = {
+      directoryUserId: null,
+      name: null,
+    };
+    if (leaderOriginId) {
+      const leaders = await db.user.findMany({
+        where: { extendedFields: { contains: leaderOriginId } },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          extendedFields: true,
+        },
+      });
+      const matched = matchAuthingSupervisor(leaderOriginId, buildEmpOriginIndex(leaders));
+      if (matched) {
+        supervisor = {
+          directoryUserId: matched.empOriginId,
+          name: matched.displayName || matched.username,
+        };
+      }
+    }
+
     return NextResponse.json({
       userId,
       username: user.username,
@@ -122,10 +151,7 @@ export async function POST(request: Request) {
       dingtalkUserId: user.username,
       mergedUserIds: result.mergedUserIds,
       positionName: orgProfile.positionName,
-      supervisor: {
-        directoryUserId: orgProfile.supervisorDingtalkUserId,
-        name: orgProfile.supervisorName,
-      },
+      supervisor,
       organization,
     });
   } catch (error) {
