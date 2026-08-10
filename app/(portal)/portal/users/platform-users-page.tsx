@@ -85,6 +85,7 @@ export default function PlatformUsersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreate);
   const [orgCopied, setOrgCopied] = useState(false);
+  const [dingtalkRefreshing, setDingtalkRefreshing] = useState(false);
 
   /** 复制文本到剪贴板；http 环境下 clipboard API 不可用，降级 textarea 复制 */
   async function copyText(text: string) {
@@ -115,6 +116,7 @@ export default function PlatformUsersPage() {
       position: selectedUser.position?.positionRole?.name ?? null,
       supervisor: selectedUser.supervisor?.name ?? selectedUser.supervisor?.directoryUserId ?? null,
       unionid: selectedUser.unionid,
+      dingtalk_userid: selectedUser.dingtalkUserId,
       phone_number: selectedUser.phoneNumber,
       phone_number_verified: selectedUser.phoneNumberVerified,
       email_verified: selectedUser.emailVerified,
@@ -136,6 +138,46 @@ export default function PlatformUsersPage() {
     if (await copyText(JSON.stringify(payload, null, 2))) {
       setOrgCopied(true);
       setTimeout(() => setOrgCopied(false), 2000);
+    }
+  }
+
+  async function refreshDingTalkIdentity() {
+    if (!selectedUser) return;
+    setDingtalkRefreshing(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await fetch('/api/admin/platform-users/dingtalk/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedUser.id }),
+      });
+      const body = await response.json().catch(() => null) as {
+        error?: string;
+        unionid?: string;
+        dingtalkUserId?: string;
+      } | null;
+      if (!response.ok) {
+        setError(body?.error ?? '刷新钉钉身份失败。');
+        return;
+      }
+      setData((current) => current ? {
+        ...current,
+        users: current.users.map((user) => (
+          user.id === selectedUser.id
+            ? {
+              ...user,
+              unionid: body?.unionid ?? user.unionid,
+              dingtalkUserId: body?.dingtalkUserId ?? user.dingtalkUserId,
+            }
+            : user
+        )),
+      } : current);
+      setMessage('钉钉 unionid 和 userid 已刷新。');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '刷新钉钉身份失败。');
+    } finally {
+      setDingtalkRefreshing(false);
     }
   }
 
@@ -406,14 +448,25 @@ export default function PlatformUsersPage() {
                 <div className="rounded border border-border bg-muted/20 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm font-semibold text-foreground">组织属性</span>
-                    <button
-                      type="button"
-                      onClick={() => void copyOrganization()}
-                      className="flex items-center gap-1 rounded border border-border bg-white px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                    >
-                      <Copy className="h-3 w-3" />
-                      {orgCopied ? '已复制' : '复制全部'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void refreshDingTalkIdentity()}
+                        disabled={dingtalkRefreshing}
+                        className="flex items-center gap-1 rounded border border-border bg-white px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${dingtalkRefreshing ? 'animate-spin' : ''}`} />
+                        {dingtalkRefreshing ? '刷新中' : '刷新钉钉身份'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copyOrganization()}
+                        className="flex items-center gap-1 rounded border border-border bg-white px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                      >
+                        <Copy className="h-3 w-3" />
+                        {orgCopied ? '已复制' : '复制全部'}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex gap-3 overflow-x-auto">
                     <ReadOnlyField label="组织小组（目录同步）">
@@ -427,6 +480,9 @@ export default function PlatformUsersPage() {
                     </ReadOnlyField>
                     <ReadOnlyField label="unionid">
                       {selectedUser.unionid || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="userid">
+                      {selectedUser.dingtalkUserId || '尚未获取'}
                     </ReadOnlyField>
                     <ReadOnlyField label="phone_number">
                       {selectedUser.phoneNumber || '尚未获取'}

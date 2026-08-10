@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DUMMY_HASH } from '@/lib/db/auth';
 import { db } from '@/lib/database';
+import { findDingTalkDirectoryUsersByJobNumber } from '@/lib/dingtalk/organization';
 import { authingIdentityKey, type AuthingClaims } from './authing.claims';
 
 type IdentityRow = {
@@ -65,14 +66,57 @@ async function findUsersByUnionid(transaction: typeof db, unionid: string | null
     SELECT id, username, display_name, email, avatar, platform_role, role, status
     FROM users
     WHERE unionid = ${unionid}
+       OR (external_source = 'dingtalk' AND external_id = ${unionid})
   `;
+}
+
+async function resolveDingTalkIdentity(identity: AuthingClaims) {
+  if (identity.unionid) {
+    return { unionid: identity.unionid, dingtalkUserId: null };
+  }
+  if (!identity.employeeNumber) return null;
+
+  const matches = await findDingTalkDirectoryUsersByJobNumber(identity.employeeNumber);
+  if (matches.length > 1) {
+    throw new ExternalIdentityError(
+      'conflict',
+      `钉钉工号 ${identity.employeeNumber} 匹配到多个账号`,
+    );
+  }
+
+  const match = matches[0];
+  const unionid = match?.unionid ?? match?.unionId;
+  if (!match || !unionid || !match.userid) {
+    throw new ExternalIdentityError(
+      'missing',
+      `钉钉通讯录中未找到工号 ${identity.employeeNumber} 的完整身份`,
+    );
+  }
+  return { unionid: String(unionid), dingtalkUserId: String(match.userid) };
 }
 
 export async function upsertAuthingUser(identity: AuthingClaims) {
   const identityKey = authingIdentityKey(identity);
+  const knownIdentity = await db.$queryRaw<{
+    user_id: string;
+    unionid: string | null;
+    dingtalk_user_id: string | null;
+  }[]>`
+    SELECT ui.user_id, u.unionid, u.dingtalk_user_id
+    FROM user_identities AS ui
+    JOIN users AS u ON u.id = ui.user_id
+    WHERE ui.provider = 'authing'
+      AND ui.issuer = ${identity.issuer}
+      AND ui.subject = ${identity.subject}
+    LIMIT 1
+  `;
+  const dingTalkIdentity = knownIdentity[0]
+    ? null
+    : await resolveDingTalkIdentity(identity);
+  const resolvedUnionid = identity.unionid ?? dingTalkIdentity?.unionid ?? null;
 
   return db.$transaction(async (transaction) => {
-    const knownIdentity = await transaction.$queryRaw<IdentityRow[]>`
+    const knownIdentityRows = await transaction.$queryRaw<IdentityRow[]>`
       SELECT user_id
       FROM user_identities
       WHERE provider = 'authing'
@@ -81,11 +125,11 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       LIMIT 1
     `;
 
-    let user = knownIdentity[0]
-      ? await findUserById(transaction, knownIdentity[0].user_id)
+    let user = knownIdentityRows[0]
+      ? await findUserById(transaction, knownIdentityRows[0].user_id)
       : null;
 
-    if (knownIdentity[0] && !user) {
+    if (knownIdentityRows[0] && !user) {
       throw new ExternalIdentityError('missing', 'Authing 身份绑定的本地用户不存在');
     }
 
@@ -99,7 +143,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
 
     if (!user) {
       // 钉钉来源的本地用户以 unionid 为衔接键，优先于 email 匹配
-      const unionidUsers = await findUsersByUnionid(transaction, identity.unionid);
+      const unionidUsers = await findUsersByUnionid(transaction, resolvedUnionid);
       if (unionidUsers.length > 1) {
         throw new ExternalIdentityError('conflict', 'Authing unionid 匹配到多个本地账号');
       }
@@ -112,6 +156,15 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
         throw new ExternalIdentityError('conflict', 'Authing email 匹配到多个本地账号');
       }
       user = emailUsers[0] ?? null;
+    }
+
+    if (!user && !resolvedUnionid) {
+      throw new ExternalIdentityError(
+        'missing',
+        identity.employeeNumber
+          ? `未能为 Authing 工号 ${identity.employeeNumber} 找到钉钉身份`
+          : 'Authing 未返回 emp_no，无法绑定钉钉身份',
+      );
     }
 
     if (!user) {
@@ -128,7 +181,8 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           status: 'active',
           externalSource: 'authing',
           externalId: identityKey,
-          unionid: identity.unionid,
+          dingtalkUserId: dingTalkIdentity?.dingtalkUserId ?? null,
+          unionid: resolvedUnionid,
           phoneNumber: identity.phoneNumber,
           phoneNumberVerified: identity.phoneNumberVerified,
           emailVerified: identity.emailVerified,
@@ -164,6 +218,23 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       throw new ExternalIdentityError('disabled', '本地账号已被禁用，请联系管理员');
     }
 
+    const identityConflicts = await transaction.$queryRaw<UserRow[]>`
+      SELECT id, username, display_name, email, avatar, platform_role, role, status
+      FROM users
+      WHERE id <> ${user.id}
+        AND (
+          (${resolvedUnionid}::text IS NOT NULL AND unionid = ${resolvedUnionid}::text)
+          OR (
+            ${dingTalkIdentity?.dingtalkUserId ?? null}::text IS NOT NULL
+            AND dingtalk_user_id = ${dingTalkIdentity?.dingtalkUserId ?? null}::text
+          )
+        )
+      LIMIT 2
+    `;
+    if (identityConflicts.length > 0) {
+      throw new ExternalIdentityError('conflict', '钉钉身份已绑定其他本地账号');
+    }
+
     const existingUserIdentity = await transaction.$queryRaw<IdentityRow[]>`
       SELECT user_id, subject
       FROM user_identities
@@ -187,7 +258,8 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
             ELSE email
           END,
           avatar = COALESCE(${identity.avatar}::text, avatar),
-          unionid = COALESCE(${identity.unionid}::text, unionid),
+          unionid = COALESCE(${resolvedUnionid}::text, unionid),
+          dingtalk_user_id = COALESCE(${dingTalkIdentity?.dingtalkUserId ?? null}::text, dingtalk_user_id),
           phone_number = COALESCE(${identity.phoneNumber}::text, phone_number),
           phone_number_verified = COALESCE(${identity.phoneNumberVerified}, phone_number_verified),
           email_verified = COALESCE(${identity.emailVerified}, email_verified),

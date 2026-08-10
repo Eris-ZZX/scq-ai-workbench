@@ -23,6 +23,7 @@ export type AuthingClaims = {
   zoneinfo: string | null;
   externalId: string | null;
   extendedFields: string | null;
+  employeeNumber: string | null;
   tenantId: string | null;
   userpoolId: string | null;
   roles: string | null;
@@ -38,6 +39,21 @@ function claimBoolean(claims: JWTPayload, key: string): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
+function parseExtendedFields(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function mapAuthingClaims(issuer: string, claims: JWTPayload): AuthingClaims {
   const subject = claimString(claims, 'sub');
   const username =
@@ -49,9 +65,14 @@ export function mapAuthingClaims(issuer: string, claims: JWTPayload): AuthingCla
 
   // extended_fields 是对象，序列化为 JSON 文本存储
   const extendedFields = claims.extended_fields;
-  const extendedFieldsText = extendedFields && typeof extendedFields === 'object'
-    ? JSON.stringify(extendedFields)
+  const extendedFieldsObject = parseExtendedFields(extendedFields);
+  const extendedFieldsText = extendedFieldsObject
+    ? JSON.stringify(extendedFieldsObject)
     : claimString(claims, 'extended_fields');
+  const employeeNumber = typeof extendedFieldsObject?.emp_no === 'string'
+    && extendedFieldsObject.emp_no.trim()
+    ? extendedFieldsObject.emp_no.trim()
+    : null;
 
   const roles = claims.roles;
   const rolesText = Array.isArray(roles)
@@ -82,6 +103,7 @@ export function mapAuthingClaims(issuer: string, claims: JWTPayload): AuthingCla
     zoneinfo: claimString(claims, 'zoneinfo'),
     externalId: claimString(claims, 'external_id'),
     extendedFields: extendedFieldsText,
+    employeeNumber,
     tenantId: claimString(claims, 'tenant_id'),
     userpoolId: claimString(claims, 'userpool_id'),
     roles: rolesText,

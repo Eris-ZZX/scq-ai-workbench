@@ -135,6 +135,21 @@ describe('Authing OIDC adapter', () => {
       subject: 'sub',
       username: 'E003',
       email: 'e003@example.test',
+      employeeNumber: null,
     });
+  });
+
+  it('extracts emp_no from string or object extended_fields claims', () => {
+    expect(mapAuthingClaims('https://auth.example.test', {
+      sub: 'sub-string-fields',
+      username: '017298',
+      extended_fields: JSON.stringify({ emp_no: '017298' }),
+    }).employeeNumber).toBe('017298');
+
+    expect(mapAuthingClaims('https://auth.example.test', {
+      sub: 'sub-object-fields',
+      username: '013192',
+      extended_fields: { emp_no: '013192' },
+    }).employeeNumber).toBe('013192');
   });
 });
