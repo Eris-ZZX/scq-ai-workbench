@@ -5,6 +5,7 @@ import {
   authingRedirectUri,
   discoverAuthing,
   exchangeAuthingCode,
+  fetchAuthingUserInfo,
   safeAuthingReturnPath,
   verifyAuthingIdToken,
 } from '@/platform/auth/authing.oidc';
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
     const config = authingConfig();
     const discovery = await discoverAuthing(config.issuer);
     const redirectUri = authingRedirectUri(request.url);
-    const idToken = await exchangeAuthingCode({
+    const { idToken, accessToken } = await exchangeAuthingCode({
       config,
       tokenEndpoint: discovery.token_endpoint,
       code,
@@ -70,7 +71,46 @@ export async function GET(request: NextRequest) {
       jwksUri: discovery.jwks_uri,
       nonce,
     });
-    const identity = mapAuthingClaims(config.issuer, claims);
+
+    const mergedClaims = { ...claims };
+    if (accessToken) {
+      let userInfoClaims: Record<string, unknown> | null = null;
+      try {
+        userInfoClaims = await fetchAuthingUserInfo({
+          userinfoEndpoint: discovery.userinfo_endpoint,
+          accessToken,
+        });
+        console.info('[authing] userinfo claims received', {
+          keys: Object.keys(userInfoClaims).sort(),
+          sub: userInfoClaims.sub ?? null,
+          unionid: userInfoClaims.unionid ?? null,
+          external_id: userInfoClaims.external_id ?? null,
+        });
+      } catch (error) {
+        console.warn(
+          '[authing] userinfo fetch failed; continue with id_token claims',
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+
+      if (
+        userInfoClaims &&
+        typeof userInfoClaims.sub === 'string' &&
+        userInfoClaims.sub !== claims.sub
+      ) {
+        throw new Error('Authing userinfo sub 不匹配');
+      }
+
+      for (const [key, value] of Object.entries(userInfoClaims ?? {})) {
+        if (mergedClaims[key] === undefined || mergedClaims[key] === null || mergedClaims[key] === '') {
+          mergedClaims[key] = value;
+        }
+      }
+    } else {
+      console.warn('[authing] token response has no access_token; skip userinfo');
+    }
+
+    const identity = mapAuthingClaims(config.issuer, mergedClaims);
     const user = await upsertAuthingUser(identity);
 
     await createSession({

@@ -15,6 +15,7 @@ export type AuthingDiscovery = {
   authorization_endpoint: string;
   token_endpoint: string;
   jwks_uri: string;
+  userinfo_endpoint: string;
 };
 
 export type AuthingConfig = ReturnType<typeof assertAuthingConfiguration>;
@@ -87,7 +88,8 @@ export async function discoverAuthing(issuer: string): Promise<AuthingDiscovery>
   if (
     typeof value.authorization_endpoint !== 'string' ||
     typeof value.token_endpoint !== 'string' ||
-    typeof value.jwks_uri !== 'string'
+    typeof value.jwks_uri !== 'string' ||
+    typeof value.userinfo_endpoint !== 'string'
   ) {
     throw new Error('Authing 服务发现响应缺少必要端点');
   }
@@ -96,6 +98,7 @@ export async function discoverAuthing(issuer: string): Promise<AuthingDiscovery>
     authorization_endpoint: value.authorization_endpoint,
     token_endpoint: value.token_endpoint,
     jwks_uri: value.jwks_uri,
+    userinfo_endpoint: value.userinfo_endpoint,
   };
   discoveryCache = { issuer, value: result, fetchedAt: Date.now() };
   return result;
@@ -127,11 +130,40 @@ export async function exchangeAuthingCode(input: {
     );
   }
 
-  const body = (await response.json()) as { id_token?: unknown };
+  const body = (await response.json()) as {
+    id_token?: unknown;
+    access_token?: unknown;
+  };
   if (typeof body.id_token !== 'string' || !body.id_token) {
     throw new Error('Authing 响应缺少 id_token');
   }
-  return body.id_token;
+  return {
+    idToken: body.id_token,
+    accessToken: typeof body.access_token === 'string' && body.access_token
+      ? body.access_token
+      : null,
+  };
+}
+
+export async function fetchAuthingUserInfo(input: {
+  userinfoEndpoint: string;
+  accessToken: string;
+}): Promise<Record<string, unknown>> {
+  const response = await fetch(input.userinfoEndpoint, {
+    headers: {
+      accept: 'application/json',
+      authorization: `Bearer ${input.accessToken}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Authing 用户信息获取失败：HTTP ${response.status}`);
+  }
+
+  const body = await response.json() as unknown;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error('Authing 用户信息响应格式无效');
+  }
+  return body as Record<string, unknown>;
 }
 
 let jwksCache: {
