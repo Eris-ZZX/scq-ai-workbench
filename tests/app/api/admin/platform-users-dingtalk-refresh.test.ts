@@ -6,9 +6,8 @@ const { mockRequireAdmin, mockResolveIdentity, mockDatabase } = vi.hoisted(() =>
   mockDatabase: {
     user: {
       findUnique: vi.fn(),
-      findFirst: vi.fn(),
-      update: vi.fn(),
     },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -29,10 +28,14 @@ describe('/api/admin/platform-users/dingtalk/refresh', () => {
     mockDatabase.user.findUnique.mockResolvedValue({
       id: 'local-1',
       username: '017298',
+      displayName: '马跃如',
       extendedFields: JSON.stringify({ emp_no: '017298' }),
     });
-    mockDatabase.user.findFirst.mockResolvedValue(null);
-    mockDatabase.user.update.mockResolvedValue({});
+    mockDatabase.$transaction.mockImplementation(async (callback: (transaction: {
+      $queryRaw: (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown[]>;
+    }) => unknown) => callback({
+      $queryRaw: vi.fn().mockResolvedValue([]),
+    }));
     mockResolveIdentity.mockResolvedValue({
       userid: '017298',
       unionid: 'union-017298',
@@ -46,18 +49,40 @@ describe('/api/admin/platform-users/dingtalk/refresh', () => {
 
     expect(response.status).toBe(200);
     expect(mockResolveIdentity).toHaveBeenCalledWith('017298');
-    expect(mockDatabase.user.update).toHaveBeenCalledWith({
-      where: { id: 'local-1' },
-      data: {
-        unionid: 'union-017298',
-        dingtalkUserId: '017298',
-      },
-    });
     expect(body).toMatchObject({
       matchedBy: 'userid',
+      displayName: '马跃如',
       unionid: 'union-017298',
       dingtalkUserId: '017298',
+      mergedUserIds: [],
     });
+  });
+
+  it('merges a conflicting DingTalk account and reports the duplicate id', async () => {
+    const queryRaw = vi.fn()
+      .mockResolvedValueOnce([{ id: 'duplicate-1' }])
+      .mockImplementation((strings: TemplateStringsArray) => {
+        const sql = strings.join('');
+        if (sql.includes('SELECT id, platform_role, role, directory_user_id')) {
+          return Promise.resolve([
+            { id: 'local-1', platform_role: 'user', role: 'user', directory_user_id: null },
+            { id: 'duplicate-1', platform_role: 'admin', role: 'manager', directory_user_id: null },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+    mockDatabase.$transaction.mockImplementationOnce(async (callback: (transaction: {
+      $queryRaw: typeof queryRaw;
+    }) => unknown) => callback({ $queryRaw: queryRaw }));
+
+    const response = await POST(requestWithUserId('local-1'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.mergedUserIds).toEqual(['duplicate-1']);
+    expect(queryRaw.mock.calls.some(([strings]) =>
+      String(strings.join('')).includes("SET status = 'disabled'"),
+    )).toBe(true);
   });
 
   it('rejects an Authing username and emp_no mismatch before calling DingTalk', async () => {
@@ -79,7 +104,6 @@ describe('/api/admin/platform-users/dingtalk/refresh', () => {
     const response = await POST(requestWithUserId('local-1'));
 
     expect(response.status).toBe(404);
-    expect(mockDatabase.user.update).not.toHaveBeenCalled();
   });
 });
 

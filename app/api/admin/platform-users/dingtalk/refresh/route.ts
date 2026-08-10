@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 import { resolveDingTalkIdentityByUserId } from '@/lib/dingtalk/users';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
+import { mergeUsersIntoPrimary } from '@/platform/auth/user-merge';
 
 function employeeNumberFromExtendedFields(value: string | null) {
   if (!value) return null;
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, username: true, extendedFields: true },
+    select: { id: true, username: true, displayName: true, extendedFields: true },
   });
   if (!user) return NextResponse.json({ error: '用户不存在。' }, { status: 404 });
 
@@ -59,31 +60,41 @@ export async function POST(request: Request) {
       );
     }
 
-    const conflict = await db.user.findFirst({
-      where: {
-        OR: [
-          { id: { not: userId }, unionid: identity.unionid },
-          { id: { not: userId }, dingtalkUserId: identity.userid },
-        ],
-      },
-      select: { id: true, username: true },
-    });
-    if (conflict) {
-      return NextResponse.json(
-        {
-          error: `钉钉身份已绑定其他本地用户：${conflict.username}`,
-          conflictUserId: conflict.id,
-        },
-        { status: 409 },
+    const result = await db.$transaction(async (transaction) => {
+      const conflicts = await transaction.$queryRaw<{ id: string }[]>`
+        SELECT id
+        FROM users
+        WHERE id <> ${userId}
+          AND (
+            unionid = ${identity.unionid}
+            OR dingtalk_user_id = ${identity.userid}
+            OR (external_source = 'dingtalk' AND external_id = ${identity.unionid})
+          )
+        FOR UPDATE
+      `;
+      const mergedUserIds = await mergeUsersIntoPrimary(
+        transaction,
+        userId,
+        conflicts.map((conflict) => conflict.id),
+        { preferredEmail: null },
       );
-    }
-
-    await db.user.update({
-      where: { id: userId },
-      data: {
-        unionid: identity.unionid,
-        dingtalkUserId: identity.userid,
-      },
+      const authingProfiles = await transaction.$queryRaw<{ display_name: string | null }[]>`
+        SELECT display_name
+        FROM user_identities
+        WHERE user_id = ${userId}
+          AND provider = 'authing'
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `;
+      const displayName = authingProfiles[0]?.display_name ?? user.displayName;
+      await transaction.$queryRaw`
+        UPDATE users
+        SET display_name = COALESCE(${displayName}::text, display_name),
+            unionid = ${identity.unionid},
+            dingtalk_user_id = ${user.username}
+        WHERE id = ${userId}
+      `;
+      return { displayName, mergedUserIds };
     });
 
     return NextResponse.json({
@@ -91,8 +102,10 @@ export async function POST(request: Request) {
       username: user.username,
       employeeNumber,
       matchedBy: 'userid',
+      displayName: result.displayName,
       unionid: identity.unionid,
-      dingtalkUserId: identity.userid,
+      dingtalkUserId: user.username,
+      mergedUserIds: result.mergedUserIds,
     });
   } catch (error) {
     console.error('[admin/platform-users/dingtalk/refresh]', error);

@@ -152,4 +152,13 @@ describe('Authing OIDC adapter', () => {
       extended_fields: { emp_no: '013192' },
     }).employeeNumber).toBe('013192');
   });
+
+  it('prefers Authing display_name over the standard name claim', () => {
+    expect(mapAuthingClaims('https://auth.example.test', {
+      sub: 'display-name-sub',
+      username: '017298',
+      name: 'OIDC Name',
+      display_name: 'Authing Display Name',
+    }).name).toBe('Authing Display Name');
+  });
 });

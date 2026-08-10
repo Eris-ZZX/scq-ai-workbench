@@ -154,8 +154,11 @@ export default function PlatformUsersPage() {
       });
       const body = await response.json().catch(() => null) as {
         error?: string;
+        userId?: string;
+        displayName?: string | null;
         unionid?: string;
         dingtalkUserId?: string;
+        mergedUserIds?: string[];
       } | null;
       if (!response.ok) {
         setError(body?.error ?? '刷新钉钉身份失败。');
@@ -163,17 +166,23 @@ export default function PlatformUsersPage() {
       }
       setData((current) => current ? {
         ...current,
-        users: current.users.map((user) => (
+        users: current.users.filter((user) => !body?.mergedUserIds?.includes(user.id)).map((user) => (
           user.id === selectedUser.id
             ? {
               ...user,
+              displayName: body?.displayName ?? user.displayName,
               unionid: body?.unionid ?? user.unionid,
               dingtalkUserId: body?.dingtalkUserId ?? user.dingtalkUserId,
             }
             : user
         )),
       } : current);
-      setMessage('已通过钉钉 userid 详情接口刷新 unionid 和 userid。');
+      if (body?.userId) setSelectedId(body.userId);
+      setMessage(
+        body?.mergedUserIds?.length
+          ? `钉钉身份已刷新，并合并 ${body.mergedUserIds.length} 个重复用户。`
+          : '已通过钉钉 userid 详情接口刷新 unionid 和 userid。',
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : '刷新钉钉身份失败。');
     } finally {
@@ -400,7 +409,8 @@ export default function PlatformUsersPage() {
                     <UserRound className="h-4 w-4" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-foreground">{user.username}</span>
+                    <span className="block truncate text-sm font-medium text-foreground">{user.displayName || user.username}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">账号：{user.username}</span>
                     <span className="block truncate text-xs text-muted-foreground">{user.email || '未填写邮箱'}</span>
                     <span className="block truncate text-[11px] text-muted-foreground">
                       平台：{user.platformRole === 'admin' ? '管理员' : '用户'}
@@ -434,9 +444,9 @@ export default function PlatformUsersPage() {
             <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">{selectedUser.username}</h2>
+                  <h2 className="text-lg font-semibold text-foreground">{selectedUser.displayName || selectedUser.username}</h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {sourceLabel(selectedUser.source)} · {selectedUser.email || '未填写邮箱'}
+                    账号：{selectedUser.username} · {sourceLabel(selectedUser.source)} · {selectedUser.email || '未填写邮箱'}
                   </p>
                 </div>
                 <span className={`rounded px-2 py-1 text-xs ${selectedUser.status === 'active' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>

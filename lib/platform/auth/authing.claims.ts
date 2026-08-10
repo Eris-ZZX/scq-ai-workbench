@@ -85,7 +85,7 @@ export function mapAuthingClaims(issuer: string, claims: JWTPayload): AuthingCla
     issuer,
     subject,
     username,
-    name: claimString(claims, 'name'),
+    name: claimString(claims, 'display_name') ?? claimString(claims, 'name'),
     email: claimString(claims, 'email'),
     avatar: claimString(claims, 'picture') ?? claimString(claims, 'avatar'),
     unionid: claimString(claims, 'unionid'),

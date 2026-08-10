@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockResolveIdentity, mockDatabase } = vi.hoisted(() => ({
+const { mockResolveIdentity, mockDatabase, mockTransaction } = vi.hoisted(() => ({
   mockResolveIdentity: vi.fn(),
   mockDatabase: {
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
+  },
+  mockTransaction: {
+    $queryRaw: vi.fn(),
+    user: {
+      create: vi.fn(),
+    },
   },
 }));
 
@@ -35,12 +41,7 @@ describe('Authing external user DingTalk binding', () => {
     expect(mockResolveIdentity).not.toHaveBeenCalled();
   });
 
-  it('re-resolves DingTalk identity when an existing Authing binding lacks mapping fields', async () => {
-    mockDatabase.$queryRaw.mockResolvedValueOnce([{
-      user_id: 'local-1',
-      unionid: null,
-      dingtalk_user_id: null,
-    }]);
+  it('resolves DingTalk identity on every Authing login', async () => {
     mockResolveIdentity.mockResolvedValueOnce({
       userid: '017298',
       unionid: 'union-017298',
@@ -55,19 +56,83 @@ describe('Authing external user DingTalk binding', () => {
     expect(mockResolveIdentity).toHaveBeenCalledWith('017298');
   });
 
-  it('does not re-query a complete existing Authing binding', async () => {
-    mockDatabase.$queryRaw.mockResolvedValueOnce([{
-      user_id: 'local-1',
+  it('merges identity and DingTalk candidates into the Authing account', async () => {
+    mockResolveIdentity.mockResolvedValueOnce({
+      userid: '017298',
       unionid: 'union-017298',
-      dingtalk_user_id: '017298',
-    }]);
+      jobNumber: '017298',
+    });
+    mockDatabase.$transaction.mockImplementation(async (callback: (transaction: typeof mockTransaction) => unknown) => {
+      return callback(mockTransaction);
+    });
+    mockTransaction.$queryRaw.mockImplementation((strings: TemplateStringsArray) => {
+      const sql = strings.join('');
+      if (sql.includes('FROM users AS u')) {
+        return Promise.resolve([
+          {
+            id: 'authing-user',
+            username: '017298',
+            display_name: 'Authing Display',
+            email: 'mayr@shokz.com.cn',
+            platform_role: 'admin',
+            role: 'manager',
+            status: 'active',
+            has_authing_identity: true,
+            username_match: true,
+            email_match: true,
+            unionid_match: false,
+            userid_match: false,
+          },
+          {
+            id: 'dingtalk-user',
+            username: 'old-name',
+            display_name: 'Old Name',
+            email: null,
+            platform_role: 'user',
+            role: 'user',
+            status: 'active',
+            has_authing_identity: false,
+            username_match: false,
+            email_match: false,
+            unionid_match: true,
+            userid_match: false,
+          },
+        ]);
+      }
+      if (sql.includes('SELECT id, username, display_name')) {
+        return Promise.resolve([{
+          id: 'authing-user',
+          username: '017298',
+          display_name: 'Authing Display',
+          email: 'mayr@shokz.com.cn',
+          avatar: null,
+          platform_role: 'admin',
+          role: 'manager',
+          status: 'active',
+        }]);
+      }
+      if (sql.includes('SELECT id, platform_role, role, directory_user_id')) {
+        return Promise.resolve([
+          { id: 'authing-user', platform_role: 'admin', role: 'manager', directory_user_id: null },
+          { id: 'dingtalk-user', platform_role: 'user', role: 'user', directory_user_id: null },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
 
-    await expect(upsertAuthingUser(identity({
+    const result = await upsertAuthingUser(identity({
       username: '017298',
       employeeNumber: '017298',
-    }))).rejects.toThrow('stop before transaction');
+    }));
 
-    expect(mockResolveIdentity).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      id: 'authing-user',
+      displayName: 'Authing Display',
+      mergedUserIds: ['dingtalk-user'],
+    });
+    expect(mockTransaction.$queryRaw.mock.calls.some(([strings]) =>
+      String(strings.join('')).includes("SET status = 'disabled'"),
+    )).toBe(true);
   });
 });
 

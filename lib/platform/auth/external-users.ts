@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { DUMMY_HASH } from '@/lib/db/auth';
 import { db } from '@/lib/database';
 import { resolveDingTalkIdentityByUserId } from '@/lib/dingtalk/users';
+import {
+  findUserMergeCandidates,
+  mergeUsersIntoPrimary,
+  type UserMergeCandidate,
+} from './user-merge';
 import { authingIdentityKey, type AuthingClaims } from './authing.claims';
-
-type IdentityRow = {
-  user_id: string;
-  subject?: string;
-};
 
 type UserRow = {
   id: string;
@@ -41,33 +41,6 @@ async function findUserById(transaction: typeof db, userId: string) {
     LIMIT 1
   `;
   return rows[0] ?? null;
-}
-
-async function findUsersByUsername(transaction: typeof db, username: string) {
-  return transaction.$queryRaw<UserRow[]>`
-    SELECT id, username, display_name, email, avatar, platform_role, role, status
-    FROM users
-    WHERE username = ${username}
-  `;
-}
-
-async function findUsersByEmail(transaction: typeof db, email: string | null) {
-  if (!email) return [];
-  return transaction.$queryRaw<UserRow[]>`
-    SELECT id, username, display_name, email, avatar, platform_role, role, status
-    FROM users
-    WHERE lower(email) = lower(${email})
-  `;
-}
-
-async function findUsersByUnionid(transaction: typeof db, unionid: string | null) {
-  if (!unionid) return [];
-  return transaction.$queryRaw<UserRow[]>`
-    SELECT id, username, display_name, email, avatar, platform_role, role, status
-    FROM users
-    WHERE unionid = ${unionid}
-       OR (external_source = 'dingtalk' AND external_id = ${unionid})
-  `;
 }
 
 async function resolveDingTalkIdentity(identity: AuthingClaims) {
@@ -104,86 +77,47 @@ async function resolveDingTalkIdentity(identity: AuthingClaims) {
   return resolved;
 }
 
+function selectPrimaryCandidate(candidates: UserMergeCandidate[]) {
+  return candidates.find((candidate) => candidate.has_authing_identity)
+    ?? candidates.find((candidate) => candidate.username_match)
+    ?? candidates.find((candidate) => candidate.unionid_match || candidate.userid_match)
+    ?? candidates.find((candidate) => candidate.email_match)
+    ?? candidates[0]
+    ?? null;
+}
+
 export async function upsertAuthingUser(identity: AuthingClaims) {
   const identityKey = authingIdentityKey(identity);
-  const knownIdentity = await db.$queryRaw<{
-    user_id: string;
-    unionid: string | null;
-    dingtalk_user_id: string | null;
-  }[]>`
-    SELECT ui.user_id, u.unionid, u.dingtalk_user_id
-    FROM user_identities AS ui
-    JOIN users AS u ON u.id = ui.user_id
-    WHERE ui.provider = 'authing'
-      AND ui.issuer = ${identity.issuer}
-      AND ui.subject = ${identity.subject}
-    LIMIT 1
-  `;
-  const known = knownIdentity[0] ?? null;
-  const needsDingTalkIdentity = !known?.unionid || !known.dingtalk_user_id;
-  const dingTalkIdentity = needsDingTalkIdentity
-    ? await resolveDingTalkIdentity(identity)
-    : null;
-  const resolvedUnionid = dingTalkIdentity?.unionid ?? known?.unionid ?? null;
-  const resolvedDingTalkUserId = dingTalkIdentity?.userid ?? known?.dingtalk_user_id ?? null;
+  const dingTalkIdentity = await resolveDingTalkIdentity(identity);
+  const resolvedUnionid = dingTalkIdentity.unionid;
+  const resolvedDingTalkUserId = identity.username.trim();
 
   return db.$transaction(async (transaction) => {
-    const knownIdentityRows = await transaction.$queryRaw<IdentityRow[]>`
-      SELECT user_id
-      FROM user_identities
-      WHERE provider = 'authing'
-        AND issuer = ${identity.issuer}
-        AND subject = ${identity.subject}
-      LIMIT 1
-    `;
-
-    let user = knownIdentityRows[0]
-      ? await findUserById(transaction, knownIdentityRows[0].user_id)
+    const candidates = await findUserMergeCandidates(transaction, {
+      issuer: identity.issuer,
+      subject: identity.subject,
+      authingExternalId: identityKey,
+      externalId: identity.externalId,
+      username: resolvedDingTalkUserId,
+      email: identity.email,
+      unionid: resolvedUnionid,
+      dingtalkUserId: resolvedDingTalkUserId,
+    });
+    const primaryCandidate = selectPrimaryCandidate(candidates);
+    let user = primaryCandidate
+      ? await findUserById(transaction, primaryCandidate.id)
       : null;
+    let mergedUserIds: string[] = [];
 
-    if (knownIdentityRows[0] && !user) {
-      throw new ExternalIdentityError('missing', 'Authing 身份绑定的本地用户不存在');
-    }
-
-    if (!user) {
-      // 钉钉来源的本地用户以 unionid 为衔接键，优先于 email 匹配
-      const unionidUsers = await findUsersByUnionid(transaction, resolvedUnionid);
-      if (unionidUsers.length > 1) {
-        throw new ExternalIdentityError('conflict', 'Authing unionid 匹配到多个本地账号');
-      }
-      user = unionidUsers[0] ?? null;
-    }
-
-    if (!user) {
-      const usernameUsers = await findUsersByUsername(transaction, identity.username);
-      if (usernameUsers.length > 1) {
-        throw new ExternalIdentityError('conflict', 'Authing username 匹配到多个本地账号');
-      }
-      user = usernameUsers[0] ?? null;
-    }
-
-    if (!user) {
-      const emailUsers = await findUsersByEmail(transaction, identity.email);
-      if (emailUsers.length > 1) {
-        throw new ExternalIdentityError('conflict', 'Authing email 匹配到多个本地账号');
-      }
-      user = emailUsers[0] ?? null;
-    }
-
-    if (!resolvedUnionid || !resolvedDingTalkUserId) {
-      throw new ExternalIdentityError(
-        'missing',
-        identity.employeeNumber
-          ? `未能为 Authing 工号 ${identity.employeeNumber} 获取完整钉钉身份`
-          : `未能为 Authing userid ${identity.username} 获取完整钉钉身份`,
-      );
+    if (user?.status !== 'active' && user) {
+      throw new ExternalIdentityError('disabled', '本地账号已被禁用，请联系管理员');
     }
 
     if (!user) {
       const created = await transaction.user.create({
         data: {
           id: randomUUID(),
-          username: identity.username,
+          username: resolvedDingTalkUserId,
           displayName: identity.name,
           passwordHash: DUMMY_HASH,
           email: identity.email,
@@ -224,54 +158,33 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
         role: 'user',
         status: 'active',
       };
-    }
-
-    if (user.status !== 'active') {
-      throw new ExternalIdentityError('disabled', '本地账号已被禁用，请联系管理员');
-    }
-
-    const identityConflicts = await transaction.$queryRaw<UserRow[]>`
-      SELECT id, username, display_name, email, avatar, platform_role, role, status
-      FROM users
-      WHERE id <> ${user.id}
-        AND (
-          (${resolvedUnionid}::text IS NOT NULL AND unionid = ${resolvedUnionid}::text)
-          OR (
-            ${resolvedDingTalkUserId}::text IS NOT NULL
-            AND dingtalk_user_id = ${resolvedDingTalkUserId}::text
-          )
-        )
-      LIMIT 2
-    `;
-    if (identityConflicts.length > 0) {
-      throw new ExternalIdentityError('conflict', '钉钉身份已绑定其他本地账号');
-    }
-
-    const existingUserIdentity = await transaction.$queryRaw<IdentityRow[]>`
-      SELECT user_id, subject
-      FROM user_identities
-      WHERE provider = 'authing'
-        AND issuer = ${identity.issuer}
-        AND user_id = ${user.id}
-        AND subject <> ${identity.subject}
-      LIMIT 1
-    `;
-    if (existingUserIdentity[0]) {
-      throw new ExternalIdentityError('conflict', '本地账号已绑定其他 Authing 身份');
+    } else {
+      mergedUserIds = await mergeUsersIntoPrimary(
+        transaction,
+        user.id,
+        candidates.filter((candidate) => candidate.id !== user?.id).map((candidate) => candidate.id),
+        { preferredEmail: identity.email },
+      );
     }
 
     await transaction.$queryRaw`
+      DELETE FROM user_identities
+      WHERE user_id = ${user.id}
+        AND provider = 'authing'
+        AND issuer = ${identity.issuer}
+        AND subject <> ${identity.subject}
+    `;
+
+    await transaction.$queryRaw`
       UPDATE users
-      SET display_name = COALESCE(${identity.name}::text, display_name),
-          email = CASE
-            WHEN ${identity.email}::text IS NOT NULL
-              AND (email IS NULL OR lower(email) = lower(${identity.email}::text))
-            THEN ${identity.email}::text
-            ELSE email
-          END,
+      SET username = ${resolvedDingTalkUserId},
+          display_name = COALESCE(${identity.name}::text, display_name),
+          email = COALESCE(${identity.email}::text, email),
           avatar = COALESCE(${identity.avatar}::text, avatar),
-          unionid = COALESCE(${resolvedUnionid}::text, unionid),
-          dingtalk_user_id = COALESCE(${resolvedDingTalkUserId}::text, dingtalk_user_id),
+          external_source = 'authing',
+          external_id = ${identityKey},
+          unionid = ${resolvedUnionid},
+          dingtalk_user_id = ${resolvedDingTalkUserId},
           phone_number = COALESCE(${identity.phoneNumber}::text, phone_number),
           phone_number_verified = COALESCE(${identity.phoneNumberVerified}, phone_number_verified),
           email_verified = COALESCE(${identity.emailVerified}, email_verified),
@@ -326,6 +239,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       role: refreshed.role,
       status: refreshed.status,
       displayName: refreshed.display_name,
+      mergedUserIds,
     };
   });
 }
