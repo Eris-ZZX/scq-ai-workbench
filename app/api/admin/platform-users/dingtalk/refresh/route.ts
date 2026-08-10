@@ -4,6 +4,7 @@ import {
   DingTalkOrganizationError,
   findDingTalkDirectoryUsersByJobNumber,
 } from '@/lib/dingtalk/organization';
+import { resolveDingTalkIdentityByMobile, type DingTalkIdentity } from '@/lib/dingtalk/users';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 
 function employeeNumberFromExtendedFields(value: string | null) {
@@ -28,47 +29,70 @@ export async function POST(request: Request) {
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, username: true, extendedFields: true },
+    select: { id: true, username: true, phoneNumber: true, extendedFields: true },
   });
   if (!user) return NextResponse.json({ error: '用户不存在。' }, { status: 404 });
 
   const employeeNumber = employeeNumberFromExtendedFields(user.extendedFields);
-  if (!employeeNumber) {
+  const mobile = user.phoneNumber?.trim() || null;
+  if (!mobile && !employeeNumber) {
     return NextResponse.json(
-      { error: '该用户没有 Authing emp_no，无法查询钉钉身份。' },
+      { error: '该用户没有 Authing 手机号或 emp_no，无法查询钉钉身份。' },
       { status: 400 },
     );
   }
 
   try {
-    const matches = await findDingTalkDirectoryUsersByJobNumber(employeeNumber);
-    if (matches.length === 0) {
-      return NextResponse.json(
-        { error: `钉钉通讯录中未找到工号 ${employeeNumber}。` },
-        { status: 404 },
-      );
-    }
-    if (matches.length > 1) {
-      return NextResponse.json(
-        { error: `工号 ${employeeNumber} 匹配到多个钉钉账号，请先处理冲突。` },
-        { status: 409 },
-      );
+    let identity: DingTalkIdentity | null = mobile
+      ? await resolveDingTalkIdentityByMobile(mobile)
+      : null;
+    let matchedBy = 'mobile';
+
+    if (
+      identity &&
+      employeeNumber &&
+      identity.jobNumber &&
+      identity.jobNumber !== employeeNumber
+    ) {
+      identity = null;
     }
 
-    const match = matches[0]!;
-    const unionid = match.unionid ?? match.unionId;
-    if (!unionid || !match.userid) {
+    if (!identity && employeeNumber) {
+      const matches = await findDingTalkDirectoryUsersByJobNumber(employeeNumber);
+      if (matches.length > 1) {
+        return NextResponse.json(
+          { error: `工号 ${employeeNumber} 匹配到多个钉钉账号，请先处理冲突。` },
+          { status: 409 },
+        );
+      }
+      const match = matches[0];
+      const unionid = match?.unionid ?? match?.unionId;
+      if (match?.userid && unionid) {
+        identity = {
+          userid: String(match.userid),
+          unionid: String(unionid),
+          jobNumber: employeeNumber,
+        };
+        matchedBy = 'job_number';
+      }
+    }
+
+    if (!identity) {
       return NextResponse.json(
-        { error: `工号 ${employeeNumber} 的钉钉账号缺少 unionid 或 userid。` },
-        { status: 502 },
+        {
+          error: employeeNumber
+            ? `手机号和工号 ${employeeNumber} 均未找到钉钉账号。`
+            : '钉钉通讯录中未找到该手机号对应的账号。',
+        },
+        { status: 404 },
       );
     }
 
     const conflict = await db.user.findFirst({
       where: {
         OR: [
-          { id: { not: userId }, unionid: String(unionid) },
-          { id: { not: userId }, dingtalkUserId: String(match.userid) },
+          { id: { not: userId }, unionid: identity.unionid },
+          { id: { not: userId }, dingtalkUserId: identity.userid },
         ],
       },
       select: { id: true, username: true },
@@ -86,8 +110,8 @@ export async function POST(request: Request) {
     await db.user.update({
       where: { id: userId },
       data: {
-        unionid: String(unionid),
-        dingtalkUserId: String(match.userid),
+        unionid: identity.unionid,
+        dingtalkUserId: identity.userid,
       },
     });
 
@@ -95,8 +119,9 @@ export async function POST(request: Request) {
       userId,
       username: user.username,
       employeeNumber,
-      unionid: String(unionid),
-      dingtalkUserId: String(match.userid),
+      matchedBy,
+      unionid: identity.unionid,
+      dingtalkUserId: identity.userid,
     });
   } catch (error) {
     if (error instanceof DingTalkOrganizationError) {

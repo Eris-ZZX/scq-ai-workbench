@@ -1,6 +1,12 @@
 import { db } from '@/lib/database';
 import { getCorpAccessToken } from './token';
 
+export type DingTalkIdentity = {
+  userid: string;
+  unionid: string;
+  jobNumber?: string;
+};
+
 export async function resolveUserIdByUnionId(unionId: string): Promise<string | null> {
   const token = await getCorpAccessToken();
   if (!token) return null;
@@ -23,6 +29,70 @@ export async function resolveUserIdByUnionId(unionId: string): Promise<string | 
     return null;
   }
   return data.result.userid;
+}
+
+export async function resolveUserIdByMobile(mobile: string): Promise<string | null> {
+  const token = await getCorpAccessToken();
+  if (!token || !mobile.trim()) return null;
+
+  const res = await fetch(
+    `https://oapi.dingtalk.com/topapi/v2/user/getbymobile?access_token=${encodeURIComponent(token)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile: mobile.trim() }),
+    },
+  );
+  const data = (await res.json()) as {
+    errcode?: number;
+    errmsg?: string;
+    result?: { userid?: string };
+  };
+  if (!res.ok || data.errcode !== 0 || !data.result?.userid) {
+    console.error('[dingtalk] getbymobile failed:', data);
+    return null;
+  }
+  return data.result.userid;
+}
+
+export async function resolveDingTalkIdentityByMobile(
+  mobile: string,
+): Promise<DingTalkIdentity | null> {
+  const userid = await resolveUserIdByMobile(mobile);
+  if (!userid) return null;
+
+  const token = await getCorpAccessToken();
+  if (!token) return null;
+  const res = await fetch(
+    `https://oapi.dingtalk.com/topapi/v2/user/get?access_token=${encodeURIComponent(token)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userid, language: 'zh_CN' }),
+    },
+  );
+  const data = (await res.json()) as {
+    errcode?: number;
+    errmsg?: string;
+    result?: {
+      userid?: string;
+      unionid?: string;
+      job_number?: string | number;
+      jobnumber?: string | number;
+    };
+  };
+  const result = data.result;
+  if (!res.ok || data.errcode !== 0 || !result?.unionid) {
+    console.error('[dingtalk] user detail lookup failed:', data);
+    return null;
+  }
+
+  const jobNumber = result.job_number ?? result.jobnumber;
+  return {
+    userid: result.userid ?? userid,
+    unionid: result.unionid,
+    jobNumber: jobNumber === undefined ? undefined : String(jobNumber).trim(),
+  };
 }
 
 /** 取用户的钉钉 unionId：优先读 users.unionid 列（Authing 来源兼容），旧 dingtalk 来源读 external_id */

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { DUMMY_HASH } from '@/lib/db/auth';
 import { db } from '@/lib/database';
 import { findDingTalkDirectoryUsersByJobNumber } from '@/lib/dingtalk/organization';
+import { resolveDingTalkIdentityByMobile } from '@/lib/dingtalk/users';
 import { authingIdentityKey, type AuthingClaims } from './authing.claims';
 
 type IdentityRow = {
@@ -74,6 +75,22 @@ async function resolveDingTalkIdentity(identity: AuthingClaims) {
   if (identity.unionid) {
     return { unionid: identity.unionid, dingtalkUserId: null };
   }
+
+  if (identity.phoneNumber) {
+    const mobileIdentity = await resolveDingTalkIdentityByMobile(identity.phoneNumber);
+    if (
+      mobileIdentity &&
+      (!identity.employeeNumber ||
+        !mobileIdentity.jobNumber ||
+        mobileIdentity.jobNumber === identity.employeeNumber)
+    ) {
+      return {
+        unionid: mobileIdentity.unionid,
+        dingtalkUserId: mobileIdentity.userid,
+      };
+    }
+  }
+
   if (!identity.employeeNumber) return null;
 
   const matches = await findDingTalkDirectoryUsersByJobNumber(identity.employeeNumber);
