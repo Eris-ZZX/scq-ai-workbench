@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Plus, RefreshCw, Search, UserRound } from 'lucide-react';
+import { Copy, Plus, RefreshCw, Search, UserRound } from 'lucide-react';
 
 type Position = { id: string; name: string; roleName?: string | null };
 type Organization = { id: string; name: string; parentId: string | null };
@@ -84,6 +84,60 @@ export default function PlatformUsersPage() {
   const [message, setMessage] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreate);
+  const [orgCopied, setOrgCopied] = useState(false);
+
+  /** 复制文本到剪贴板；http 环境下 clipboard API 不可用，降级 textarea 复制 */
+  async function copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      textarea.remove();
+      return ok;
+    }
+  }
+
+  /** 把全部从 Authing 获取的信息（含目录同步字段）打包成 JSON 复制 */
+  async function copyOrganization() {
+    if (!selectedUser) return;
+    const payload = {
+      username: selectedUser.username,
+      email: selectedUser.email,
+      display_name: selectedUser.displayName,
+      organization: selectedUser.organization?.name ?? null,
+      position: selectedUser.position?.positionRole?.name ?? null,
+      supervisor: selectedUser.supervisor?.name ?? selectedUser.supervisor?.directoryUserId ?? null,
+      unionid: selectedUser.unionid,
+      phone_number: selectedUser.phoneNumber,
+      phone_number_verified: selectedUser.phoneNumberVerified,
+      email_verified: selectedUser.emailVerified,
+      address: selectedUser.address,
+      birthdate: selectedUser.birthdate,
+      gender: selectedUser.gender,
+      locale: selectedUser.locale,
+      nickname: selectedUser.nickname,
+      preferred_username: selectedUser.preferredUsername,
+      profile: selectedUser.profile,
+      website: selectedUser.website,
+      zoneinfo: selectedUser.zoneinfo,
+      external_id: selectedUser.externalIdAuthing,
+      extended_fields: selectedUser.extendedFields,
+      tenant_id: selectedUser.tenantId,
+      userpool_id: selectedUser.userpoolId,
+      roles: selectedUser.roles,
+    };
+    if (await copyText(JSON.stringify(payload, null, 2))) {
+      setOrgCopied(true);
+      setTimeout(() => setOrgCopied(false), 2000);
+    }
+  }
 
   const visibleUsers = useMemo(
     () => (data?.users ?? []).filter((user) => (
@@ -350,7 +404,17 @@ export default function PlatformUsersPage() {
 
               <div className="space-y-3">
                 <div className="rounded border border-border bg-muted/20 p-3">
-                  <div className="mb-2 text-sm font-semibold text-foreground">组织属性</div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-foreground">组织属性</span>
+                    <button
+                      type="button"
+                      onClick={() => void copyOrganization()}
+                      className="flex items-center gap-1 rounded border border-border bg-white px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                    >
+                      <Copy className="h-3 w-3" />
+                      {orgCopied ? '已复制' : '复制全部'}
+                    </button>
+                  </div>
                   <div className="flex gap-3 overflow-x-auto">
                     <ReadOnlyField label="组织小组（目录同步）">
                       {selectedUser.organization?.name || '未同步组织'}
