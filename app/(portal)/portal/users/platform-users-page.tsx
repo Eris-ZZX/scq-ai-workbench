@@ -173,7 +173,7 @@ export default function PlatformUsersPage() {
             : user
         )),
       } : current);
-      setMessage('钉钉 unionid 和 userid 已刷新。');
+      setMessage('已通过钉钉 userid 详情接口刷新 unionid 和 userid。');
     } catch (err) {
       setError(err instanceof Error ? err.message : '刷新钉钉身份失败。');
     } finally {

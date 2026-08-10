@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DUMMY_HASH } from '@/lib/db/auth';
 import { db } from '@/lib/database';
-import { findDingTalkDirectoryUsersByJobNumber } from '@/lib/dingtalk/organization';
-import { resolveDingTalkIdentityByMobile } from '@/lib/dingtalk/users';
+import { resolveDingTalkIdentityByUserId } from '@/lib/dingtalk/users';
 import { authingIdentityKey, type AuthingClaims } from './authing.claims';
 
 type IdentityRow = {
@@ -72,44 +71,37 @@ async function findUsersByUnionid(transaction: typeof db, unionid: string | null
 }
 
 async function resolveDingTalkIdentity(identity: AuthingClaims) {
-  if (identity.unionid) {
-    return { unionid: identity.unionid, dingtalkUserId: null };
-  }
-
-  if (identity.phoneNumber) {
-    const mobileIdentity = await resolveDingTalkIdentityByMobile(identity.phoneNumber);
-    if (
-      mobileIdentity &&
-      (!identity.employeeNumber ||
-        !mobileIdentity.jobNumber ||
-        mobileIdentity.jobNumber === identity.employeeNumber)
-    ) {
-      return {
-        unionid: mobileIdentity.unionid,
-        dingtalkUserId: mobileIdentity.userid,
-      };
-    }
-  }
-
-  if (!identity.employeeNumber) return null;
-
-  const matches = await findDingTalkDirectoryUsersByJobNumber(identity.employeeNumber);
-  if (matches.length > 1) {
+  const userId = identity.username.trim();
+  if (
+    identity.employeeNumber &&
+    identity.employeeNumber !== userId
+  ) {
     throw new ExternalIdentityError(
       'conflict',
-      `钉钉工号 ${identity.employeeNumber} 匹配到多个账号`,
+      `Authing username ${userId} 与 emp_no ${identity.employeeNumber} 不一致`,
     );
   }
 
-  const match = matches[0];
-  const unionid = match?.unionid ?? match?.unionId;
-  if (!match || !unionid || !match.userid) {
+  const resolved = await resolveDingTalkIdentityByUserId(userId);
+  if (!resolved) {
     throw new ExternalIdentityError(
       'missing',
-      `钉钉通讯录中未找到工号 ${identity.employeeNumber} 的完整身份`,
+      `钉钉用户详情接口未找到 userid ${userId} 或未返回 unionid`,
     );
   }
-  return { unionid: String(unionid), dingtalkUserId: String(match.userid) };
+
+  if (
+    identity.employeeNumber &&
+    resolved.jobNumber &&
+    resolved.jobNumber !== identity.employeeNumber
+  ) {
+    throw new ExternalIdentityError(
+      'conflict',
+      `钉钉 userid ${userId} 的工号 ${resolved.jobNumber} 与 Authing emp_no ${identity.employeeNumber} 不一致`,
+    );
+  }
+
+  return resolved;
 }
 
 export async function upsertAuthingUser(identity: AuthingClaims) {
@@ -127,10 +119,13 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       AND ui.subject = ${identity.subject}
     LIMIT 1
   `;
-  const dingTalkIdentity = knownIdentity[0]
-    ? null
-    : await resolveDingTalkIdentity(identity);
-  const resolvedUnionid = identity.unionid ?? dingTalkIdentity?.unionid ?? null;
+  const known = knownIdentity[0] ?? null;
+  const needsDingTalkIdentity = !known?.unionid || !known.dingtalk_user_id;
+  const dingTalkIdentity = needsDingTalkIdentity
+    ? await resolveDingTalkIdentity(identity)
+    : null;
+  const resolvedUnionid = dingTalkIdentity?.unionid ?? known?.unionid ?? null;
+  const resolvedDingTalkUserId = dingTalkIdentity?.userid ?? known?.dingtalk_user_id ?? null;
 
   return db.$transaction(async (transaction) => {
     const knownIdentityRows = await transaction.$queryRaw<IdentityRow[]>`
@@ -151,20 +146,20 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
     }
 
     if (!user) {
-      const usernameUsers = await findUsersByUsername(transaction, identity.username);
-      if (usernameUsers.length > 1) {
-        throw new ExternalIdentityError('conflict', 'Authing username 匹配到多个本地账号');
-      }
-      user = usernameUsers[0] ?? null;
-    }
-
-    if (!user) {
       // 钉钉来源的本地用户以 unionid 为衔接键，优先于 email 匹配
       const unionidUsers = await findUsersByUnionid(transaction, resolvedUnionid);
       if (unionidUsers.length > 1) {
         throw new ExternalIdentityError('conflict', 'Authing unionid 匹配到多个本地账号');
       }
       user = unionidUsers[0] ?? null;
+    }
+
+    if (!user) {
+      const usernameUsers = await findUsersByUsername(transaction, identity.username);
+      if (usernameUsers.length > 1) {
+        throw new ExternalIdentityError('conflict', 'Authing username 匹配到多个本地账号');
+      }
+      user = usernameUsers[0] ?? null;
     }
 
     if (!user) {
@@ -175,12 +170,12 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       user = emailUsers[0] ?? null;
     }
 
-    if (!user && !resolvedUnionid) {
+    if (!resolvedUnionid || !resolvedDingTalkUserId) {
       throw new ExternalIdentityError(
         'missing',
         identity.employeeNumber
-          ? `未能为 Authing 工号 ${identity.employeeNumber} 找到钉钉身份`
-          : 'Authing 未返回 emp_no，无法绑定钉钉身份',
+          ? `未能为 Authing 工号 ${identity.employeeNumber} 获取完整钉钉身份`
+          : `未能为 Authing userid ${identity.username} 获取完整钉钉身份`,
       );
     }
 
@@ -198,7 +193,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           status: 'active',
           externalSource: 'authing',
           externalId: identityKey,
-          dingtalkUserId: dingTalkIdentity?.dingtalkUserId ?? null,
+          dingtalkUserId: resolvedDingTalkUserId,
           unionid: resolvedUnionid,
           phoneNumber: identity.phoneNumber,
           phoneNumberVerified: identity.phoneNumberVerified,
@@ -242,8 +237,8 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
         AND (
           (${resolvedUnionid}::text IS NOT NULL AND unionid = ${resolvedUnionid}::text)
           OR (
-            ${dingTalkIdentity?.dingtalkUserId ?? null}::text IS NOT NULL
-            AND dingtalk_user_id = ${dingTalkIdentity?.dingtalkUserId ?? null}::text
+            ${resolvedDingTalkUserId}::text IS NOT NULL
+            AND dingtalk_user_id = ${resolvedDingTalkUserId}::text
           )
         )
       LIMIT 2
@@ -276,7 +271,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           END,
           avatar = COALESCE(${identity.avatar}::text, avatar),
           unionid = COALESCE(${resolvedUnionid}::text, unionid),
-          dingtalk_user_id = COALESCE(${dingTalkIdentity?.dingtalkUserId ?? null}::text, dingtalk_user_id),
+          dingtalk_user_id = COALESCE(${resolvedDingTalkUserId}::text, dingtalk_user_id),
           phone_number = COALESCE(${identity.phoneNumber}::text, phone_number),
           phone_number_verified = COALESCE(${identity.phoneNumberVerified}, phone_number_verified),
           email_verified = COALESCE(${identity.emailVerified}, email_verified),

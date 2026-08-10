@@ -206,26 +206,6 @@ export async function fetchDingTalkDirectoryUsers(
   return Array.from(users.values());
 }
 
-function directoryUserJobNumber(user: DingTalkDirectoryUser) {
-  const value = user.job_number ?? user.jobnumber;
-  return value === undefined || value === null ? '' : String(value).trim();
-}
-
-/**
- * 通过员工工号查找钉钉通讯录身份。
- *
- * 钉钉没有提供按 job_number 直接查询用户的接口，因此复用通讯录部门
- * 遍历结果，返回唯一匹配的 unionid/userid。
- */
-export async function findDingTalkDirectoryUsersByJobNumber(jobNumber: string) {
-  const normalizedJobNumber = jobNumber.trim();
-  if (!normalizedJobNumber) return [];
-
-  const departments = await fetchDingTalkDepartments();
-  const directoryUsers = await fetchDingTalkDirectoryUsers(departments);
-  return directoryUsers.filter((user) => directoryUserJobNumber(user) === normalizedJobNumber);
-}
-
 async function fetchDepartmentSnapshot(departmentId: string): Promise<DingTalkDepartmentSnapshot> {
   const result = await callDingTalk<{
     dept_id?: number | string;

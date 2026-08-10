@@ -7,6 +7,13 @@ export type DingTalkIdentity = {
   jobNumber?: string;
 };
 
+type DingTalkUserDetailResult = {
+  userid?: string;
+  unionid?: string;
+  job_number?: string | number;
+  jobnumber?: string | number;
+};
+
 export async function resolveUserIdByUnionId(unionId: string): Promise<string | null> {
   const token = await getCorpAccessToken();
   if (!token) return null;
@@ -31,66 +38,58 @@ export async function resolveUserIdByUnionId(unionId: string): Promise<string | 
   return data.result.userid;
 }
 
-export async function resolveUserIdByMobile(mobile: string): Promise<string | null> {
-  const token = await getCorpAccessToken();
-  if (!token || !mobile.trim()) return null;
-
-  const res = await fetch(
-    `https://oapi.dingtalk.com/topapi/v2/user/getbymobile?access_token=${encodeURIComponent(token)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mobile: mobile.trim() }),
-    },
-  );
-  const data = (await res.json()) as {
-    errcode?: number;
-    errmsg?: string;
-    result?: { userid?: string };
-  };
-  if (!res.ok || data.errcode !== 0 || !data.result?.userid) {
-    console.error('[dingtalk] getbymobile failed:', data);
-    return null;
-  }
-  return data.result.userid;
-}
-
-export async function resolveDingTalkIdentityByMobile(
-  mobile: string,
+/**
+ * 通过钉钉企业通讯录 userid 查询完整身份。
+ *
+ * Authing username 在当前组织内就是钉钉 userid，因此登录绑定和管理员
+ * 刷新都统一走这条官方接口链路，避免依赖手机号查询或部门遍历权限。
+ */
+export async function resolveDingTalkIdentityByUserId(
+  userId: string,
 ): Promise<DingTalkIdentity | null> {
-  const userid = await resolveUserIdByMobile(mobile);
-  if (!userid) return null;
-
   const token = await getCorpAccessToken();
-  if (!token) return null;
+  const normalizedUserId = userId.trim();
+  if (!token || !normalizedUserId) return null;
+
   const res = await fetch(
     `https://oapi.dingtalk.com/topapi/v2/user/get?access_token=${encodeURIComponent(token)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userid, language: 'zh_CN' }),
+      body: JSON.stringify({ userid: normalizedUserId, language: 'zh_CN' }),
     },
   );
   const data = (await res.json()) as {
     errcode?: number;
     errmsg?: string;
-    result?: {
-      userid?: string;
-      unionid?: string;
-      job_number?: string | number;
-      jobnumber?: string | number;
-    };
+    result?: DingTalkUserDetailResult;
   };
   const result = data.result;
-  if (!res.ok || data.errcode !== 0 || !result?.unionid) {
-    console.error('[dingtalk] user detail lookup failed:', data);
+  const returnedUserId = result?.userid?.trim();
+  const unionId = result?.unionid?.trim();
+  if (
+    !res.ok ||
+    data.errcode !== 0 ||
+    !returnedUserId ||
+    returnedUserId !== normalizedUserId ||
+    !unionId
+  ) {
+    console.error('[dingtalk] user detail lookup failed:', {
+      status: res.status,
+      errcode: data.errcode ?? null,
+      errmsg: data.errmsg ?? null,
+      requestedUserId: normalizedUserId,
+      returnedUserId: returnedUserId ?? null,
+      hasUnionId: Boolean(unionId),
+    });
     return null;
   }
 
+  if (!result) return null;
   const jobNumber = result.job_number ?? result.jobnumber;
   return {
-    userid: result.userid ?? userid,
-    unionid: result.unionid,
+    userid: returnedUserId,
+    unionid: unionId,
     jobNumber: jobNumber === undefined ? undefined : String(jobNumber).trim(),
   };
 }

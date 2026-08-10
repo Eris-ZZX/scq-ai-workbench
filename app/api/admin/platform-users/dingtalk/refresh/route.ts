@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
-import {
-  DingTalkOrganizationError,
-  findDingTalkDirectoryUsersByJobNumber,
-} from '@/lib/dingtalk/organization';
-import { resolveDingTalkIdentityByMobile, type DingTalkIdentity } from '@/lib/dingtalk/users';
+import { resolveDingTalkIdentityByUserId } from '@/lib/dingtalk/users';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 
 function employeeNumberFromExtendedFields(value: string | null) {
@@ -29,62 +25,37 @@ export async function POST(request: Request) {
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, username: true, phoneNumber: true, extendedFields: true },
+    select: { id: true, username: true, extendedFields: true },
   });
   if (!user) return NextResponse.json({ error: '用户不存在。' }, { status: 404 });
 
   const employeeNumber = employeeNumberFromExtendedFields(user.extendedFields);
-  const mobile = user.phoneNumber?.trim() || null;
-  if (!mobile && !employeeNumber) {
+  if (employeeNumber && employeeNumber !== user.username) {
     return NextResponse.json(
-      { error: '该用户没有 Authing 手机号或 emp_no，无法查询钉钉身份。' },
-      { status: 400 },
+      { error: `Authing username ${user.username} 与 emp_no ${employeeNumber} 不一致。` },
+      { status: 409 },
     );
   }
 
   try {
-    let identity: DingTalkIdentity | null = mobile
-      ? await resolveDingTalkIdentityByMobile(mobile)
-      : null;
-    let matchedBy = 'mobile';
+    const identity = await resolveDingTalkIdentityByUserId(user.username);
+    if (!identity) {
+      return NextResponse.json(
+        { error: `钉钉用户详情接口未找到 userid ${user.username} 或未返回 unionid。` },
+        { status: 404 },
+      );
+    }
 
     if (
-      identity &&
       employeeNumber &&
       identity.jobNumber &&
       identity.jobNumber !== employeeNumber
     ) {
-      identity = null;
-    }
-
-    if (!identity && employeeNumber) {
-      const matches = await findDingTalkDirectoryUsersByJobNumber(employeeNumber);
-      if (matches.length > 1) {
-        return NextResponse.json(
-          { error: `工号 ${employeeNumber} 匹配到多个钉钉账号，请先处理冲突。` },
-          { status: 409 },
-        );
-      }
-      const match = matches[0];
-      const unionid = match?.unionid ?? match?.unionId;
-      if (match?.userid && unionid) {
-        identity = {
-          userid: String(match.userid),
-          unionid: String(unionid),
-          jobNumber: employeeNumber,
-        };
-        matchedBy = 'job_number';
-      }
-    }
-
-    if (!identity) {
       return NextResponse.json(
         {
-          error: employeeNumber
-            ? `手机号和工号 ${employeeNumber} 均未找到钉钉账号。`
-            : '钉钉通讯录中未找到该手机号对应的账号。',
+          error: `钉钉 userid ${user.username} 的工号 ${identity.jobNumber} 与 Authing emp_no ${employeeNumber} 不一致。`,
         },
-        { status: 404 },
+        { status: 409 },
       );
     }
 
@@ -119,14 +90,11 @@ export async function POST(request: Request) {
       userId,
       username: user.username,
       employeeNumber,
-      matchedBy,
+      matchedBy: 'userid',
       unionid: identity.unionid,
       dingtalkUserId: identity.userid,
     });
   } catch (error) {
-    if (error instanceof DingTalkOrganizationError) {
-      return NextResponse.json({ error: error.message }, { status: 502 });
-    }
     console.error('[admin/platform-users/dingtalk/refresh]', error);
     return NextResponse.json({ error: '刷新钉钉身份失败。' }, { status: 500 });
   }

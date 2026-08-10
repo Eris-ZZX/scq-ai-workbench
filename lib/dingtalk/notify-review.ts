@@ -540,7 +540,7 @@ export async function sendTestNotifyToUser(
 
   const userid = await ensureDingTalkUserId(localUserId);
   if (!userid) {
-    return { ok: false, error: '当前账号未绑定钉钉企业 userid，请先用钉钉扫码登录一次' };
+    return { ok: false, error: '当前账号未绑定钉钉企业 userid，请先通过 Authing 登录或刷新钉钉身份' };
   }
 
   const url = buildAuthEntryUrl('/ai-resources/admin/dingtalk');
@@ -574,7 +574,7 @@ export async function sendTestTodoToUser(
 
   const unionId = await getDingTalkUnionId(localUserId);
   if (!unionId) {
-    return { ok: false, error: '当前账号未绑定钉钉 unionId，请先登录同步' };
+    return { ok: false, error: '当前账号未绑定钉钉 unionId，请先通过 Authing 登录或刷新钉钉身份' };
   }
 
   const content = TEST_NOTIFICATION_CONTENT[category];
@@ -608,7 +608,7 @@ export async function completeTestTodo(
 ): Promise<{ ok: boolean; error?: string }> {
   const unionId = await getDingTalkUnionId(localUserId);
   if (!unionId) {
-    return { ok: false, error: '当前账号未绑定钉钉 unionId，请先登录同步' };
+    return { ok: false, error: '当前账号未绑定钉钉 unionId，请先通过 Authing 登录或刷新钉钉身份' };
   }
 
   const ok = await completeDingTalkTodo(unionId, taskId);
