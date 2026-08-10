@@ -46,6 +46,29 @@ describe('production deploy platform simulation', () => {
     expect(unconfirmed).toEqual([]);
   });
 
+  it('every DROP TABLE migration is idempotent (IF EXISTS)', async () => {
+    // 生产从旧分支（无该表）升级时，DROP 的表可能从未存在；
+    // 不带 IF EXISTS 会导致迁移在部署时失败（42P01），app 无法启动
+    const drizzleDir = join(ROOT, 'drizzle');
+    const files = (await readdir(drizzleDir))
+      .filter((name) => name.endsWith('.sql'))
+      .sort();
+
+    const risky: string[] = [];
+    for (const file of files) {
+      const source = await readFile(join(drizzleDir, file), 'utf8');
+      // 找 DROP TABLE 语句，要求紧跟 IF EXISTS
+      for (const match of source.matchAll(/\bDROP\s+TABLE\b/gi)) {
+        const after = source.slice(match.index ?? 0, (match.index ?? 0) + 120);
+        if (!/\bIF\s+EXISTS\b/i.test(after)) {
+          risky.push(`${file}: DROP TABLE 未使用 IF EXISTS`);
+        }
+      }
+    }
+
+    expect(risky).toEqual([]);
+  });
+
   it('required compose variables are declared in .env.example', async () => {
     const compose = await readFile(join(ROOT, 'docker-compose.yml'), 'utf8');
     const envExample = await readFile(join(ROOT, '.env.example'), 'utf8');
