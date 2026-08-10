@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MIGRATIONS_DIR = resolve(SCRIPT_DIR, '..', 'drizzle');
 export const DESTRUCTIVE_OVERRIDE = 'QE_ALLOW_DESTRUCTIVE_MIGRATIONS';
+// 迁移文件头部的确认标记：标注该文件的破坏性变更已人工审查，跳过 block 拦截
+export const CONFIRMED_MARKER = '-- @confirmed-destructive';
 
 const HARD_RULES = [
   {
@@ -98,13 +100,21 @@ function collectFindings(source, file, rules, severity) {
 }
 
 export function analyzeMigrationContent(source, file = 'migration.sql') {
+  // 文件头部含确认标记时，破坏性变更视为已人工审查（降级为 review，不拦截）
+  const confirmed = source.slice(0, 500).includes(CONFIRMED_MARKER);
   const findings = [
-    ...collectFindings(source, file, HARD_RULES, 'block'),
+    ...collectFindings(
+      source,
+      file,
+      HARD_RULES,
+      confirmed ? 'review' : 'block',
+    ),
     ...collectFindings(source, file, REVIEW_RULES, 'review'),
   ].sort((left, right) => left.line - right.line || left.code.localeCompare(right.code));
 
   return {
     findings,
+    confirmed,
     blocked: findings.filter((finding) => finding.severity === 'block'),
     review: findings.filter((finding) => finding.severity === 'review'),
   };
@@ -136,9 +146,18 @@ export async function main() {
   const blocked = findings.filter((finding) => finding.severity === 'block');
   const review = findings.filter((finding) => finding.severity === 'review');
   const override = process.env[DESTRUCTIVE_OVERRIDE] === '1';
+  const confirmedFiles = results
+    .filter((result) => result.confirmed)
+    .map((result) => result.file);
 
   for (const finding of review) {
     console.warn(`[migration-check] review: ${formatFinding(finding)}`);
+  }
+
+  if (confirmedFiles.length > 0) {
+    console.warn(
+      `[migration-check] 已确认放行 ${confirmedFiles.length} 个破坏性迁移：${confirmedFiles.join(', ')}`,
+    );
   }
 
   if (blocked.length > 0) {
