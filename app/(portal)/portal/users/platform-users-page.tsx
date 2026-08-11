@@ -224,10 +224,7 @@ export default function PlatformUsersPage() {
     [aiResourceRoleFilter, data, platformRoleFilter, sourceFilter, statusFilter, workbenchRoleFilter],
   );
 
-  const selectedUser = useMemo(
-    () => visibleUsers.find((user) => user.id === selectedId) ?? visibleUsers[0] ?? null,
-    [selectedId, visibleUsers],
-  );
+  const selectedUser = visibleUsers.find((user) => user.id === selectedId) ?? visibleUsers[0] ?? null;
 
   async function load(nextQuery = query) {
     setLoading(true);
