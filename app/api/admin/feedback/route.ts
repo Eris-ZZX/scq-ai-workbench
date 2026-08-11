@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
-import { FEEDBACK_APPLICATIONS } from '@/lib/feedback/constants';
+import { FEEDBACK_APPLICATIONS, FEEDBACK_CATEGORIES, isFeedbackCategory } from '@/lib/feedback/constants';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 
 const PAGE_SIZE = 20;
@@ -12,10 +12,12 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const query = url.searchParams.get('q')?.trim() ?? '';
   const application = url.searchParams.get('application')?.trim() ?? '';
+  const category = url.searchParams.get('category')?.trim() ?? '';
   const page = clampInt(url.searchParams.get('page'), 1, 1, 100000);
   const whereParts: Record<string, unknown>[] = [];
 
   if (application) whereParts.push({ application });
+  if (isFeedbackCategory(category)) whereParts.push({ category });
   if (query) {
     whereParts.push({
       OR: [
@@ -45,6 +47,7 @@ export async function GET(request: Request) {
     items: rows.map((row) => ({
       id: row.id,
       content: row.content,
+      category: row.category,
       application: row.application,
       pagePath: row.pagePath,
       createdAt: row.createdAt,
@@ -59,6 +62,7 @@ export async function GET(request: Request) {
     })),
     filters: {
       applications: FEEDBACK_APPLICATIONS,
+      categories: FEEDBACK_CATEGORIES,
     },
     pagination: {
       page,

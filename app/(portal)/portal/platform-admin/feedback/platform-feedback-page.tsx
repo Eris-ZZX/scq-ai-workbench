@@ -3,11 +3,16 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
-import { FEEDBACK_APPLICATIONS } from '@/lib/feedback/constants';
+import {
+  FEEDBACK_APPLICATIONS,
+  FEEDBACK_CATEGORIES,
+  type FeedbackCategory,
+} from '@/lib/feedback/constants';
 
 type FeedbackItem = {
   id: string;
   content: string;
+  category: FeedbackCategory;
   application: string | null;
   pagePath: string | null;
   createdAt: string;
@@ -22,6 +27,7 @@ type FeedbackResponse = {
 
 export default function PlatformFeedbackPage() {
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('');
   const [application, setApplication] = useState('');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<FeedbackResponse | null>(null);
@@ -34,6 +40,7 @@ export default function PlatformFeedbackPage() {
       setLoading(true);
       const params = new URLSearchParams({ page: String(page) });
       if (query.trim()) params.set('q', query.trim());
+      if (category) params.set('category', category);
       if (application) params.set('application', application);
 
       fetch(`/api/admin/feedback?${params.toString()}`, {
@@ -60,10 +67,14 @@ export default function PlatformFeedbackPage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [application, page, query]);
+  }, [application, category, page, query]);
 
   const applicationLabels = useMemo(
     () => new Map<string, string>(FEEDBACK_APPLICATIONS.map((item) => [item.value, item.label])),
+    [],
+  );
+  const categoryLabels = useMemo(
+    () => new Map<string, string>(FEEDBACK_CATEGORIES.map((item) => [item.value, item.label])),
     [],
   );
 
@@ -79,6 +90,16 @@ export default function PlatformFeedbackPage() {
             className="h-9 w-full rounded-md border border-border pl-8 pr-3 text-sm outline-none focus:border-primary"
           />
         </label>
+        <select
+          value={category}
+          onChange={(event) => { setCategory(event.target.value); setPage(1); }}
+          className="h-9 rounded-md border border-border bg-white px-3 text-sm outline-none focus:border-primary"
+        >
+          <option value="">全部类型</option>
+          {FEEDBACK_CATEGORIES.map((item) => (
+            <option key={item.value} value={item.value}>{item.label}</option>
+          ))}
+        </select>
         <select
           value={application}
           onChange={(event) => { setApplication(event.target.value); setPage(1); }}
@@ -108,6 +129,9 @@ export default function PlatformFeedbackPage() {
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="font-medium text-slate-800">{item.user?.displayName || item.user?.username || '已删除用户'}</span>
                   <span>{formatDate(item.createdAt)}</span>
+                  <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-700">
+                    {categoryLabels.get(item.category) || item.category}
+                  </span>
                   <span className="rounded bg-slate-100 px-2 py-0.5">
                     {item.application ? applicationLabels.get(item.application) || item.application : '未关联应用'}
                   </span>

@@ -34,9 +34,10 @@ const session = {
   platformRole: 'user',
 };
 
-function feedbackRequest(content: string, file?: File) {
+function feedbackRequest(content: string, file?: File, category = 'problem') {
   const body = new FormData();
   body.set('content', content);
+  body.set('category', category);
   if (file) body.append('files', file);
   return new Request('http://localhost/api/feedback', { method: 'POST', body });
 }
@@ -70,6 +71,13 @@ describe('/api/feedback', () => {
     expect(mockPutObject).not.toHaveBeenCalled();
   });
 
+  it('rejects an invalid feedback category', async () => {
+    const response = await POST(feedbackRequest('新增一个需求', undefined, 'invalid'));
+
+    expect(response.status).toBe(400);
+    expect(mockDatabase.feedbackLog.create).not.toHaveBeenCalled();
+  });
+
   it('stores valid feedback and image metadata', async () => {
     const png = new File([
       Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -85,6 +93,7 @@ describe('/api/feedback', () => {
       data: expect.objectContaining({
         userId: 'user-1',
         content: '页面按钮无法点击',
+        category: 'problem',
         attachments: expect.stringContaining('"type":"image/png"'),
       }),
     }));

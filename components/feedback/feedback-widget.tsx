@@ -5,12 +5,14 @@ import { usePathname } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { ImagePlus, Loader2, MessageSquarePlus, Send, X } from 'lucide-react';
 import {
+  FEEDBACK_CATEGORIES,
   FEEDBACK_APPLICATIONS,
   FEEDBACK_IMAGE_TYPES,
   FEEDBACK_MAX_ATTACHMENTS,
   FEEDBACK_MAX_CONTENT_LENGTH,
   FEEDBACK_MAX_FILE_SIZE_BYTES,
   FEEDBACK_MAX_FILE_SIZE_LABEL,
+  type FeedbackCategory,
 } from '@/lib/feedback/constants';
 
 type PickedImage = {
@@ -23,6 +25,7 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState('');
+  const [category, setCategory] = useState<FeedbackCategory | ''>('');
   const [application, setApplication] = useState('');
   const [images, setImages] = useState<PickedImage[]>([]);
   const [error, setError] = useState('');
@@ -36,6 +39,7 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
     clearImages();
     setOpen(false);
     setContent('');
+    setCategory('');
     setApplication('');
     setError('');
     setSubmitted(false);
@@ -76,6 +80,10 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
 
   async function submit() {
     const trimmed = content.trim();
+    if (!category) {
+      setError('请选择反馈类型。');
+      return;
+    }
     if (!trimmed) {
       setError('请填写反馈内容。');
       return;
@@ -90,6 +98,7 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
     try {
       const body = new FormData();
       body.set('content', trimmed);
+      body.set('category', category);
       body.set('application', application);
       body.set('pagePath', pathname);
       images.forEach((image) => body.append('files', image.file));
@@ -100,6 +109,7 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
 
       clearImages();
       setContent('');
+      setCategory('');
       setApplication('');
       setSubmitted(true);
     } catch (submitError) {
@@ -160,6 +170,20 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
               </div>
             ) : (
               <>
+                <label className="mt-5 block text-sm text-slate-700">
+                  <span className="mb-1.5 block">反馈类型</span>
+                  <select
+                    value={category}
+                    onChange={(event) => setCategory(event.target.value as FeedbackCategory | '')}
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">请选择反馈类型</option>
+                    {FEEDBACK_CATEGORIES.map((item) => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
+                </label>
+
                 <textarea
                   value={content}
                   onChange={(event) => setContent(event.target.value)}
@@ -171,7 +195,7 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
                   }}
                   maxLength={FEEDBACK_MAX_CONTENT_LENGTH}
                   placeholder="说说你遇到的问题或建议,截图可直接粘贴进来"
-                  className="mt-5 min-h-28 w-full resize-y rounded-md border border-blue-500 px-3 py-3 text-sm text-slate-900 outline-none ring-2 ring-blue-100 placeholder:text-slate-400"
+                  className="mt-4 min-h-28 w-full resize-y rounded-md border border-blue-500 px-3 py-3 text-sm text-slate-900 outline-none ring-2 ring-blue-100 placeholder:text-slate-400"
                 />
 
                 <div className="mt-3 flex items-center gap-3">

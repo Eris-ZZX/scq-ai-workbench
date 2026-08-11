@@ -10,6 +10,14 @@ export const FEEDBACK_IMAGE_TYPES = [
   'image/webp',
 ] as const;
 
+export type FeedbackCategory = 'feature' | 'problem' | 'suggestion';
+
+export const FEEDBACK_CATEGORIES: Array<{ value: FeedbackCategory; label: string }> = [
+  { value: 'feature', label: '需求' },
+  { value: 'problem', label: '问题' },
+  { value: 'suggestion', label: '建议' },
+];
+
 export type FeedbackApplication =
   | 'ai-resources'
   | 'npq'
@@ -35,6 +43,10 @@ export const FEEDBACK_APPLICATIONS: Array<{ value: FeedbackApplication; label: s
 
 export function isFeedbackApplication(value: string): value is FeedbackApplication {
   return FEEDBACK_APPLICATIONS.some((application) => application.value === value);
+}
+
+export function isFeedbackCategory(value: string): value is FeedbackCategory {
+  return FEEDBACK_CATEGORIES.some((category) => category.value === value);
 }
 
 export function isFeedbackImageType(value: string): value is (typeof FEEDBACK_IMAGE_TYPES)[number] {

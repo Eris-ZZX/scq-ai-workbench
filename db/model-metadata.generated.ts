@@ -4386,6 +4386,11 @@ export const modelMetadata = {
         "type": "String",
         "nullable": false
       },
+      "category": {
+        "column": "category",
+        "type": "String",
+        "nullable": false
+      },
       "application": {
         "column": "application",
         "type": "String",

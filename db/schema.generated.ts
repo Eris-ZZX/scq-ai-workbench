@@ -61,6 +61,7 @@ export const FeedbackLog = pgTable('feedback_logs', {
 	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
 	userId: text('user_id'),
 	content: text('content').notNull(),
+	category: text('category').notNull().default("suggestion"),
 	application: text('application'),
 	pagePath: text('page_path'),
 	attachments: text('attachments').notNull().default("[]"),

@@ -4,6 +4,7 @@ import { db } from '@/lib/database';
 import { putFeedbackObject, removeFeedbackObject } from '@/lib/storage';
 import { getSession } from '@/platform/auth/auth.config';
 import {
+  isFeedbackCategory,
   FEEDBACK_MAX_ATTACHMENTS,
   FEEDBACK_MAX_CONTENT_LENGTH,
   isFeedbackApplication,
@@ -44,6 +45,11 @@ export async function POST(request: Request) {
       { error: `反馈内容不能超过 ${FEEDBACK_MAX_CONTENT_LENGTH} 个字符。` },
       { status: 400 },
     );
+  }
+
+  const categoryValue = String(formData.get('category') ?? '').trim();
+  if (!isFeedbackCategory(categoryValue)) {
+    return NextResponse.json({ error: '反馈类型无效。' }, { status: 400 });
   }
 
   const applicationValue = String(formData.get('application') ?? '').trim();
@@ -97,6 +103,7 @@ export async function POST(request: Request) {
       data: {
         userId: session.sub,
         content,
+        category: categoryValue,
         application: applicationValue || null,
         pagePath,
         attachments: JSON.stringify(attachments),
