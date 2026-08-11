@@ -26,6 +26,12 @@ export default async function PortalUsersPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               统一维护所有分支应用共用的平台用户、Authing 身份、DWS 组织信息和应用角色；项目权限请在质量工作台项目管理中维护。
             </p>
+            <Link
+              href="/portal/users/departments"
+              className="mt-3 inline-flex items-center rounded border border-border bg-white px-3 py-2 text-sm text-foreground hover:border-primary"
+            >
+              维护组织小组 ID 映射
+            </Link>
           </div>
         </header>
         <PlatformUsersPage />
