@@ -75,6 +75,7 @@ export default function PlatformUsersPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [dingtalkBindingFilter, setDingtalkBindingFilter] = useState('');
   const [platformRoleFilter, setPlatformRoleFilter] = useState('');
   const [workbenchRoleFilter, setWorkbenchRoleFilter] = useState('');
   const [aiResourceRoleFilter, setAiResourceRoleFilter] = useState('');
@@ -217,11 +218,13 @@ export default function PlatformUsersPage() {
     () => (data?.users ?? []).filter((user) => (
       (!statusFilter || user.status === statusFilter) &&
       (!sourceFilter || user.source === sourceFilter) &&
+      (!dingtalkBindingFilter ||
+        (dingtalkBindingFilter === 'bound' ? Boolean(user.unionid) : !user.unionid)) &&
       (!platformRoleFilter || user.platformRole === platformRoleFilter) &&
       (!workbenchRoleFilter || user.workbenchRole === workbenchRoleFilter) &&
       (!aiResourceRoleFilter || (user.aiResourceRole ?? 'user') === aiResourceRoleFilter)
     )),
-    [aiResourceRoleFilter, data, platformRoleFilter, sourceFilter, statusFilter, workbenchRoleFilter],
+    [aiResourceRoleFilter, data, dingtalkBindingFilter, platformRoleFilter, sourceFilter, statusFilter, workbenchRoleFilter],
   );
 
   const selectedUser = visibleUsers.find((user) => user.id === selectedId) ?? visibleUsers[0] ?? null;
@@ -348,6 +351,11 @@ export default function PlatformUsersPage() {
               <option value="authing">Authing</option>
               <option value="dws">DWS</option>
               <option value="dingtalk">钉钉（历史）</option>
+            </select>
+            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={dingtalkBindingFilter} onChange={(event) => setDingtalkBindingFilter(event.target.value)}>
+              <option value="">全部钉钉绑定</option>
+              <option value="bound">已绑定钉钉</option>
+              <option value="unbound">未绑定钉钉</option>
             </select>
             <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={platformRoleFilter} onChange={(event) => setPlatformRoleFilter(event.target.value)}>
               <option value="">全部平台角色</option>
