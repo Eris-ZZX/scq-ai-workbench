@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Gauge,
   Library,
+  Settings2,
   ShieldCheck,
   Wrench,
   type LucideIcon,
@@ -20,6 +21,7 @@ const testApps: Array<{ href: string; title: string; icon: LucideIcon }> = [
   { href: '/portal/coming-soon/qcm', title: 'QCM（测试）', icon: Wrench },
   { href: '/portal/coming-soon/lab', title: '实验室（测试）', icon: FlaskConical },
   { href: '/portal/coming-soon/ems', title: 'EMS（测试）', icon: Boxes },
+  { href: '/portal/coming-soon/management', title: '管理工作台（测试）', icon: Settings2 },
 ];
 
 export default async function PortalPage() {
