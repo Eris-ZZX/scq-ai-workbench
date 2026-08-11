@@ -2,6 +2,7 @@ import { Client, type BucketItemStat } from 'minio';
 import type { Readable } from 'node:stream';
 
 const OBJECT_PREFIX = 'ai-resources/uploads/';
+const FEEDBACK_OBJECT_PREFIX = 'feedback/uploads/';
 
 let client: Client | undefined;
 
@@ -40,16 +41,24 @@ function storageClient() {
   return client;
 }
 
+function objectKey(prefix: string, storedName: string) {
+  const safeName = storedName.replaceAll('\\', '/').split('/').pop()?.trim();
+  if (!safeName || safeName === '.' || safeName === '..') {
+    throw new Error('Invalid stored object name');
+  }
+  return `${prefix}${safeName}`;
+}
+
 export function storageBucket() {
   return required('MINIO_BUCKET');
 }
 
 export function aiResourceObjectKey(storedName: string) {
-  const safeName = storedName.replaceAll('\\', '/').split('/').pop()?.trim();
-  if (!safeName || safeName === '.' || safeName === '..') {
-    throw new Error('Invalid stored object name');
-  }
-  return `${OBJECT_PREFIX}${safeName}`;
+  return objectKey(OBJECT_PREFIX, storedName);
+}
+
+export function feedbackObjectKey(storedName: string) {
+  return objectKey(FEEDBACK_OBJECT_PREFIX, storedName);
 }
 
 export async function ensureStorageBucket() {
@@ -85,6 +94,29 @@ export function statAiResourceObject(storedName: string): Promise<BucketItemStat
 
 export function removeAiResourceObject(storedName: string) {
   return storageClient().removeObject(storageBucket(), aiResourceObjectKey(storedName));
+}
+
+export async function putFeedbackObject(
+  storedName: string,
+  body: Buffer | Readable,
+  size: number,
+  contentType: string,
+) {
+  await storageClient().putObject(
+    storageBucket(),
+    feedbackObjectKey(storedName),
+    body,
+    size,
+    { 'Content-Type': contentType || 'application/octet-stream' },
+  );
+}
+
+export function getFeedbackObject(storedName: string) {
+  return storageClient().getObject(storageBucket(), feedbackObjectKey(storedName));
+}
+
+export function removeFeedbackObject(storedName: string) {
+  return storageClient().removeObject(storageBucket(), feedbackObjectKey(storedName));
 }
 
 export function isStorageNotFound(error: unknown) {

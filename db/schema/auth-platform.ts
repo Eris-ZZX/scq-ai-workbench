@@ -1,5 +1,6 @@
 export {
   User,
+  FeedbackLog,
   UserIdentity,
   DingTalkDepartment,
   UserDingTalkDepartment,

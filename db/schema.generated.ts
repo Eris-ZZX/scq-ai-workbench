@@ -57,6 +57,27 @@ export const User = pgTable('users', {
 	'users_directory_supervisor_user_id_idx': index('users_directory_supervisor_user_id_idx').on(User.directorySupervisorUserId),
 }));
 
+export const FeedbackLog = pgTable('feedback_logs', {
+	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
+	userId: text('user_id'),
+	content: text('content').notNull(),
+	application: text('application'),
+	pagePath: text('page_path'),
+	attachments: text('attachments').notNull().default("[]"),
+	createdAt: timestamp('created_at', { precision: 3, withTimezone: true }).notNull().defaultNow()
+}, (FeedbackLog) => ({
+	'FeedbackLog_user_fkey': foreignKey({
+		name: 'feedback_log_user_fkey',
+		columns: [FeedbackLog.userId],
+		foreignColumns: [User.id]
+	})
+		.onDelete('set null')
+		.onUpdate('cascade'),
+	'feedback_logs_created_at_idx': index('feedback_logs_created_at_idx').on(FeedbackLog.createdAt),
+	'feedback_logs_user_id_idx': index('feedback_logs_user_id_idx').on(FeedbackLog.userId),
+	'feedback_logs_application_idx': index('feedback_logs_application_idx').on(FeedbackLog.application)
+}));
+
 export const UserIdentity = pgTable('user_identities', {
 	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
 	userId: text('user_id').notNull(),
@@ -1389,6 +1410,9 @@ export const UserRelations = relations(User, ({ many }) => ({
 	events: many(ObservabilityEvent, {
 		relationName: 'ObservabilityEventToUser'
 	}),
+	feedbackLogs: many(FeedbackLog, {
+		relationName: 'FeedbackLogToUser'
+	}),
 	aiResourceMembership: many(AiResourceMembership, {
 		relationName: 'AiResourceMembershipToUser'
 	}),
@@ -1433,6 +1457,14 @@ export const UserRelations = relations(User, ({ many }) => ({
 	}),
 	aiResourceMigrationRuns: many(AiResourceMigrationRun, {
 		relationName: 'AiResourceMigrationOperator'
+	})
+}));
+
+export const FeedbackLogRelations = relations(FeedbackLog, ({ one }) => ({
+	user: one(User, {
+		relationName: 'FeedbackLogToUser',
+		fields: [FeedbackLog.userId],
+		references: [User.id]
 	})
 }));
 

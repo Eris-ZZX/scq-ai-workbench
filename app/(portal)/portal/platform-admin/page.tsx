@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, UsersRound } from 'lucide-react';
+import { ArrowLeft, MessageSquareText, UsersRound } from 'lucide-react';
 import { requireSystemAdminPage } from '@/platform/permissions/system-admin';
 
 export default async function PlatformAdminPage() {
@@ -34,6 +34,18 @@ export default async function PlatformAdminPage() {
             <div className="text-base font-semibold text-foreground">用户与权限管理</div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               维护平台账号、角色、岗位、项目权限和组织小组 ID 映射。
+            </p>
+          </Link>
+          <Link
+            href="/portal/platform-admin/feedback"
+            className="rounded-md border border-border bg-white p-4 shadow-sm transition hover:border-primary"
+          >
+            <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <MessageSquareText className="h-4 w-4" />
+            </div>
+            <div className="text-base font-semibold text-foreground">反馈日志</div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              查看用户提交的问题、建议、关联应用和截图。
             </p>
           </Link>
         </div>

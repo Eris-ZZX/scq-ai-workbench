@@ -71,6 +71,13 @@
       "when": 1786329355241,
       "tag": "0009_repair_master_upgrade",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786329400000,
+      "tag": "0010_feedback_logs",
+      "breakpoints": true
     }
   ]
 }

@@ -4368,6 +4368,60 @@ export const modelMetadata = {
     },
     "relations": {}
   },
+  "FeedbackLog": {
+    "table": "feedback_logs",
+    "fields": {
+      "id": {
+        "column": "id",
+        "type": "String",
+        "nullable": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "String",
+        "nullable": true
+      },
+      "content": {
+        "column": "content",
+        "type": "String",
+        "nullable": false
+      },
+      "application": {
+        "column": "application",
+        "type": "String",
+        "nullable": true
+      },
+      "pagePath": {
+        "column": "page_path",
+        "type": "String",
+        "nullable": true
+      },
+      "attachments": {
+        "column": "attachments",
+        "type": "String",
+        "nullable": false
+      },
+      "createdAt": {
+        "column": "created_at",
+        "type": "DateTime",
+        "nullable": false
+      }
+    },
+    "relations": {
+      "user": {
+        "model": "User",
+        "list": false,
+        "nullable": true,
+        "relationName": "FeedbackLogToUser",
+        "localFields": [
+          "userId"
+        ],
+        "referenceFields": [
+          "id"
+        ]
+      }
+    }
+  },
   "UserIdentity": {
     "table": "user_identities",
     "fields": {
