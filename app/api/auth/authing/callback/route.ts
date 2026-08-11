@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
   let username: string | null = null;
   let displayName: string | null = null;
   let userId: string | null = null;
+  let authingData: unknown = null;
   try {
     const config = authingConfig();
     const discovery = await discoverAuthing(config.issuer);
@@ -96,10 +97,11 @@ export async function GET(request: NextRequest) {
       jwksUri: discovery.jwks_uri,
       nonce,
     });
+    authingData = { idTokenClaims: claims };
 
     const mergedClaims = { ...claims };
+    let userInfoClaims: Record<string, unknown> | null = null;
     if (accessToken) {
-      let userInfoClaims: Record<string, unknown> | null = null;
       try {
         userInfoClaims = await fetchAuthingUserInfo({
           userinfoEndpoint: discovery.userinfo_endpoint,
@@ -134,6 +136,11 @@ export async function GET(request: NextRequest) {
     } else {
       console.warn('[authing] token response has no access_token; skip userinfo');
     }
+    authingData = {
+      idTokenClaims: claims,
+      userInfoClaims,
+      mergedClaims,
+    };
 
     const identity = mapAuthingClaims(config.issuer, mergedClaims);
     username = identity.username;
@@ -179,6 +186,7 @@ export async function GET(request: NextRequest) {
       errorCode,
       errorMessage: error instanceof Error ? error.message : String(error),
       errorParams,
+      authingData,
     });
     return redirectFailure(errorCode);
   }

@@ -16,6 +16,24 @@ const SAFE_ERROR_PARAM_KEYS = new Set([
   'error_uri',
 ]);
 
+const SENSITIVE_AUTHING_KEYS = new Set([
+  'access_token',
+  'authorization',
+  'client_secret',
+  'code',
+  'code_verifier',
+  'cookie',
+  'id_token',
+  'nonce',
+  'password',
+  'refresh_token',
+  'secret',
+  'state',
+  'token',
+]);
+
+const MAX_AUTHING_DATA_LENGTH = 128 * 1024;
+
 function truncate(value: string | null | undefined, maxLength: number) {
   const normalized = value?.trim();
   if (!normalized) return null;
@@ -56,6 +74,36 @@ export function parseAuthErrorParams(value: unknown): Record<string, string> {
   }
 }
 
+function sanitizeAuthingValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeAuthingValue);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !SENSITIVE_AUTHING_KEYS.has(key.toLowerCase()))
+      .map(([key, item]) => [key, sanitizeAuthingValue(item)]),
+  );
+}
+
+function serializeAuthingData(value: unknown) {
+  if (value === undefined || value === null) return null;
+  const serialized = JSON.stringify(sanitizeAuthingValue(value));
+  if (serialized.length <= MAX_AUTHING_DATA_LENGTH) return serialized;
+  return JSON.stringify({
+    truncated: true,
+    value: serialized.slice(0, MAX_AUTHING_DATA_LENGTH),
+  });
+}
+
+export function parseAuthingData(value: unknown): unknown {
+  if (typeof value !== 'string') return null;
+  try {
+    return sanitizeAuthingValue(JSON.parse(value) as unknown);
+  } catch {
+    return null;
+  }
+}
+
 export function authRequestContext(request: Request) {
   const forwardedFor = request.headers.get('x-forwarded-for');
   const realIp = request.headers.get('x-real-ip');
@@ -78,6 +126,7 @@ export async function recordAuthLoginEvent(input: {
   errorCode?: string | null;
   errorMessage?: string | null;
   errorParams?: Record<string, string>;
+  authingData?: unknown;
 }) {
   const context = authRequestContext(input.request);
   try {
@@ -92,6 +141,7 @@ export async function recordAuthLoginEvent(input: {
         errorCode: truncate(input.errorCode, 100),
         errorMessage: redactErrorMessage(input.errorMessage),
         errorParams: JSON.stringify(input.errorParams ?? {}),
+        authingData: serializeAuthingData(input.authingData),
         requestPath: context.requestPath,
         ipAddress: context.ipAddress,
         userAgent: context.userAgent,

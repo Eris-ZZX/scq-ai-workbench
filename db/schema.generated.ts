@@ -89,6 +89,7 @@ export const AuthLoginLog = pgTable('auth_login_logs', {
 	errorCode: text('error_code'),
 	errorMessage: text('error_message'),
 	errorParams: text('error_params').notNull().default("{}"),
+	authingData: text('authing_data'),
 	requestPath: text('request_path'),
 	ipAddress: text('ip_address'),
 	userAgent: text('user_agent'),

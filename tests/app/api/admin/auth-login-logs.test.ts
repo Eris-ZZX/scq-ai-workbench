@@ -96,6 +96,11 @@ describe('/api/admin/auth-login-logs/[id]/export', () => {
       errorCode: 'authing',
       errorMessage: 'lookup failed',
       errorParams: JSON.stringify({ error: 'access_denied', state: 'secret' }),
+      authingData: JSON.stringify({
+        username: '314265',
+        unionid: null,
+        state: 'secret',
+      }),
       requestPath: '/api/auth/authing/callback',
       ipAddress: '192.0.2.10',
       userAgent: 'test-agent',
@@ -113,5 +118,6 @@ describe('/api/admin/auth-login-logs/[id]/export', () => {
     expect(response.headers.get('content-disposition')).toContain('auth-login-log-log-1.json');
     expect(body.errorParams).toEqual({ error: 'access_denied' });
     expect(body.errorParams.state).toBeUndefined();
+    expect(body.authingData).toEqual({ username: '314265', unionid: null });
   });
 });

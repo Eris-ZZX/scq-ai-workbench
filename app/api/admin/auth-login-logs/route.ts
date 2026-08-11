@@ -72,6 +72,7 @@ export async function GET(request: Request) {
       errorCode: row.errorCode,
       errorMessage: row.errorMessage,
       errorParams: parseAuthErrorParams(row.errorParams),
+      hasAuthingData: Boolean(row.authingData),
       createdAt: row.createdAt,
       user: row.user
         ? {

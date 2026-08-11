@@ -74,6 +74,41 @@ describe('login audit safety', () => {
     });
   });
 
+  it('preserves non-secret Authing claims while removing replay credentials', async () => {
+    await recordAuthLoginEvent({
+      request: new Request('https://app.example.test/api/auth/authing/callback'),
+      provider: 'authing',
+      stage: 'callback',
+      outcome: 'failure',
+      authingData: {
+        idTokenClaims: {
+          username: '314265',
+          unionid: null,
+          extended_fields: { emp_no: '314265' },
+          nonce: 'must-not-persist',
+        },
+        userInfoClaims: {
+          external_id: null,
+          userpool_id: 'userpool',
+          access_token: 'must-not-persist',
+        },
+      },
+    });
+
+    const data = mockCreate.mock.calls[0]?.[0].data as { authingData: string };
+    expect(JSON.parse(data.authingData)).toEqual({
+      idTokenClaims: {
+        username: '314265',
+        unionid: null,
+        extended_fields: { emp_no: '314265' },
+      },
+      userInfoClaims: {
+        external_id: null,
+        userpool_id: 'userpool',
+      },
+    });
+  });
+
   it('does not make login fail when audit persistence fails', async () => {
     mockCreate.mockRejectedValueOnce(new Error('database unavailable'));
 

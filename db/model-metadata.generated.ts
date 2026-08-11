@@ -4475,6 +4475,11 @@ export const modelMetadata = {
         "type": "String",
         "nullable": false
       },
+      "authingData": {
+        "column": "authing_data",
+        "type": "String",
+        "nullable": true
+      },
       "requestPath": {
         "column": "request_path",
         "type": "String",

@@ -1,5 +1,5 @@
 import { db } from '@/lib/database';
-import { parseAuthErrorParams } from '@/platform/auth/login-audit';
+import { parseAuthErrorParams, parseAuthingData } from '@/platform/auth/login-audit';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 
 type RouteContext = {
@@ -31,6 +31,7 @@ export async function GET(_request: Request, context: RouteContext) {
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
     errorParams: parseAuthErrorParams(row.errorParams),
+    authingData: parseAuthingData(row.authingData),
     requestPath: row.requestPath,
     ipAddress: row.ipAddress,
     userAgent: row.userAgent,

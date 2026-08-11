@@ -13,6 +13,7 @@ type AuthLoginLogItem = {
   errorCode: string | null;
   errorMessage: string | null;
   errorParams: Record<string, string>;
+  hasAuthingData: boolean;
   createdAt: string;
   user: { id: string; username: string; displayName: string } | null;
 };
@@ -202,6 +203,9 @@ export default function AuthLoginLogsPage() {
                           <summary className="cursor-pointer">错误参数</summary>
                           <pre className="mt-1 whitespace-pre-wrap break-all">{JSON.stringify(item.errorParams, null, 2)}</pre>
                         </details>
+                      )}
+                      {item.hasAuthingData && (
+                        <div className="mt-1 text-xs text-blue-600">已保存 Authing claims，可导出查看</div>
                       )}
                     </td>
                     <td className="px-4 py-3">
