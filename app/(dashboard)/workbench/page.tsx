@@ -93,7 +93,7 @@ export default function WorkbenchPage() {
       const body = await fetchJson<WorkbenchData>('/api/npq/workbench', { cache: 'no-store' });
       setData(body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '个人项目工作台加载失败');
+      setError(err instanceof Error ? err.message : 'NPQ工作台加载失败');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -143,15 +143,15 @@ export default function WorkbenchPage() {
     return data.projectCards.filter((project) => project.projectName.toLowerCase().includes(keyword));
   }, [data, query]);
 
-  if (loading) return <div className="p-8 text-sm text-muted-foreground">加载个人项目工作台...</div>;
-  if (!data) return <div className="p-8 text-sm text-red-600">{error || '个人项目工作台不可用'}</div>;
+  if (loading) return <div className="p-8 text-sm text-muted-foreground">加载 NPQ 工作台...</div>;
+  if (!data) return <div className="p-8 text-sm text-red-600">{error || 'NPQ工作台不可用'}</div>;
 
   return (
     <div className="min-h-screen bg-slate-50/80 px-5 py-5 text-slate-900">
       <div className="mx-auto flex max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="mt-1 text-xl font-semibold">个人项目工作台</h1>
+            <h1 className="mt-1 text-xl font-semibold">NPQ工作台</h1>
           </div>
           <Button variant="outline" size="sm" onClick={loadData} disabled={refreshing}>
             <RefreshCw className={refreshing ? 'animate-spin' : ''} />

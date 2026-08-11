@@ -272,7 +272,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '密码长度应为 6-128 位。' }, { status: 400 });
   }
   if (!PLATFORM_ROLES.has(platformRole) || !WORKBENCH_ROLES.has(workbenchRole) || !ACCOUNT_STATUSES.has(status)) {
-    return NextResponse.json({ error: '平台角色、质量工作台角色或账号状态无效。' }, { status: 400 });
+    return NextResponse.json({ error: '平台角色、NPQ 工作台角色或账号状态无效。' }, { status: 400 });
   }
 
   try {
@@ -358,10 +358,10 @@ export async function PATCH(request: Request) {
     } else if (action === 'workbench-role') {
       const nextRole = clean(body?.role);
       if (!WORKBENCH_ROLES.has(nextRole)) {
-        return NextResponse.json({ error: '质量工作台角色无效。' }, { status: 400 });
+        return NextResponse.json({ error: 'NPQ 工作台角色无效。' }, { status: 400 });
       }
       if (subject.username === 'admin' && nextRole !== 'admin') {
-        return NextResponse.json({ error: 'admin 是兜底管理员，不能移除质量工作台管理员角色。' }, { status: 400 });
+        return NextResponse.json({ error: 'admin 是兜底管理员，不能移除 NPQ 工作台管理员角色。' }, { status: 400 });
       }
 
       await db.$transaction(async (tx) => {
@@ -438,7 +438,7 @@ export async function PATCH(request: Request) {
     const message = error instanceof Error ? error.message : '';
     const knownErrors: Record<string, [string, number]> = {
       CANNOT_REMOVE_LAST_PLATFORM_ADMIN: ['不能移除最后一个有效平台管理员。', 409],
-      CANNOT_REMOVE_LAST_WORKBENCH_ADMIN: ['不能移除最后一个有效质量工作台管理员。', 409],
+      CANNOT_REMOVE_LAST_WORKBENCH_ADMIN: ['不能移除最后一个有效 NPQ 工作台管理员。', 409],
       不能移除末位有效模块管理员: ['不能移除最后一个有效 AI 资源管理员。', 409],
     };
     const knownError = knownErrors[message];

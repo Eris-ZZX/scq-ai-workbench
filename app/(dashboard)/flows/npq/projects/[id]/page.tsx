@@ -421,7 +421,7 @@ export default function ProjectWorkspacePage() {
           onClick={() => router.push('/workbench')}
           className="flex w-fit items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
         >
-          <ArrowLeft className="h-4 w-4" /> 返回个人项目工作台
+          <ArrowLeft className="h-4 w-4" /> 返回 NPQ 工作台
         </button>
 
         {errorMsg && (

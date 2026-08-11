@@ -593,7 +593,7 @@ export default function PlatformUsersPage() {
                     </select>
                   </PermissionField>
                 </PermissionCard>
-                <PermissionCard title="质量工作台角色" description="只控制质量工作台的应用级项目管理能力。">
+                <PermissionCard title="NPQ工作台角色" description="只控制 NPQ 工作台的应用级项目管理能力。">
                   <PermissionField label="应用角色">
                     <select className="h-9 w-full rounded border border-border px-2 text-sm" value={selectedUser.workbenchRole} disabled={saving} onChange={(event) => void updatePermission('workbench-role', { role: event.target.value })}>
                       <option value="user">用户</option>

@@ -7,9 +7,9 @@ export function isPlatformAdmin(session: { role: string; platformRole?: string }
   return session.platformRole === 'admin' || (!session.platformRole && session.role === 'admin');
 }
 
-export async function requireSystemAdminPage(): Promise<SystemAdminSession> {
+export async function requireSystemAdminPage(nextPath = '/portal/platform-admin/users'): Promise<SystemAdminSession> {
   const session = await getSession();
-  if (!session) redirect('/login?next=%2Fportal%2Fusers');
+  if (!session) redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   if (!isPlatformAdmin(session)) redirect('/portal');
   return session;
 }

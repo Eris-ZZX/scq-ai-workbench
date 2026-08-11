@@ -57,7 +57,7 @@ const positionRoles = [
 ] as const;
 
 const components = [
-  ['cmp-workbench', '个人项目工作台', '/workbench'],
+  ['cmp-workbench', 'NPQ工作台', '/workbench'],
   ['cmp-npq-activities', '批量修改', '/flows/npq/activities'],
   ['cmp-npq-activity-dashboard', '活动管理看板', '/flows/npq/activity-dashboard'],
   ['cmp-admin-projects', '项目管理', '/admin/projects'],

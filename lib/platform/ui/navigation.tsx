@@ -30,7 +30,7 @@ export async function DynamicNav() {
   return (
     <nav className="flex flex-col gap-1">
       <SectionHeader>业务</SectionHeader>
-      <NavLink href="/workbench" label="个人项目工作台" />
+      <NavLink href="/workbench" label="NPQ工作台" />
       {businessLinks.map((component) => (
         <NavLink key={component.id} href={component.path} label={component.name} />
       ))}

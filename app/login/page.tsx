@@ -102,7 +102,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
 
         {oidcEnabled && (
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            身份认证由 Authing 提供，角色和权限由质量工作台本地维护。
+            身份认证由 Authing 提供，角色和权限由 NPQ 工作台本地维护。
           </p>
         )}
       </div>
