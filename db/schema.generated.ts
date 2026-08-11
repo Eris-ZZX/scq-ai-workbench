@@ -78,6 +78,35 @@ export const FeedbackLog = pgTable('feedback_logs', {
 	'feedback_logs_application_idx': index('feedback_logs_application_idx').on(FeedbackLog.application)
 }));
 
+export const AuthLoginLog = pgTable('auth_login_logs', {
+	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
+	userId: text('user_id'),
+	provider: text('provider').notNull(),
+	stage: text('stage').notNull(),
+	outcome: text('outcome').notNull(),
+	username: text('username'),
+	displayName: text('display_name'),
+	errorCode: text('error_code'),
+	errorMessage: text('error_message'),
+	errorParams: text('error_params').notNull().default("{}"),
+	requestPath: text('request_path'),
+	ipAddress: text('ip_address'),
+	userAgent: text('user_agent'),
+	createdAt: timestamp('created_at', { precision: 3, withTimezone: true }).notNull().defaultNow()
+}, (AuthLoginLog) => ({
+	'AuthLoginLog_user_fkey': foreignKey({
+		name: 'auth_login_log_user_fkey',
+		columns: [AuthLoginLog.userId],
+		foreignColumns: [User.id]
+	})
+		.onDelete('set null')
+		.onUpdate('cascade'),
+	'auth_login_logs_created_at_idx': index('auth_login_logs_created_at_idx').on(AuthLoginLog.createdAt),
+	'auth_login_logs_provider_outcome_idx': index('auth_login_logs_provider_outcome_idx').on(AuthLoginLog.provider, AuthLoginLog.outcome),
+	'auth_login_logs_username_idx': index('auth_login_logs_username_idx').on(AuthLoginLog.username),
+	'auth_login_logs_user_id_idx': index('auth_login_logs_user_id_idx').on(AuthLoginLog.userId)
+}));
+
 export const UserIdentity = pgTable('user_identities', {
 	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
 	userId: text('user_id').notNull(),
@@ -1413,6 +1442,9 @@ export const UserRelations = relations(User, ({ many }) => ({
 	feedbackLogs: many(FeedbackLog, {
 		relationName: 'FeedbackLogToUser'
 	}),
+	authLoginLogs: many(AuthLoginLog, {
+		relationName: 'AuthLoginLogToUser'
+	}),
 	aiResourceMembership: many(AiResourceMembership, {
 		relationName: 'AiResourceMembershipToUser'
 	}),
@@ -1464,6 +1496,14 @@ export const FeedbackLogRelations = relations(FeedbackLog, ({ one }) => ({
 	user: one(User, {
 		relationName: 'FeedbackLogToUser',
 		fields: [FeedbackLog.userId],
+		references: [User.id]
+	})
+}));
+
+export const AuthLoginLogRelations = relations(AuthLoginLog, ({ one }) => ({
+	user: one(User, {
+		relationName: 'AuthLoginLogToUser',
+		fields: [AuthLoginLog.userId],
 		references: [User.id]
 	})
 }));

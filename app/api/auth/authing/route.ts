@@ -9,6 +9,7 @@ import {
   randomToken,
   safeAuthingReturnPath,
 } from '@/platform/auth/authing.oidc';
+import { recordAuthLoginEvent, safeAuthErrorParams } from '@/platform/auth/login-audit';
 
 export const runtime = 'nodejs';
 
@@ -46,9 +47,25 @@ export async function GET(request: NextRequest) {
     response.cookies.set('authing_state', state, TRANSIENT_COOKIE_OPTIONS);
     response.cookies.set('authing_nonce', nonce, TRANSIENT_COOKIE_OPTIONS);
     response.cookies.set('authing_return_to', returnTo, TRANSIENT_COOKIE_OPTIONS);
+    await recordAuthLoginEvent({
+      request,
+      provider: 'authing',
+      stage: 'initiation',
+      outcome: 'success',
+      errorParams: safeAuthErrorParams(request.nextUrl),
+    });
     return response;
   } catch (error) {
     console.error('[authing] login initiation failed', error);
+    await recordAuthLoginEvent({
+      request,
+      provider: 'authing',
+      stage: 'initiation',
+      outcome: 'failure',
+      errorCode: 'authing_config',
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorParams: safeAuthErrorParams(request.nextUrl),
+    });
     return NextResponse.redirect(
       new URL('/login?error=authing_config', request.url),
     );

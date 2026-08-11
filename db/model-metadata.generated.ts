@@ -4422,6 +4422,95 @@ export const modelMetadata = {
       }
     }
   },
+  "AuthLoginLog": {
+    "table": "auth_login_logs",
+    "fields": {
+      "id": {
+        "column": "id",
+        "type": "String",
+        "nullable": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "String",
+        "nullable": true
+      },
+      "provider": {
+        "column": "provider",
+        "type": "String",
+        "nullable": false
+      },
+      "stage": {
+        "column": "stage",
+        "type": "String",
+        "nullable": false
+      },
+      "outcome": {
+        "column": "outcome",
+        "type": "String",
+        "nullable": false
+      },
+      "username": {
+        "column": "username",
+        "type": "String",
+        "nullable": true
+      },
+      "displayName": {
+        "column": "display_name",
+        "type": "String",
+        "nullable": true
+      },
+      "errorCode": {
+        "column": "error_code",
+        "type": "String",
+        "nullable": true
+      },
+      "errorMessage": {
+        "column": "error_message",
+        "type": "String",
+        "nullable": true
+      },
+      "errorParams": {
+        "column": "error_params",
+        "type": "String",
+        "nullable": false
+      },
+      "requestPath": {
+        "column": "request_path",
+        "type": "String",
+        "nullable": true
+      },
+      "ipAddress": {
+        "column": "ip_address",
+        "type": "String",
+        "nullable": true
+      },
+      "userAgent": {
+        "column": "user_agent",
+        "type": "String",
+        "nullable": true
+      },
+      "createdAt": {
+        "column": "created_at",
+        "type": "DateTime",
+        "nullable": false
+      }
+    },
+    "relations": {
+      "user": {
+        "model": "User",
+        "list": false,
+        "nullable": true,
+        "relationName": "AuthLoginLogToUser",
+        "localFields": [
+          "userId"
+        ],
+        "referenceFields": [
+          "id"
+        ]
+      }
+    }
+  },
   "UserIdentity": {
     "table": "user_identities",
     "fields": {

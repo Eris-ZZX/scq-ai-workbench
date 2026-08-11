@@ -12,6 +12,7 @@ import {
 import { authingEnabled } from '@/platform/auth/authing.config';
 import { createSession } from '@/platform/auth/auth.config';
 import { ExternalIdentityError, upsertAuthingUser } from '@/platform/auth/external-users';
+import { recordAuthLoginEvent, safeAuthErrorParams } from '@/platform/auth/login-audit';
 
 export const runtime = 'nodejs';
 
@@ -40,7 +41,19 @@ function redirectFailure(code: string) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!authingEnabled()) return redirectFailure('authing_config');
+  const errorParams = safeAuthErrorParams(request.nextUrl);
+  if (!authingEnabled()) {
+    await recordAuthLoginEvent({
+      request,
+      provider: 'authing',
+      stage: 'callback',
+      outcome: 'failure',
+      errorCode: 'authing_config',
+      errorMessage: 'Authing 配置不完整',
+      errorParams,
+    });
+    return redirectFailure('authing_config');
+  }
 
   const jar = request.cookies;
   const returnTo = safeAuthingReturnPath(jar.get('authing_return_to')?.value);
@@ -51,9 +64,21 @@ export async function GET(request: NextRequest) {
   const nonce = jar.get('authing_nonce')?.value;
 
   if (!code || !state || !verifier || !expectedState || state !== expectedState || !nonce) {
+    await recordAuthLoginEvent({
+      request,
+      provider: 'authing',
+      stage: 'callback',
+      outcome: 'failure',
+      errorCode: 'authing_state',
+      errorMessage: 'Authing 回调缺少必要参数或 state 校验失败',
+      errorParams,
+    });
     return redirectFailure('authing_state');
   }
 
+  let username: string | null = null;
+  let displayName: string | null = null;
+  let userId: string | null = null;
   try {
     const config = authingConfig();
     const discovery = await discoverAuthing(config.issuer);
@@ -111,7 +136,10 @@ export async function GET(request: NextRequest) {
     }
 
     const identity = mapAuthingClaims(config.issuer, mergedClaims);
+    username = identity.username;
+    displayName = identity.name;
     const user = await upsertAuthingUser(identity);
+    userId = user.id;
 
     await createSession({
       id: user.id,
@@ -119,6 +147,16 @@ export async function GET(request: NextRequest) {
       displayName: user.displayName,
       role: user.role,
       platformRole: user.platformRole,
+    });
+    await recordAuthLoginEvent({
+      request,
+      provider: 'authing',
+      stage: 'callback',
+      outcome: 'success',
+      username: user.username,
+      displayName: user.displayName,
+      userId: user.id,
+      errorParams,
     });
 
     const baseUrl = process.env.APP_BASE_URL?.replace(/\/+$/, '');
@@ -129,6 +167,19 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('[authing] callback failed', error);
-    return redirectFailure(failureCode(error));
+    const errorCode = failureCode(error);
+    await recordAuthLoginEvent({
+      request,
+      provider: 'authing',
+      stage: 'callback',
+      outcome: 'failure',
+      username,
+      displayName,
+      userId,
+      errorCode,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorParams,
+    });
+    return redirectFailure(errorCode);
   }
 }

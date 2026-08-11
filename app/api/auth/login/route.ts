@@ -6,6 +6,7 @@ import { authingEnabled, authingRequired } from '@/platform/auth/authing.config'
 import { DEFAULT_AFTER_LOGIN } from '@/platform/auth/constants';
 import { getRequestUrl } from '@/platform/auth/request-url';
 import { resolveReturnPath } from '@/platform/auth/return-path';
+import { recordAuthLoginEvent } from '@/platform/auth/login-audit';
 
 type LoginBody = {
   username?: string;
@@ -57,17 +58,52 @@ function fail(formMode: boolean, request: Request, error: string, status: number
 export async function POST(request: Request) {
   const { body, formMode } = await readLoginBody(request);
   if (authingEnabled() || authingRequired()) {
+    await recordAuthLoginEvent({
+      request,
+      provider: 'password',
+      stage: 'credentials',
+      outcome: 'failure',
+      username: body?.username,
+      errorCode: 'authing_required',
+      errorMessage: '当前系统已切换为 Authing 登录',
+    });
     return fail(formMode, request, '当前系统已切换为 Authing 登录', 403);
   }
   if (!body) {
+    await recordAuthLoginEvent({
+      request,
+      provider: 'password',
+      stage: 'credentials',
+      outcome: 'failure',
+      errorCode: 'invalid_request',
+      errorMessage: '无效的请求体',
+    });
     return fail(formMode, request, '无效的请求体', 400);
   }
 
   const { username, password } = body;
   if (!username || !password) {
+    await recordAuthLoginEvent({
+      request,
+      provider: 'password',
+      stage: 'credentials',
+      outcome: 'failure',
+      username,
+      errorCode: 'missing_credentials',
+      errorMessage: '用户名或密码缺失',
+    });
     return fail(formMode, request, '用户名和密码为必填项', 400);
   }
   if (typeof password !== 'string' || password.length > 128) {
+    await recordAuthLoginEvent({
+      request,
+      provider: 'password',
+      stage: 'credentials',
+      outcome: 'failure',
+      username,
+      errorCode: 'invalid_password',
+      errorMessage: '密码长度无效',
+    });
     return fail(formMode, request, '用户名或密码错误', 401);
   }
 
@@ -79,6 +115,17 @@ export async function POST(request: Request) {
   );
 
   if (!user || !valid || user.status !== 'active') {
+    await recordAuthLoginEvent({
+      request,
+      provider: 'password',
+      stage: 'credentials',
+      outcome: 'failure',
+      username,
+      userId: user?.id,
+      displayName: user?.displayName,
+      errorCode: !user || !valid ? 'invalid_credentials' : 'disabled',
+      errorMessage: !user || !valid ? '用户名或密码错误' : '本地账号已被禁用',
+    });
     return fail(formMode, request, '用户名或密码错误', 401);
   }
 
@@ -88,6 +135,15 @@ export async function POST(request: Request) {
     displayName: user.displayName,
     role: user.role,
     platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
+  });
+  await recordAuthLoginEvent({
+    request,
+    provider: 'password',
+    stage: 'session',
+    outcome: 'success',
+    username: user.username,
+    displayName: user.displayName,
+    userId: user.id,
   });
 
   if (formMode) {
