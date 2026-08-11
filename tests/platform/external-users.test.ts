@@ -12,6 +12,12 @@ const { mockResolveIdentity, mockDatabase, mockTransaction, mockApplyOrgProfile 
     user: {
       create: vi.fn(),
     },
+    userDingTalkDepartment: {
+      deleteMany: vi.fn(),
+    },
+    userPosition: {
+      deleteMany: vi.fn(),
+    },
   },
 }));
 
@@ -39,17 +45,53 @@ describe('Authing external user DingTalk binding', () => {
     });
   });
 
-  it('rejects an Authing username and emp_no mismatch', async () => {
-    mockDatabase.$queryRaw.mockResolvedValueOnce([]);
-
-    await expect(upsertAuthingUser(identity({
-      username: '017298',
-      employeeNumber: '013192',
-    }))).rejects.toMatchObject({
-      code: 'conflict',
+  it('allows login and leaves the account unbound when DingTalk userid lookup fails', async () => {
+    mockResolveIdentity.mockResolvedValueOnce(null);
+    mockDatabase.$transaction.mockImplementation(async (callback: (transaction: typeof mockTransaction) => unknown) => {
+      return callback(mockTransaction);
+    });
+    mockTransaction.user.create.mockResolvedValueOnce({
+      id: 'unbound-user',
+      username: '314265',
+    });
+    mockTransaction.$queryRaw.mockImplementation((strings: TemplateStringsArray) => {
+      const sql = strings.join('');
+      if (sql.includes('FROM users AS u')) return Promise.resolve([]);
+      if (sql.includes('SELECT id, username, display_name')) {
+        return Promise.resolve([{
+          id: 'unbound-user',
+          username: '314265',
+          display_name: '徐小英',
+          email: null,
+          avatar: null,
+          platform_role: 'user',
+          role: 'user',
+          status: 'active',
+        }]);
+      }
+      return Promise.resolve([]);
     });
 
-    expect(mockResolveIdentity).not.toHaveBeenCalled();
+    await expect(upsertAuthingUser(identity({
+      username: '314265',
+      employeeNumber: '314265',
+    }))).resolves.toMatchObject({
+      id: 'unbound-user',
+      username: '314265',
+    });
+
+    expect(mockTransaction.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        username: '314265',
+        dingtalkUserId: null,
+        unionid: null,
+        dingtalkBindingStatus: 'unbound',
+      }),
+    });
+    expect(mockTransaction.userDingTalkDepartment.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'unbound-user' },
+    });
+    expect(mockApplyOrgProfile).not.toHaveBeenCalled();
   });
 
   it('resolves DingTalk identity on every Authing login', async () => {

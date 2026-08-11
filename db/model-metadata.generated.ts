@@ -74,6 +74,11 @@ export const modelMetadata = {
         "type": "String",
         "nullable": true
       },
+      "dingtalkBindingStatus": {
+        "column": "dingtalk_binding_status",
+        "type": "String",
+        "nullable": false
+      },
       "supervisorDingtalkUserId": {
         "column": "supervisor_dingtalk_user_id",
         "type": "String",

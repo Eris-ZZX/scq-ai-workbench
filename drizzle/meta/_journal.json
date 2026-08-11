@@ -92,6 +92,13 @@
       "when": 1786329600000,
       "tag": "0012_authing_failure_data",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786329700000,
+      "tag": "0013_dingtalk_binding_status",
+      "breakpoints": true
     }
   ]
 }

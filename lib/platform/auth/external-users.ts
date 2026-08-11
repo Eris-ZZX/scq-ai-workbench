@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { DUMMY_HASH } from '@/lib/db/auth';
 import { db } from '@/lib/database';
 import { applyDingTalkOrgProfile } from '@/lib/dingtalk/org-profile';
-import { resolveDingTalkIdentityByUserId } from '@/lib/dingtalk/users';
+import {
+  resolveDingTalkIdentityByUserId,
+  type DingTalkIdentity,
+} from '@/lib/dingtalk/users';
 import {
   findUserMergeCandidates,
   mergeUsersIntoPrimary,
@@ -44,24 +47,26 @@ async function findUserById(transaction: typeof db, userId: string) {
   return rows[0] ?? null;
 }
 
-async function resolveDingTalkIdentity(identity: AuthingClaims) {
+async function resolveDingTalkIdentity(identity: AuthingClaims): Promise<DingTalkIdentity | null> {
   const userId = identity.username.trim();
   if (
     identity.employeeNumber &&
     identity.employeeNumber !== userId
   ) {
-    throw new ExternalIdentityError(
-      'conflict',
-      `Authing username ${userId} 与 emp_no ${identity.employeeNumber} 不一致`,
+    console.warn(
+      '[authing] username and emp_no differ; continue without DingTalk binding',
+      { username: userId, employeeNumber: identity.employeeNumber },
     );
+    return null;
   }
 
   const resolved = await resolveDingTalkIdentityByUserId(userId);
   if (!resolved) {
-    throw new ExternalIdentityError(
-      'missing',
-      `钉钉用户详情接口未找到 userid ${userId} 或未返回 unionid`,
+    console.warn(
+      '[authing] DingTalk userid lookup failed; continue without DingTalk binding',
+      { requestedUserId: userId },
     );
+    return null;
   }
 
   if (
@@ -69,10 +74,15 @@ async function resolveDingTalkIdentity(identity: AuthingClaims) {
     resolved.jobNumber &&
     resolved.jobNumber !== identity.employeeNumber
   ) {
-    throw new ExternalIdentityError(
-      'conflict',
-      `钉钉 userid ${userId} 的工号 ${resolved.jobNumber} 与 Authing emp_no ${identity.employeeNumber} 不一致`,
+    console.warn(
+      '[authing] DingTalk job number differs from Authing emp_no; continue without DingTalk binding',
+      {
+        requestedUserId: userId,
+        dingtalkJobNumber: resolved.jobNumber,
+        employeeNumber: identity.employeeNumber,
+      },
     );
+    return null;
   }
 
   return resolved;
@@ -90,8 +100,10 @@ function selectPrimaryCandidate(candidates: UserMergeCandidate[]) {
 export async function upsertAuthingUser(identity: AuthingClaims) {
   const identityKey = authingIdentityKey(identity);
   const dingTalkIdentity = await resolveDingTalkIdentity(identity);
-  const resolvedUnionid = dingTalkIdentity.unionid;
-  const resolvedDingTalkUserId = identity.username.trim();
+  const resolvedUnionid = dingTalkIdentity?.unionid ?? null;
+  const resolvedDingTalkUserId = dingTalkIdentity?.userid ?? null;
+  const authingUsername = identity.username.trim();
+  const dingtalkBindingStatus = dingTalkIdentity ? 'bound' : 'unbound';
 
   const result = await db.$transaction(async (transaction) => {
     const candidates = await findUserMergeCandidates(transaction, {
@@ -99,7 +111,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       subject: identity.subject,
       authingExternalId: identityKey,
       externalId: identity.externalId,
-      username: resolvedDingTalkUserId,
+      username: authingUsername,
       email: identity.email,
       unionid: resolvedUnionid,
       dingtalkUserId: resolvedDingTalkUserId,
@@ -118,7 +130,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       const created = await transaction.user.create({
         data: {
           id: randomUUID(),
-          username: resolvedDingTalkUserId,
+          username: authingUsername,
           displayName: identity.name,
           passwordHash: DUMMY_HASH,
           email: identity.email,
@@ -129,6 +141,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           externalSource: 'authing',
           externalId: identityKey,
           dingtalkUserId: resolvedDingTalkUserId,
+          dingtalkBindingStatus,
           unionid: resolvedUnionid,
           phoneNumber: identity.phoneNumber,
           phoneNumberVerified: identity.phoneNumberVerified,
@@ -178,7 +191,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
 
     await transaction.$queryRaw`
       UPDATE users
-      SET username = ${resolvedDingTalkUserId},
+      SET username = ${authingUsername},
           display_name = COALESCE(${identity.name}::text, display_name),
           email = COALESCE(${identity.email}::text, email),
           avatar = COALESCE(${identity.avatar}::text, avatar),
@@ -186,6 +199,7 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           external_id = ${identityKey},
           unionid = ${resolvedUnionid},
           dingtalk_user_id = ${resolvedDingTalkUserId},
+          dingtalk_binding_status = ${dingtalkBindingStatus},
           phone_number = COALESCE(${identity.phoneNumber}::text, phone_number),
           phone_number_verified = COALESCE(${identity.phoneNumberVerified}, phone_number_verified),
           email_verified = COALESCE(${identity.emailVerified}, email_verified),
@@ -205,6 +219,18 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           roles = COALESCE(${identity.roles}::text, roles)
       WHERE id = ${user.id}
     `;
+
+    if (!dingTalkIdentity) {
+      await transaction.userDingTalkDepartment.deleteMany({ where: { userId: user.id } });
+      await transaction.userPosition.deleteMany({ where: { userId: user.id } });
+      await transaction.$queryRaw`
+        UPDATE users
+        SET supervisor_dingtalk_user_id = NULL,
+            supervisor_name = NULL,
+            sync_at = NULL
+        WHERE id = ${user.id}
+      `;
+    }
 
     await transaction.$queryRaw`
       INSERT INTO user_identities (
@@ -244,6 +270,8 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
     };
   });
 
-  await applyDingTalkOrgProfile(result.id, dingTalkIdentity);
+  if (dingTalkIdentity) {
+    await applyDingTalkOrgProfile(result.id, dingTalkIdentity);
+  }
   return result;
 }

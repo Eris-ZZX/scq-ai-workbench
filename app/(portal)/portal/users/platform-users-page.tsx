@@ -18,6 +18,7 @@ type PlatformUser = {
   source: string;
   externalSource: string | null;
   dingtalkUserId: string | null;
+  dingtalkBindingStatus: string;
   syncAt: string | null;
   unionid: string | null;
   phoneNumber: string | null;
@@ -510,6 +511,9 @@ export default function PlatformUsersPage() {
                     </ReadOnlyField>
                     <ReadOnlyField label="unionid">
                       {selectedUser.unionid || '尚未获取'}
+                    </ReadOnlyField>
+                    <ReadOnlyField label="钉钉绑定状态">
+                      {selectedUser.dingtalkBindingStatus === 'bound' ? '已绑定' : '未绑定钉钉信息'}
                     </ReadOnlyField>
                     <ReadOnlyField label="userid">
                       {selectedUser.dingtalkUserId || '尚未获取'}

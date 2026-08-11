@@ -7,8 +7,8 @@ export type UserMergeIdentity = {
   externalId: string | null;
   username: string;
   email: string | null;
-  unionid: string;
-  dingtalkUserId: string;
+  unionid: string | null;
+  dingtalkUserId: string | null;
 };
 
 export type UserMergeCandidate = {

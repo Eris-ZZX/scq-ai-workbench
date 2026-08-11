@@ -48,6 +48,7 @@ const userSelect = {
   externalSource: true,
   externalId: true,
   dingtalkUserId: true,
+  dingtalkBindingStatus: true,
   supervisorDingtalkUserId: true,
   supervisorName: true,
   directoryUserId: true,
