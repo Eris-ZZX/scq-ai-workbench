@@ -13,7 +13,7 @@ export default async function PortalPage() {
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold text-foreground">选择要进入的应用</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            已登录为 {session.username} · 供应链质量部统一入口
+            已登录为 {session.displayName} · 供应链质量部统一入口
           </p>
         </div>
 

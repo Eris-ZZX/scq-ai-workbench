@@ -18,7 +18,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const attachments = await db.activityAttachment.findMany({
     where: { childId, deletedAt: null },
-    include: { uploadedBy: { select: { id: true, username: true } } },
+    include: { uploadedBy: { select: { id: true, username: true, displayName: true } } },
     orderBy: { createdAt: 'desc' },
   });
   return NextResponse.json(attachments);

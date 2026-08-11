@@ -41,7 +41,7 @@ export default async function AiResourcesLayout({ children }: { children: React.
               管理后台
             </Link>
           ) : null}
-          <span className="nav-user">{session.username}</span>
+          <span className="nav-user">{session.displayName}</span>
           <Link href="/portal">
             <LayoutGrid size={14} />
             应用选择

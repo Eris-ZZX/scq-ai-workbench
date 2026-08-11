@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
                 id: true, userId: true, role: true, assignedRole: true,
                 user: {
                   select: {
-                    id: true, username: true,
+                    id: true, username: true, displayName: true,
                     positionBinding: {
                       select: {
                         positionRoleId: true,
@@ -57,7 +57,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
                 id: true, userId: true, role: true, assignedRole: true,
                 user: {
                   select: {
-                    id: true, username: true,
+                    id: true, username: true, displayName: true,
                     positionBinding: {
                       select: {
                         positionRoleId: true,

@@ -31,6 +31,7 @@ type ProjectMember = {
   user: {
     id: string;
     username: string;
+    displayName?: string | null;
     positionBinding: null | {
       positionRoleId: string;
       positionRole: { id: string; name: string; roleName: string | null };
@@ -106,7 +107,7 @@ type ActivityEvent = {
   actionType: string;
   note: string | null;
   createdAt: string;
-  actor: { id: string; username: string } | null;
+  actor: { id: string; username: string; displayName?: string | null } | null;
 };
 
 type StageGate = {
@@ -139,6 +140,7 @@ type WorkspaceData = {
 type RoleContext = {
   userId: string;
   username: string;
+  displayName?: string | null;
   appRole: string;
   workbenchRole: WorkbenchRole;
   position: null | { id: string; name: string; roleName: string | null };
@@ -198,7 +200,7 @@ export default function ProjectWorkspacePage() {
         const meRes = await fetch('/api/auth/me');
         if (meRes.ok) {
           const me = await meRes.json();
-          setRoleContext({ userId: me.id, appRole: me.role, workbenchRole: 'executor', username: me.username, position: me.positionBinding?.positionRole ?? null });
+          setRoleContext({ userId: me.id, appRole: me.role, workbenchRole: 'executor', username: me.username, displayName: me.displayName, position: me.positionBinding?.positionRole ?? null });
         }
       } catch { /* non-critical */ }
     } catch {
@@ -1005,7 +1007,7 @@ function EventList({ events }: { events: ActivityEvent[] }) {
         <div key={event.id} className="rounded-md bg-slate-50 px-2 py-1.5">
           <div className="text-xs font-medium">{eventActionLabel(event.actionType)}</div>
           <div className="mt-0.5 text-[11px] text-slate-500">
-            {formatDateTime(event.createdAt)} / {event.actor?.username ?? event.actorRole ?? '系统'}
+            {formatDateTime(event.createdAt)} / {event.actor?.displayName || event.actor?.username || event.actorRole || '系统'}
           </div>
           {event.note && <div className="mt-1 text-xs text-slate-600">{event.note}</div>}
         </div>

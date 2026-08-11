@@ -29,15 +29,15 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
       AND: [visibleResourceWhere(actor)],
     },
     include: {
-      createdBy: { select: { username: true } },
-      owner: { select: { username: true } },
+      createdBy: { select: { username: true, displayName: true } },
+      owner: { select: { username: true, displayName: true } },
       _count: { select: { favorites: true, likes: true } },
       updateLogs: {
         orderBy: { createdAt: 'desc' },
         take: 3,
         include: {
-          actor: { select: { username: true } },
-          reviewer: { select: { username: true } },
+          actor: { select: { username: true, displayName: true } },
+          reviewer: { select: { username: true, displayName: true } },
         },
       },
     },
@@ -60,7 +60,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
         id: true,
         content: true,
         createdAt: true,
-        user: { select: { id: true, username: true } },
+        user: { select: { id: true, username: true, displayName: true } },
       },
     }),
   ]);
@@ -133,12 +133,12 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
                 <span className="subtle">负责人</span>
                 <strong>
                   <UserRound size={15} />
-                  {resource.owner.username || resource.ownerName}
+                  {resource.owner.displayName || resource.owner.username || resource.ownerName}
                 </strong>
               </div>
               <div>
                 <span className="subtle">创建人</span>
-                <strong>{resource.createdBy.username}</strong>
+                <strong>{resource.createdBy.displayName || resource.createdBy.username}</strong>
               </div>
               <div>
                 <span className="subtle">当前版本</span>

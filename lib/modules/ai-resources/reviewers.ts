@@ -5,6 +5,7 @@ import type { AiResourceActor } from './guards';
 export type ReviewerOption = {
   id: string;
   username: string;
+  displayName: string | null;
   role: string;
 };
 
@@ -18,7 +19,7 @@ export async function listAssignableReviewers(excludeUserId?: string) {
     },
     select: {
       role: true,
-      user: { select: { id: true, username: true } },
+      user: { select: { id: true, username: true, displayName: true } },
     },
     orderBy: { user: { username: 'asc' } },
   });
@@ -26,6 +27,7 @@ export async function listAssignableReviewers(excludeUserId?: string) {
   return memberships.map((item) => ({
     id: item.user.id,
     username: item.user.username,
+    displayName: item.user.displayName,
     role: item.role,
   })) satisfies ReviewerOption[];
 }

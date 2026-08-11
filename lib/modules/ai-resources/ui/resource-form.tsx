@@ -80,7 +80,7 @@ export function ResourceForm({
     parseAttachments(resource?.attachments),
   );
   const [files, setFiles] = useState<File[]>([]);
-  const [reviewers, setReviewers] = useState<Array<{ id: string; username: string; role: string }>>([]);
+  const [reviewers, setReviewers] = useState<Array<{ id: string; username: string; displayName?: string | null; role: string }>>([]);
   const [reviewerId, setReviewerId] = useState(initialReviewerId ?? '');
   const [ownerUsers, setOwnerUsers] = useState<AiResourceUserOption[]>([]);
   const [ownerQuery, setOwnerQuery] = useState(resource?.ownerName ?? initialOwnerName ?? '');
@@ -127,7 +127,7 @@ export function ResourceForm({
         const response = await fetch('/api/ai-resources/reviewers');
         if (!response.ok) return;
         const data = (await response.json()) as {
-          reviewers?: Array<{ id: string; username: string; role: string }>;
+          reviewers?: Array<{ id: string; username: string; displayName?: string | null; role: string }>;
         };
         if (cancelled) return;
         const list = data.reviewers ?? [];
@@ -160,9 +160,9 @@ export function ResourceForm({
         setForm((current) => ({
           ...current,
           ownerId: preferred?.id ?? current.ownerId,
-          ownerName: preferred?.username ?? current.ownerName,
+          ownerName: preferred?.displayName || preferred?.username || current.ownerName,
         }));
-        if (preferred) setOwnerQuery(preferred.username);
+        if (preferred) setOwnerQuery(preferred.displayName || preferred.username);
       } catch {
         // keep empty; submit will surface validation error
       }
@@ -220,7 +220,7 @@ export function ResourceForm({
             summary: form.summary,
             tags: form.groups,
             ownerId: selectedOwner.id,
-            ownerName: selectedOwner.username,
+            ownerName: selectedOwner.displayName || selectedOwner.username,
             visibilityScope: 'ALL',
             resourceUrl: serializeResourceUrls(form.resourceUrls),
             content: form.content,
@@ -260,7 +260,9 @@ export function ResourceForm({
 
   function updateOwnerQuery(value: string) {
     setOwnerQuery(value);
-    const selected = ownerUsers.find((user) => user.username === value.trim());
+    const selected = ownerUsers.find(
+      (user) => user.username === value.trim() || user.displayName === value.trim(),
+    );
     setForm((current) => ({
       ...current,
       ownerId: selected?.id ?? '',
@@ -273,9 +275,9 @@ export function ResourceForm({
     setForm((current) => ({
       ...current,
       ownerId: user.id,
-      ownerName: user.username,
+      ownerName: user.displayName || user.username,
     }));
-    setOwnerQuery(user.username);
+    setOwnerQuery(user.displayName || user.username);
     setOwnerOpen(false);
   }
 
@@ -416,7 +418,8 @@ export function ResourceForm({
               <div className="multi-dropdown-menu" id="owner-options" role="listbox">
                 {ownerUsers
                   .filter((user) =>
-                    user.username.toLocaleLowerCase().includes(ownerQuery.trim().toLocaleLowerCase()),
+                    (user.displayName || user.username).toLocaleLowerCase().includes(ownerQuery.trim().toLocaleLowerCase())
+                    || user.username.toLocaleLowerCase().includes(ownerQuery.trim().toLocaleLowerCase()),
                   )
                   .slice(0, 50)
                   .map((user) => (
@@ -426,11 +429,12 @@ export function ResourceForm({
                       key={user.id}
                       onClick={() => selectOwner(user)}
                     >
-                      {user.username}
+                      {user.displayName || user.username}
                     </button>
                   ))}
                 {!ownerUsers.some((user) =>
-                  user.username.toLocaleLowerCase().includes(ownerQuery.trim().toLocaleLowerCase()),
+                  (user.displayName || user.username).toLocaleLowerCase().includes(ownerQuery.trim().toLocaleLowerCase())
+                  || user.username.toLocaleLowerCase().includes(ownerQuery.trim().toLocaleLowerCase()),
                 ) ? (
                   <span className="subtle owner-empty">没有匹配的用户</span>
                 ) : null}
@@ -660,7 +664,7 @@ export function ResourceForm({
             </option>
             {reviewers.map((reviewer) => (
               <option key={reviewer.id} value={reviewer.id}>
-                {reviewer.username}
+                {reviewer.displayName || reviewer.username}
                 {reviewer.role === 'admin' ? '（管理员）' : ''}
               </option>
             ))}

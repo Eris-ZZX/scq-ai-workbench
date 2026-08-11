@@ -85,6 +85,7 @@ export async function POST(request: Request) {
   const sessionCookie = await createSession({
     id: user.id,
     username: user.username,
+    displayName: user.displayName,
     role: user.role,
     platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
   });
@@ -99,6 +100,7 @@ export async function POST(request: Request) {
   const response = NextResponse.json({
     id: user.id,
     username: user.username,
+    displayName: user.displayName || user.username,
     role: user.role,
     platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
   });

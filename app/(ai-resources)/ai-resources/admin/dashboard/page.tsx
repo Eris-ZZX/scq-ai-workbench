@@ -196,10 +196,10 @@ export default async function AiResourceDashboardPage({
                 <span className="admin-dashboard-list-main">
                   <strong>{review.resource?.name ?? '新资源申请'}</strong>
                   <span className="subtle">
-                    {reviewTypeLabel[review.type as AiReviewType] ?? review.type} · 提交人 {review.requester.username}
+                    {reviewTypeLabel[review.type as AiReviewType] ?? review.type} · 提交人 {review.requester.displayName || review.requester.username}
                   </span>
                 </span>
-                <span className="admin-dashboard-list-value">{review.reviewer?.username ?? '未指定'}</span>
+                <span className="admin-dashboard-list-value">{review.reviewer ? review.reviewer.displayName || review.reviewer.username : '未指定'}</span>
               </Link>
             ))}
             {dashboard.pendingReviewItems.length === 0 ? <div className="empty">暂无待审批事项。</div> : null}

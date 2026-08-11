@@ -38,7 +38,8 @@ export default async function AiResourcesLibraryPage({
     db.aiResource.findMany({
       where,
       include: {
-        createdBy: { select: { username: true } },
+        createdBy: { select: { username: true, displayName: true } },
+        owner: { select: { username: true, displayName: true } },
         _count: { select: { favorites: true, likes: true } },
       },
       orderBy: buildOrderBy(sort),

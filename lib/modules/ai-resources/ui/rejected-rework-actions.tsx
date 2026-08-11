@@ -15,7 +15,7 @@ export function RejectedReworkActions({ reviewId, reviewType, initialReviewerId 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [reviewers, setReviewers] = useState<Array<{ id: string; username: string }>>([]);
+  const [reviewers, setReviewers] = useState<Array<{ id: string; username: string; displayName?: string | null }>>([]);
   const [reviewerId, setReviewerId] = useState(initialReviewerId ?? '');
   const [updateSummary, setUpdateSummary] = useState('按驳回意见修改后重新提交');
 
@@ -24,7 +24,7 @@ export function RejectedReworkActions({ reviewId, reviewType, initialReviewerId 
     void (async () => {
       const res = await fetch('/api/ai-resources/reviewers');
       if (!res.ok || cancelled) return;
-      const body = (await res.json()) as { reviewers?: Array<{ id: string; username: string }> };
+      const body = (await res.json()) as { reviewers?: Array<{ id: string; username: string; displayName?: string | null }> };
       const list = body.reviewers ?? [];
       setReviewers(list);
       setReviewerId((current) => current || list[0]?.id || '');
@@ -90,7 +90,7 @@ export function RejectedReworkActions({ reviewId, reviewType, initialReviewerId 
             <select value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} disabled={pending}>
               {reviewers.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.username}
+                  {item.displayName || item.username}
                 </option>
               ))}
             </select>

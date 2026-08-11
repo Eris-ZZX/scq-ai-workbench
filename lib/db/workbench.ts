@@ -3,6 +3,7 @@ import { db } from '@/lib/database';
 type SessionLike = {
   sub: string;
   username: string;
+  displayName: string;
   role: string;
 };
 
@@ -161,7 +162,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
         where: { projectId: { in: projectIds } },
         include: {
           project: { select: { id: true, name: true } },
-          actor: { select: { username: true } },
+          actor: { select: { username: true, displayName: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 30,
@@ -172,6 +173,7 @@ export async function getWorkbenchData(session: SessionLike, options: { projectI
     roleContext: {
       userId: session.sub,
       username: session.username,
+      displayName: session.displayName,
       appRole: session.role,
       workbenchRole: (session.role === 'admin' || session.role === 'manager') ? 'admin' as const : 'executor' as const,
     },

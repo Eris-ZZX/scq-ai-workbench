@@ -21,7 +21,7 @@ type ActivityAttachment = {
   fileName: string;
   sizeBytes: number | null;
   createdAt: string;
-  uploadedBy?: { username: string } | null;
+  uploadedBy?: { username: string; displayName?: string | null } | null;
 };
 type ActivityChild = {
   id: string;
@@ -70,7 +70,7 @@ type ActivityEvent = {
   actionType: string;
   note: string | null;
   createdAt: string;
-  actor: { username: string } | null;
+  actor: { username: string; displayName?: string | null } | null;
 };
 
 const STAGES = ['TR1', 'TR2&3', 'TR4', 'TR4A', 'TR5', 'TR6'];
@@ -660,7 +660,7 @@ export default function ActivityTrackingPage() {
           <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
             {events.slice(0, 8).map((event) => (
               <div key={event.id} className="rounded border bg-muted/20 px-3 py-2">
-                <span className="font-medium text-foreground">{event.actor?.username ?? '系统'}</span>
+                <span className="font-medium text-foreground">{event.actor?.displayName || event.actor?.username || '系统'}</span>
                 <span className="ml-2">{event.actionType}</span>
                 {event.note && <span className="ml-2 text-amber-700">{event.note}</span>}
                 <span className="ml-2">{formatDateTime(event.createdAt)}</span>

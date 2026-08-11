@@ -29,8 +29,8 @@ export default async function ReviewPage({
     orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     take: 100,
     include: {
-      requester: { select: { username: true } },
-      reviewer: { select: { username: true } },
+      requester: { select: { username: true, displayName: true } },
+      reviewer: { select: { username: true, displayName: true } },
       resource: {
         select: {
           id: true,
@@ -90,10 +90,10 @@ export default async function ReviewPage({
                     {type ? (
                       <span className="badge">{resourceTypeLabel[type] ?? type}</span>
                     ) : null}
-                    <span className="badge">提交人：{request.requester.username}</span>
+                    <span className="badge">提交人：{request.requester.displayName || request.requester.username}</span>
                     {request.reviewer ? (
                       <span className="badge">
-                        {reviewerLabel}：{request.reviewer.username}
+                        {reviewerLabel}：{request.reviewer.displayName || request.reviewer.username}
                       </span>
                     ) : null}
                   </div>

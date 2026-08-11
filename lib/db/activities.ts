@@ -308,7 +308,7 @@ export async function getProjectActivityView(projectId: string, options?: { atta
 export async function getActivityEvents(projectId: string, childId?: string) {
   return db.activityEvent.findMany({
     where: { projectId, ...(childId ? { childId } : {}) },
-    include: { actor: { select: { id: true, username: true } } },
+    include: { actor: { select: { id: true, username: true, displayName: true } } },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });

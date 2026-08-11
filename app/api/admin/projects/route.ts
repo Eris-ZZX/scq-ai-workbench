@@ -60,6 +60,7 @@ function projectSelect() {
           select: {
             id: true,
             username: true,
+            displayName: true,
             positionBinding: {
               select: {
                 positionRoleId: true,

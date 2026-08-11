@@ -36,8 +36,8 @@ export async function GET(
         skip,
         take: pageSize,
         include: {
-          actor: { select: { id: true, username: true } },
-          reviewer: { select: { id: true, username: true } },
+          actor: { select: { id: true, username: true, displayName: true } },
+          reviewer: { select: { id: true, username: true, displayName: true } },
         },
       }),
     ]);

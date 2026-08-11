@@ -7,7 +7,7 @@ export type ResourceCommentItem = {
   id: string;
   content: string;
   createdAt: string;
-  user: { id: string; username: string };
+  user: { id: string; username: string; displayName?: string | null };
 };
 
 type Props = {
@@ -109,7 +109,7 @@ export function ResourceComments({
             return (
               <li className="comment-item" key={comment.id}>
                 <div className="comment-meta">
-                  <strong>{comment.user.username}</strong>
+                  <strong>{comment.user.displayName || comment.user.username}</strong>
                   <span className="subtle">{formatCommentTime(comment.createdAt)}</span>
                   {canDelete ? (
                     <button

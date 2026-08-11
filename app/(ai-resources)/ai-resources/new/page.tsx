@@ -6,7 +6,7 @@ export default async function NewResourcePage() {
 
   return (
     <main className="main">
-      <ResourceForm initialOwnerId={actor.userId} initialOwnerName={actor.username} />
+      <ResourceForm initialOwnerId={actor.userId} initialOwnerName={actor.displayName} />
     </main>
   );
 }

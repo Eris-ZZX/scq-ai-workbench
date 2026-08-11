@@ -40,6 +40,7 @@ async function isSecureRequest() {
 export async function createSession(user: {
   id: string;
   username: string;
+  displayName?: string | null;
   role: string;
   platformRole?: string;
 }): Promise<SessionCookie> {
@@ -48,6 +49,7 @@ export async function createSession(user: {
   const token = await new SignJWT({
     sub: user.id,
     username: user.username,
+    displayName: user.displayName ?? user.username,
     role: user.role,
     platformRole,
     authAt,
@@ -78,12 +80,14 @@ export async function createSession(user: {
 export async function maybeRefreshSession(existing: {
   sub: string;
   username: string;
+  displayName?: string | null;
   role: string;
   platformRole?: string;
 }) {
   await createSession({
     id: existing.sub,
     username: existing.username,
+    displayName: existing.displayName,
     role: existing.role,
     platformRole: existing.platformRole,
   });
@@ -145,6 +149,7 @@ function isValidPayload(
 export async function getSession(): Promise<{
   sub: string;
   username: string;
+  displayName: string;
   role: string;
   platformRole: string;
 } | null> {
@@ -165,6 +170,7 @@ export async function getSession(): Promise<{
       select: {
         id: true,
         username: true,
+        displayName: true,
         platformRole: true,
         role: true,
         status: true,
@@ -186,6 +192,7 @@ export async function getSession(): Promise<{
     return {
       sub: user.id,
       username: user.username,
+      displayName: user.displayName || user.username,
       role: user.role,
       platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
     };

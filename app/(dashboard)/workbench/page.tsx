@@ -51,6 +51,7 @@ type WorkbenchData = {
   roleContext: {
     userId: string;
     username: string;
+    displayName: string;
     appRole: string;
     workbenchRole: WorkbenchRole;
     position: null | { name: string; roleName: string | null };

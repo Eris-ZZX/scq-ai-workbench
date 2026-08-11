@@ -12,6 +12,7 @@ import {
 export type AiResourceActor = {
   userId: string;
   username: string;
+  displayName: string;
   workbenchRole: string;
   moduleRole: AiResourceRole;
   membershipId: string | null;
@@ -26,6 +27,7 @@ async function loadActor(userId: string, username: string, workbenchRole: string
     select: {
       id: true,
       username: true,
+      displayName: true,
       status: true,
       aiResourceMembership: { select: { id: true, role: true } },
     },
@@ -42,6 +44,7 @@ async function loadActor(userId: string, username: string, workbenchRole: string
   return {
     userId: user.id,
     username: user.username || username,
+    displayName: user.displayName || user.username || username,
     workbenchRole,
     moduleRole,
     membershipId: user.aiResourceMembership?.id ?? null,

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       where: { AND: filters },
       orderBy: { updatedAt: 'desc' },
       include: {
-        createdBy: { select: { id: true, username: true } },
+        createdBy: { select: { id: true, username: true, displayName: true } },
       },
       take: 100,
     });

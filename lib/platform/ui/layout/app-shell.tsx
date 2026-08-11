@@ -6,6 +6,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 type AppShellSession = {
   username: string;
+  displayName: string;
   platformRole?: string;
   role: string;
 };
@@ -63,12 +64,12 @@ export function AppShell({
         <div className="mt-auto border-t border-white/10 px-3 py-3">
           <div className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''}`}>
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ws-blue text-xs font-bold text-white">
-              {session.username.charAt(0)}
+              {session.displayName.charAt(0)}
             </div>
             {!collapsed && (
               <>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white">{session.username}</div>
+                  <div className="truncate text-sm text-white">{session.displayName}</div>
                 </div>
                 <Link href="/portal" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="返回应用选择">
                   应用

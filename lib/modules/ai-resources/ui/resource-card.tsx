@@ -28,6 +28,7 @@ type ResourceCardData = {
   summary: string;
   tags: string;
   ownerName: string;
+  owner?: { username: string; displayName?: string | null } | null;
   resourceUrl?: string | null;
   attachments?: unknown;
   extension?: unknown;
@@ -81,7 +82,9 @@ export function ResourceCard({
             <div className="resource-card-facts">
               <div className="resource-card-fact">
                 <span className="resource-card-fact-label">负责人</span>
-                <span className="resource-card-plain">{resource.ownerName || '未填写'}</span>
+                <span className="resource-card-plain">
+                  {resource.owner?.displayName || resource.owner?.username || resource.ownerName || '未填写'}
+                </span>
               </div>
               <div className="resource-card-fact">
                 <span className="resource-card-fact-label">适用小组</span>

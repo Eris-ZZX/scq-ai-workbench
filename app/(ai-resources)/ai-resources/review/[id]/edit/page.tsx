@@ -41,7 +41,7 @@ export default async function ReviewResubmitPage({ params }: { params: Promise<{
     tags,
     ownerId: String(proposed.ownerId ?? currentResource?.ownerId ?? request.requesterId),
     ownerName: String(
-      proposed.ownerName ?? currentResource?.ownerName ?? actor.username,
+      proposed.ownerName ?? currentResource?.ownerName ?? actor.displayName,
     ),
     visibilityScope: String(proposed.visibilityScope ?? 'ALL'),
     visibleDeptIds: '[]',

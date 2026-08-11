@@ -11,7 +11,7 @@ export const DUMMY_HASH =
 
 /** 返回给客户端的安全 User 字段（不含 passwordHash） */
 const SAFE_USER_SELECT = {
-  id: true, username: true, avatar: true,
+  id: true, username: true, displayName: true, avatar: true,
   platformRole: true, role: true, status: true, email: true,
   createdAt: true, updatedAt: true,
 } as const;

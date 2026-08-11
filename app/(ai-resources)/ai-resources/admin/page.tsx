@@ -12,7 +12,7 @@ export default async function AdminPage() {
     return (
       <main className="main">
         <p className="subtle" style={{ marginBottom: 16 }}>
-          管理员：{actor.username}
+          管理员：{actor.displayName}
         </p>
         <section className="admin-feature-grid">
           <Link className="admin-feature-card" href="/ai-resources/admin/dashboard">

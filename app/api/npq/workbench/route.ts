@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const data = await getWorkbenchData({
     sub: session.sub,
     username: session.username,
+    displayName: session.displayName,
     role: session.role,
   }, { projectId });
   return NextResponse.json(data);

@@ -31,8 +31,8 @@ export default async function AdminResourcesPage({
     db.aiResource.findMany({
       where,
       include: {
-        createdBy: { select: { username: true } },
-        owner: { select: { username: true } },
+        createdBy: { select: { username: true, displayName: true } },
+        owner: { select: { username: true, displayName: true } },
       },
       orderBy: { updatedAt: 'desc' },
       skip,
@@ -78,12 +78,12 @@ export default async function AdminResourcesPage({
                     <Link className="admin-resource-name" href={`/ai-resources/${resource.id}`}>
                       {resource.name}
                     </Link>
-                    <span className="subtle">创建人：{resource.createdBy.username}</span>
+                    <span className="subtle">创建人：{resource.createdBy.displayName || resource.createdBy.username}</span>
                   </td>
                   <td>{resourceTypeLabel[resource.type as AiResourceType] ?? resource.type}</td>
                   <td>{resource.status}</td>
                   <td>{parseList(resource.tags).join('、') || '未设置'}</td>
-                  <td>{resource.owner.username || resource.ownerName}</td>
+                  <td>{resource.owner.displayName || resource.owner.username || resource.ownerName}</td>
                   <td>v{resource.currentVersion}</td>
                   <td>{formatDate(resource.updatedAt)}</td>
                   <td>

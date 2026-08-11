@@ -15,7 +15,7 @@ type ProjectMember = {
   userId: string;
   role: string;
   assignedRole: string | null;
-  user: { id: string; username: string; positionBinding: PositionBinding };
+  user: { id: string; username: string; displayName?: string | null; positionBinding: PositionBinding };
 };
 
 type Project = {
@@ -33,6 +33,7 @@ type Project = {
 type User = {
   id: string;
   username: string;
+  displayName?: string | null;
   status?: string;
   positionBinding: PositionBinding;
 };
@@ -86,9 +87,9 @@ function statusLabel(status: string) {
   return statusOptions.find((item) => item.value === status)?.label ?? status;
 }
 
-function displayUser(user?: { username: string }) {
+function displayUser(user?: { username: string; displayName?: string | null }) {
   if (!user) return '-';
-  return user.username;
+  return user.displayName || user.username;
 }
 
 function formatTemplateVersion(version: ActivityTemplate['version']) {
@@ -220,10 +221,15 @@ export default function AdminProjectsPage() {
   const activeUsers = useMemo(() => users.filter((user) => !user.status || user.status === 'active'), [users]);
   const npqFiltered = useMemo(() => {
     const kw = npqSearch.trim().toLowerCase();
-    return kw ? activeUsers.filter((u) => u.username.toLowerCase().includes(kw)) : activeUsers;
+    return kw
+      ? activeUsers.filter((u) =>
+          (u.displayName || u.username).toLowerCase().includes(kw)
+          || u.username.toLowerCase().includes(kw),
+        )
+      : activeUsers;
   }, [activeUsers, npqSearch]);
   const npqSelectedName = useMemo(() =>
-    createForm.ownerId ? activeUsers.find((u) => u.id === createForm.ownerId)?.username ?? '' : '',
+    createForm.ownerId ? displayUser(activeUsers.find((u) => u.id === createForm.ownerId)) : '',
   [activeUsers, createForm.ownerId]);
 
   // 加载选中项目的活动角色
@@ -733,7 +739,8 @@ export default function AdminProjectsPage() {
                   .filter((user) => !selected.has(user.id))
                   .filter((user) => {
                     if (!keyword) return true;
-                    return user.username.toLowerCase().includes(keyword);
+                    return (user.displayName || user.username).toLowerCase().includes(keyword)
+                      || user.username.toLowerCase().includes(keyword);
                   });
                 return (
                   <div className="max-h-72 overflow-auto rounded border border-border p-2">

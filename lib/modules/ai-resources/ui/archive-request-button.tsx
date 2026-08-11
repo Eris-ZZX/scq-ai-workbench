@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Trash2, X } from 'lucide-react';
 import { getErrorMessage } from '@/modules/ai-resources/api-errors';
 
-type ReviewerOption = { id: string; username: string; role: string };
+type ReviewerOption = { id: string; username: string; displayName?: string | null; role: string };
 
 export function ArchiveRequestButton({
   resourceId,
@@ -103,7 +103,7 @@ export function ArchiveRequestButton({
                 </option>
                 {reviewers.map((reviewer) => (
                   <option key={reviewer.id} value={reviewer.id}>
-                    {reviewer.username}
+                    {reviewer.displayName || reviewer.username}
                     {reviewer.role === 'admin' ? '（管理员）' : ''}
                   </option>
                 ))}

@@ -25,8 +25,8 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
   const request = await db.aiResourceReviewRequest.findUnique({
     where: { id },
     include: {
-      requester: { select: { username: true } },
-      reviewer: { select: { username: true } },
+      requester: { select: { username: true, displayName: true } },
+      reviewer: { select: { username: true, displayName: true } },
       resource: {
         select: {
           id: true,
@@ -125,7 +125,7 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
               </div>
               <div>
                 <span className="subtle">提交人</span>
-                <strong>{request.requester.username}</strong>
+                <strong>{request.requester.displayName || request.requester.username}</strong>
               </div>
             </div>
           </section>
@@ -249,14 +249,14 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
               </div>
               <div>
                 <span className="subtle">提交人</span>
-                <strong>{request.requester.username}</strong>
+                <strong>{request.requester.displayName || request.requester.username}</strong>
               </div>
               {request.reviewer ? (
                 <div>
                   <span className="subtle">
                     {request.status === 'PENDING' ? '指定审批人' : '审批人'}
                   </span>
-                  <strong>{request.reviewer.username}</strong>
+                  <strong>{request.reviewer.displayName || request.reviewer.username}</strong>
                 </div>
               ) : null}
               {request.updateSummary ? (

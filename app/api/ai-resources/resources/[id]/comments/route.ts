@@ -41,7 +41,7 @@ export async function GET(
         id: true,
         content: true,
         createdAt: true,
-        user: { select: { id: true, username: true } },
+        user: { select: { id: true, username: true, displayName: true } },
       },
     });
 
@@ -100,7 +100,7 @@ export async function POST(
         id: true,
         content: true,
         createdAt: true,
-        user: { select: { id: true, username: true } },
+        user: { select: { id: true, username: true, displayName: true } },
       },
     });
 
