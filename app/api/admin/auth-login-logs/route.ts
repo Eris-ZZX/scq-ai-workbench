@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
-import { parseAuthErrorParams } from '@/platform/auth/login-audit';
+import { parseAuthErrorParams, parseAuthingData } from '@/platform/auth/login-audit';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
 
 const PAGE_SIZE = 20;
@@ -72,7 +72,10 @@ export async function GET(request: Request) {
       errorCode: row.errorCode,
       errorMessage: row.errorMessage,
       errorParams: parseAuthErrorParams(row.errorParams),
-      hasAuthingData: Boolean(row.authingData),
+      authingData: parseAuthingData(row.authingData),
+      requestPath: row.requestPath,
+      ipAddress: row.ipAddress,
+      userAgent: row.userAgent,
       createdAt: row.createdAt,
       user: row.user
         ? {

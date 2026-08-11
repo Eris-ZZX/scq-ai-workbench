@@ -6,7 +6,6 @@ const { mockRequireAdmin, mockDatabase } = vi.hoisted(() => ({
     authLoginLog: {
       findMany: vi.fn(),
       count: vi.fn(),
-      findUnique: vi.fn(),
     },
   },
 }));
@@ -17,7 +16,6 @@ vi.mock('@/platform/permissions/system-admin', () => ({
 vi.mock('@/lib/database', () => ({ db: mockDatabase }));
 
 import { GET as listLogs } from '@/app/api/admin/auth-login-logs/route';
-import { GET as exportLog } from '@/app/api/admin/auth-login-logs/[id]/export/route';
 
 describe('/api/admin/auth-login-logs', () => {
   beforeEach(() => {
@@ -47,6 +45,14 @@ describe('/api/admin/auth-login-logs', () => {
       errorCode: 'authing',
       errorMessage: 'user lookup failed',
       errorParams: JSON.stringify({ error: 'access_denied', code: 'secret' }),
+      authingData: JSON.stringify({
+        username: '314265',
+        unionid: null,
+        extended_fields: { emp_no: '314265' },
+      }),
+      requestPath: '/api/auth/authing/callback',
+      ipAddress: '192.0.2.10',
+      userAgent: 'test-agent',
       createdAt: new Date('2026-08-11T02:00:00.000Z'),
       user: null,
     }]);
@@ -59,6 +65,16 @@ describe('/api/admin/auth-login-logs', () => {
 
     expect(response.status).toBe(200);
     expect(body.items[0].errorParams).toEqual({ error: 'access_denied' });
+    expect(body.items[0].authingData).toEqual({
+      username: '314265',
+      unionid: null,
+      extended_fields: { emp_no: '314265' },
+    });
+    expect(body.items[0]).toMatchObject({
+      requestPath: '/api/auth/authing/callback',
+      ipAddress: '192.0.2.10',
+      userAgent: 'test-agent',
+    });
     expect(body.pagination).toMatchObject({ page: 2, total: 1, totalPages: 1 });
     expect(mockDatabase.authLoginLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
@@ -76,48 +92,5 @@ describe('/api/admin/auth-login-logs', () => {
         ],
       },
     }));
-  });
-});
-
-describe('/api/admin/auth-login-logs/[id]/export', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockRequireAdmin.mockResolvedValue({ session: { sub: 'admin-1' } });
-  });
-
-  it('exports one record without unsafe error parameters', async () => {
-    mockDatabase.authLoginLog.findUnique.mockResolvedValueOnce({
-      id: 'log-1',
-      provider: 'authing',
-      stage: 'callback',
-      outcome: 'failure',
-      username: '329662',
-      displayName: '刘富荣',
-      errorCode: 'authing',
-      errorMessage: 'lookup failed',
-      errorParams: JSON.stringify({ error: 'access_denied', state: 'secret' }),
-      authingData: JSON.stringify({
-        username: '314265',
-        unionid: null,
-        state: 'secret',
-      }),
-      requestPath: '/api/auth/authing/callback',
-      ipAddress: '192.0.2.10',
-      userAgent: 'test-agent',
-      createdAt: new Date('2026-08-11T02:00:00.000Z'),
-      user: null,
-    });
-
-    const response = await exportLog(
-      new Request('http://localhost/api/admin/auth-login-logs/log-1/export'),
-      { params: Promise.resolve({ id: 'log-1' }) },
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-disposition')).toContain('auth-login-log-log-1.json');
-    expect(body.errorParams).toEqual({ error: 'access_denied' });
-    expect(body.errorParams.state).toBeUndefined();
-    expect(body.authingData).toEqual({ username: '314265', unionid: null });
   });
 });

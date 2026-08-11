@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Download, Loader2, Search } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { Copy, Loader2, Search } from 'lucide-react';
 
 type AuthLoginLogItem = {
   id: string;
@@ -13,7 +13,10 @@ type AuthLoginLogItem = {
   errorCode: string | null;
   errorMessage: string | null;
   errorParams: Record<string, string>;
-  hasAuthingData: boolean;
+  authingData: unknown;
+  requestPath: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
   createdAt: string;
   user: { id: string; username: string; displayName: string } | null;
 };
@@ -45,6 +48,9 @@ export default function AuthLoginLogsPage() {
   const [data, setData] = useState<AuthLoginLogsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [copyError, setCopyError] = useState('');
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -90,6 +96,34 @@ export default function AuthLoginLogsPage() {
     setFrom('');
     setTo('');
     setPage(1);
+  };
+
+  const toggleDetails = (id: string) => {
+    setExpandedIds((current) => ({ ...current, [id]: !current[id] }));
+    setCopyError('');
+  };
+
+  const copyDetails = async (item: AuthLoginLogItem) => {
+    const text = formatLogDetails(item);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        textarea.remove();
+      }
+      setCopiedId(item.id);
+      setCopyError('');
+      window.setTimeout(() => setCopiedId((current) => current === item.id ? null : current), 1500);
+    } catch {
+      setCopyError('复制失败，请手动选择 JSON 内容复制。');
+    }
   };
 
   return (
@@ -172,56 +206,76 @@ export default function AuthLoginLogsPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {data.items.map((item) => (
-                  <tr key={item.id} className="align-top">
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                      {formatDate(item.createdAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>{providerLabels[item.provider] || item.provider}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">{item.stage}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>{item.displayName || item.user?.displayName || '未知用户'}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {item.username || item.user?.username || '无用户名'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={item.outcome === 'success' ? 'text-emerald-600' : 'text-red-600'}>
-                        {outcomeLabels[item.outcome] || item.outcome}
-                      </span>
-                    </td>
-                    <td className="max-w-[360px] px-4 py-3">
-                      {item.errorCode && <div className="font-medium text-red-700">{item.errorCode}</div>}
-                      {item.errorMessage && (
-                        <div className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">
-                          {item.errorMessage}
+                  <Fragment key={item.id}>
+                    <tr className="align-top">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                        {formatDate(item.createdAt)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>{providerLabels[item.provider] || item.provider}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{item.stage}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>{item.displayName || item.user?.displayName || '未知用户'}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {item.username || item.user?.username || '无用户名'}
                         </div>
-                      )}
-                      {Object.keys(item.errorParams).length > 0 && (
-                        <details className="mt-1 text-xs text-muted-foreground">
-                          <summary className="cursor-pointer">错误参数</summary>
-                          <pre className="mt-1 whitespace-pre-wrap break-all">{JSON.stringify(item.errorParams, null, 2)}</pre>
-                        </details>
-                      )}
-                      {item.hasAuthingData && (
-                        <div className="mt-1 text-xs text-blue-600">已保存 Authing claims，可导出查看</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <a
-                        href={`/api/admin/auth-login-logs/${encodeURIComponent(item.id)}/export`}
-                        className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs hover:border-primary hover:text-primary"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        导出详情
-                      </a>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={item.outcome === 'success' ? 'text-emerald-600' : 'text-red-600'}>
+                          {outcomeLabels[item.outcome] || item.outcome}
+                        </span>
+                      </td>
+                      <td className="max-w-[360px] px-4 py-3">
+                        {item.errorCode && <div className="font-medium text-red-700">{item.errorCode}</div>}
+                        {item.errorMessage && (
+                          <div className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                            {item.errorMessage}
+                          </div>
+                        )}
+                        {Object.keys(item.errorParams).length > 0 && (
+                          <details className="mt-1 text-xs text-muted-foreground">
+                            <summary className="cursor-pointer">错误参数</summary>
+                            <pre className="mt-1 whitespace-pre-wrap break-all">{JSON.stringify(item.errorParams, null, 2)}</pre>
+                          </details>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleDetails(item.id)}
+                          className="rounded-md border border-border px-2.5 py-1.5 text-xs hover:border-primary hover:text-primary"
+                        >
+                          {expandedIds[item.id] ? '收起详情' : '查看详情'}
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedIds[item.id] && (
+                      <tr>
+                        <td colSpan={6} className="bg-slate-50 px-4 py-3">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <span className="text-xs font-medium text-slate-700">登录详情 JSON</span>
+                            <button
+                              type="button"
+                              onClick={() => copyDetails(item)}
+                              className="inline-flex items-center gap-1 rounded-md border border-border bg-white px-2.5 py-1.5 text-xs hover:border-primary hover:text-primary"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                              {copiedId === item.id ? '已复制' : '复制 JSON'}
+                            </button>
+                          </div>
+                          <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-white p-3 text-xs leading-5 text-slate-700">
+                            {formatLogDetails(item)}
+                          </pre>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
+          {copyError && <div className="border-t border-border px-4 py-2 text-xs text-red-600">{copyError}</div>}
           <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm">
             <span className="text-muted-foreground">共 {data.pagination.total} 条</span>
             <div className="flex items-center gap-2">
@@ -255,4 +309,24 @@ function formatDate(value: string) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function formatLogDetails(item: AuthLoginLogItem) {
+  return JSON.stringify({
+    id: item.id,
+    provider: item.provider,
+    stage: item.stage,
+    outcome: item.outcome,
+    username: item.username,
+    displayName: item.displayName,
+    errorCode: item.errorCode,
+    errorMessage: item.errorMessage,
+    errorParams: item.errorParams,
+    authingData: item.authingData,
+    requestPath: item.requestPath,
+    ipAddress: item.ipAddress,
+    userAgent: item.userAgent,
+    createdAt: item.createdAt,
+    user: item.user,
+  }, null, 2);
 }
