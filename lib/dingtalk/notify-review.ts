@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { db } from '@/lib/database';
 import { resourceTypeLabel, reviewTypeLabel } from '@/modules/ai-resources/labels';
 import type { AiResourceType, AiReviewType } from '@/modules/ai-resources/constants';
@@ -9,6 +10,10 @@ import {
 import { completeDingTalkTodo, createDingTalkTodo } from './todo';
 import { ensureDingTalkUserId, getDingTalkUnionId, listPublishNotifyUserIds } from './users';
 import { sendActionCardNotify } from './work-notify';
+import {
+  enqueueNotificationEvent,
+  NOTIFICATION_EVENT_TYPES,
+} from '@/platform/notifications/outbox';
 
 function reviewTypeText(type: string): string {
   if (type in reviewTypeLabel) {
@@ -62,23 +67,38 @@ function buildNotificationMarkdown(title: string, paragraphs: string[]) {
     .trim();
 }
 
-function fireAndForget(label: string, work: () => Promise<void>) {
-  void work().catch((error) => {
-    console.error(`[dingtalk] ${label} failed:`, error);
+export async function scheduleReviewSubmitted(reviewId: string) {
+  await enqueueNotificationEvent({
+    eventType: NOTIFICATION_EVENT_TYPES.reviewSubmitted,
+    idempotencyKey: `ai-resource.review-submitted:${reviewId}`,
+    payload: { reviewId },
   });
 }
 
-export function scheduleReviewSubmitted(reviewId: string) {
-  fireAndForget('onReviewSubmitted', () => onReviewSubmitted(reviewId));
-}
-
-export function scheduleReviewResolved(reviewId: string, options?: { publish?: boolean }) {
-  fireAndForget('onReviewResolved', () => onReviewResolved(reviewId, options));
+export async function scheduleReviewResolved(reviewId: string, options?: { publish?: boolean }) {
+  const publish = options?.publish !== false;
+  await enqueueNotificationEvent({
+    eventType: NOTIFICATION_EVENT_TYPES.reviewResolved,
+    idempotencyKey: `ai-resource.review-resolved:${reviewId}:${publish ? 'publish' : 'no-publish'}`,
+    payload: { reviewId, publish },
+  });
 }
 
 /** 提交人废弃/重新提交后，完成驳回待办 */
-export function scheduleReworkHandled(reviewId: string) {
-  fireAndForget('onReworkHandled', () => onReworkHandled(reviewId));
+export async function scheduleReworkHandled(
+  reviewId: string,
+  todo?: { dingtalkReworkTodoId: string | null; dingtalkReworkTodoUnionId: string | null },
+) {
+  const todoId = todo?.dingtalkReworkTodoId ?? '';
+  await enqueueNotificationEvent({
+    eventType: NOTIFICATION_EVENT_TYPES.reworkHandled,
+    idempotencyKey: `ai-resource.rework-handled:${reviewId}:${todoId}`,
+    payload: {
+      reviewId,
+      dingtalkReworkTodoId: todo?.dingtalkReworkTodoId ?? null,
+      dingtalkReworkTodoUnionId: todo?.dingtalkReworkTodoUnionId ?? null,
+    },
+  });
 }
 
 async function completeReviewerTodo(review: {
@@ -87,7 +107,8 @@ async function completeReviewerTodo(review: {
   dingtalkTodoUnionId: string | null;
 }) {
   if (!review.dingtalkTodoId || !review.dingtalkTodoUnionId) return;
-  await completeDingTalkTodo(review.dingtalkTodoUnionId, review.dingtalkTodoId);
+  const completed = await completeDingTalkTodo(review.dingtalkTodoUnionId, review.dingtalkTodoId);
+  if (!completed) throw new Error(`钉钉审批待办完成失败：${review.id}`);
   await db.aiResourceReviewRequest.update({
     where: { id: review.id },
     data: { dingtalkTodoId: null, dingtalkTodoUnionId: null },
@@ -100,14 +121,27 @@ async function completeReworkTodo(review: {
   dingtalkReworkTodoUnionId: string | null;
 }) {
   if (!review.dingtalkReworkTodoId || !review.dingtalkReworkTodoUnionId) return;
-  await completeDingTalkTodo(review.dingtalkReworkTodoUnionId, review.dingtalkReworkTodoId);
+  const completed = await completeDingTalkTodo(review.dingtalkReworkTodoUnionId, review.dingtalkReworkTodoId);
+  if (!completed) throw new Error(`钉钉返工待办完成失败：${review.id}`);
   await db.aiResourceReviewRequest.update({
     where: { id: review.id },
     data: { dingtalkReworkTodoId: null, dingtalkReworkTodoUnionId: null },
   });
 }
 
-export async function onReworkHandled(reviewId: string): Promise<void> {
+export async function onReworkHandled(
+  reviewId: string,
+  todo?: { dingtalkReworkTodoId: string | null; dingtalkReworkTodoUnionId: string | null },
+): Promise<void> {
+  if (todo) {
+    await completeReworkTodo({
+      id: reviewId,
+      dingtalkReworkTodoId: todo.dingtalkReworkTodoId,
+      dingtalkReworkTodoUnionId: todo.dingtalkReworkTodoUnionId,
+    });
+    return;
+  }
+
   const review = await db.aiResourceReviewRequest.findUnique({
     where: { id: reviewId },
     select: {
@@ -116,8 +150,7 @@ export async function onReworkHandled(reviewId: string): Promise<void> {
       dingtalkReworkTodoUnionId: true,
     },
   });
-  if (!review) return;
-  await completeReworkTodo(review);
+  if (review) await completeReworkTodo(review);
 }
 
 export async function onReviewSubmitted(reviewId: string): Promise<void> {
@@ -167,12 +200,13 @@ export async function onReviewSubmitted(reviewId: string): Promise<void> {
   if (env.hasAgentId) {
     const reviewerUserId = await ensureDingTalkUserId(review.reviewer.id);
     if (reviewerUserId && links) {
-      await sendActionCardNotify([reviewerUserId], {
+      const notifyResult = await sendActionCardNotify([reviewerUserId], {
         title: subject,
         markdown: buildNotificationMarkdown(subject, notificationParagraphs),
         singleTitle: '去处理',
         singleUrl: links.pcUrl,
       });
+      if (notifyResult.sent === 0) throw new Error(`钉钉审批通知发送失败：${review.id}`);
     } else if (!reviewerUserId) {
       console.warn('[dingtalk] skip work notify: cannot resolve reviewer userid');
     } else if (!links) {
@@ -191,22 +225,21 @@ export async function onReviewSubmitted(reviewId: string): Promise<void> {
     unionId: reviewerUnionId,
     subject,
     description,
-    sourceId: `${review.id}-review-${Date.now()}`,
+    sourceId: `${review.id}-review`,
     detailPcUrl: links.pcUrl,
     detailAppUrl: links.appUrl,
     executorUnionIds: [reviewerUnionId],
     priority: 40,
   });
 
-  if (todo) {
-    await db.aiResourceReviewRequest.update({
-      where: { id: review.id },
-      data: {
-        dingtalkTodoId: todo.taskId,
-        dingtalkTodoUnionId: todo.unionId,
-      },
-    });
-  }
+  if (!todo) throw new Error(`钉钉审批待办创建失败：${review.id}`);
+  await db.aiResourceReviewRequest.update({
+    where: { id: review.id },
+    data: {
+      dingtalkTodoId: todo.taskId,
+      dingtalkTodoUnionId: todo.unionId,
+    },
+  });
 }
 
 async function createSubmitterReworkTodo(reviewId: string): Promise<void> {
@@ -248,12 +281,13 @@ async function createSubmitterReworkTodo(reviewId: string): Promise<void> {
   if (env.hasAgentId) {
     const userid = await ensureDingTalkUserId(review.requester.id);
     if (userid) {
-      await sendActionCardNotify([userid], {
+      const notifyResult = await sendActionCardNotify([userid], {
         title: subject,
         markdown: buildNotificationMarkdown(subject, notificationParagraphs),
         singleTitle: '去处理',
         singleUrl: links.pcUrl,
       });
+      if (notifyResult.sent === 0) throw new Error(`钉钉返工通知发送失败：${review.id}`);
     }
   }
 
@@ -261,22 +295,21 @@ async function createSubmitterReworkTodo(reviewId: string): Promise<void> {
     unionId,
     subject,
     description,
-    sourceId: `${review.id}-rework-${Date.now()}`,
+    sourceId: `${review.id}-rework`,
     detailPcUrl: links.pcUrl,
     detailAppUrl: links.appUrl,
     executorUnionIds: [unionId],
     priority: 40,
   });
 
-  if (todo) {
-    await db.aiResourceReviewRequest.update({
-      where: { id: review.id },
-      data: {
-        dingtalkReworkTodoId: todo.taskId,
-        dingtalkReworkTodoUnionId: todo.unionId,
-      },
-    });
-  }
+  if (!todo) throw new Error(`钉钉返工待办创建失败：${review.id}`);
+  await db.aiResourceReviewRequest.update({
+    where: { id: review.id },
+    data: {
+      dingtalkReworkTodoId: todo.taskId,
+      dingtalkReworkTodoUnionId: todo.unionId,
+    },
+  });
 }
 
 async function notifySubmitterApproved(reviewId: string): Promise<void> {
@@ -310,7 +343,7 @@ async function notifySubmitterApproved(reviewId: string): Promise<void> {
   const links = buildNotifyLinks(`/ai-resources/review/${review.id}`);
   if (!links) return;
 
-  await sendActionCardNotify([userid], {
+  const notifyResult = await sendActionCardNotify([userid], {
     title: subject,
     markdown: buildNotificationMarkdown(subject, [
       `审批人：${review.reviewer?.username ?? '-'}`,
@@ -319,6 +352,7 @@ async function notifySubmitterApproved(reviewId: string): Promise<void> {
     singleTitle: '查看详情',
     singleUrl: links.pcUrl,
   });
+  if (notifyResult.sent === 0) throw new Error(`钉钉审批结果通知发送失败：${review.id}`);
 }
 
 export async function onReviewResolved(
@@ -397,10 +431,16 @@ export type ResourceBroadcastInput = {
   updateSummary?: string | null;
 };
 
-export function scheduleResourceBroadcast(input: ResourceBroadcastInput) {
-  fireAndForget('resourceBroadcast', async () => {
-    const result = await notifyResourceBroadcast(input);
-    console.log('[dingtalk] resource broadcast result:', result);
+export async function scheduleResourceBroadcast(input: ResourceBroadcastInput) {
+  const eventFingerprint = crypto
+    .createHash('sha256')
+    .update(JSON.stringify(input))
+    .digest('hex')
+    .slice(0, 24);
+  await enqueueNotificationEvent({
+    eventType: NOTIFICATION_EVENT_TYPES.resourceBroadcast,
+    idempotencyKey: `ai-resource.resource-broadcast:${input.resourceId}:${eventFingerprint}`,
+    payload: input,
   });
 }
 
@@ -453,6 +493,9 @@ export async function notifyResourceBroadcast(input: ResourceBroadcastInput): Pr
     singleUrl: links.pcUrl,
   });
 
+  if (result.sent === 0) {
+    throw new Error(`钉钉资源发布广播发送失败：${input.resourceId}`);
+  }
   return { enabled: true, sent: result.sent };
 }
 

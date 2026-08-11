@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import { getPlatformApp } from '@/platform/apps/manifest';
 import { getEnabledComponents } from '@/platform/permissions/component-guard';
 import { getSession } from '@/platform/auth/auth.config';
 import { getProjectAdminAccess } from '@/lib/db/project-admin-access';
 
 export async function DynamicNav() {
   const session = await getSession();
+  const npqApp = getPlatformApp('npq');
   const components = await getEnabledComponents();
   const isAdmin = session?.role === 'admin';
   const projectAdminAccess = session ? await getProjectAdminAccess(session) : { kind: 'none' as const };
@@ -30,7 +32,7 @@ export async function DynamicNav() {
   return (
     <nav className="flex flex-col gap-1">
       <SectionHeader>业务</SectionHeader>
-      <NavLink href="/workbench" label="NPQ工作台" />
+      <NavLink href={npqApp?.href ?? '/workbench'} label={npqApp?.title ?? 'NPQ工作台'} />
       {businessLinks.map((component) => (
         <NavLink key={component.id} href={component.path} label={component.name} />
       ))}

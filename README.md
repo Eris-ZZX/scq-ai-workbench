@@ -8,7 +8,7 @@
 - PostgreSQL 17、Drizzle ORM、版本化 migration（`drizzle/`）
 - MinIO（S3 兼容私有对象存储）
 - Authing OIDC（Authorization Code + PKCE）与 `qe-session` JWT Cookie
-- DWS CLI 独立 Worker；本地数据库维护角色、权限和账号状态
+- 通知 Outbox 独立 Worker；本地数据库维护角色、权限和账号状态
 - pnpm 11.6.0；Docker 多阶段构建（Node 22 构建 / Node 20 运行）
 
 应用位于仓库根目录：`app/` 页面、`components/` 通用组件、`lib/` 服务端与业务模块、`db/` 数据层、`drizzle/` migration。
@@ -22,7 +22,7 @@
 | `app` | Next.js standalone（默认宿主机 `3000`） |
 | `db` | PostgreSQL 17（默认仅本机回环暴露） |
 | `minio` | 对象存储（默认仅本机回环暴露） |
-| `dws-worker` | 可选独立 Worker，领取数据库 outbox 并执行 dws-cli |
+| `notifications-worker` | 可选独立 Worker，领取通知 outbox 并投递钉钉通知/待办 |
 
 浏览器只访问应用端口；附件由服务端读写 MinIO，不签发浏览器直连的 presigned URL。
 
@@ -36,8 +36,8 @@ cp .env.example .env
 
 docker compose up -d db minio
 docker compose --profile app up -d --build
-# 在受控 Worker 主机配置 DWS_CONFIG_DIR 后：
-docker compose --profile worker up -d --build dws-worker
+# 启用通知投递 Worker：
+docker compose --profile worker up -d --build notifications-worker
 ```
 
 空库首次启动必须配置 `ADMIN_INITIAL_PASSWORD`；`admin` 创建后后续启动不会重置密码。
@@ -84,19 +84,17 @@ pnpm db:bootstrap
 
 Authing claims 只用于身份识别和资料同步，不直接授予平台管理员、工作台或 AI 资源权限。账号 `status`、本地角色、项目成员关系和禁用状态继续由本地数据库决定。开发环境在未配置 Authing 时保留本地登录，生产环境不提供匿名或静默降级。
 
-## DWS Worker 与通知
+## 通知 Outbox
 
-Web 服务只把组织同步、审批待办、审批结果和资源发布广播写入 `external_job_outbox`，不会读取 DWS 登录态，也不会在 HTTP 请求中启动 `dws`。独立 Worker 运行：
+Web 服务只把审批待办、审批结果和资源发布广播写入 `notification_outbox`，不会在 HTTP 请求中直接调用钉钉外部 API。独立 Worker 运行：
 
 ```bash
-pnpm dws:worker
+pnpm notifications:worker
 ```
 
-Worker 通过 `dws contact ...` 同步部门和成员，按工号/邮箱匹配本地用户，姓名冲突进入未匹配统计；通过 `dws todo task create/done` 和 `dws chat message send` 投递通知。任务带幂等键、重试上限、失败原因和外部 ID，目录同步失败时保留上次成功组织快照。
+Worker 使用 `notification_outbox` 的幂等键、租约、重试上限、失败原因和状态字段，按事件调用钉钉消息与待办 provider。业务模块只发布事件，不管理外部投递重试。
 
-`DWS_CONFIG_DIR`、DWS CLI 登录态和专用账号只放在 Worker/运维机，不放入 Web 镜像或前端环境。企业若未提供可持续的专用 DWS 身份，Worker 必须停用并转人工处理，不能把任务标记为成功。
-
-`Dockerfile.worker` 不猜测或内置公司私有 dws-cli 包；部署容器前必须使用公司 Worker 基础镜像/扩展镜像提供 `dws` 可执行文件，或直接在受控主机运行 `pnpm dws:worker`。先执行 `dws schema` 和相关命令的 `--help`，确认组织、Todo、Chat 参数与权限后再启用自动任务。
+Worker 只需要配置数据库和钉钉应用凭据；未配置钉钉凭据时，事件会按业务规则跳过投递并记录日志，不会由 Web 请求启动 Worker。
 
 历史钉钉用户迁移默认先 dry-run：
 

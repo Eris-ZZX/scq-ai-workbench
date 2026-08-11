@@ -8,175 +8,22 @@ import {
   getAuditRequestContext,
 } from '@/modules/ai-resources/audit';
 import { assertNotLastEffectiveAdmin } from '@/modules/ai-resources/guards';
-import {
-  buildEmpOriginIndex,
-  matchAuthingSupervisor,
-  readAuthingExtendedString,
-  type AuthingSupervisorMatch,
-} from '@/platform/auth/authing-extended-fields';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
-
-const PLATFORM_ROLES = new Set(['user', 'admin']);
-const WORKBENCH_ROLES = new Set(['user', 'manager', 'admin']);
-const ACCOUNT_STATUSES = new Set(['active', 'disabled']);
-const AI_RESOURCE_ROLES = new Set(['user', 'reviewer', 'admin']);
+import {
+  ACCOUNT_STATUSES,
+  AI_RESOURCE_ROLES,
+  PLATFORM_ROLES,
+  parsePlatformUserListFilters,
+  WORKBENCH_ROLES,
+} from '@/platform/users/query';
+import {
+  listPlatformUsers,
+  platformUserSelect,
+  serializePlatformUser,
+} from '@/platform/users/list';
 
 function clean(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function userWhere(query: string) {
-  if (!query) return undefined;
-  return {
-    OR: [
-      { username: { contains: query } },
-      { displayName: { contains: query } },
-      { email: { contains: query } },
-    ],
-  };
-}
-
-const userSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  email: true,
-  avatar: true,
-  platformRole: true,
-  role: true,
-  status: true,
-  externalSource: true,
-  externalId: true,
-  dingtalkUserId: true,
-  supervisorDingtalkUserId: true,
-  supervisorName: true,
-  directoryUserId: true,
-  directorySupervisorUserId: true,
-  directorySupervisorName: true,
-  syncAt: true,
-  createdAt: true,
-  updatedAt: true,
-  unionid: true,
-  phoneNumber: true,
-  phoneNumberVerified: true,
-  emailVerified: true,
-  address: true,
-  birthdate: true,
-  gender: true,
-  locale: true,
-  nickname: true,
-  preferredUsername: true,
-  profile: true,
-  website: true,
-  zoneinfo: true,
-  externalIdAuthing: true,
-  extendedFields: true,
-  tenantId: true,
-  userpoolId: true,
-  roles: true,
-  positionBinding: {
-    select: {
-      id: true,
-      positionRoleId: true,
-      positionRole: { select: { id: true, name: true, roleName: true, isActive: true } },
-    },
-  },
-  aiResourceMembership: {
-    select: { id: true, role: true, updatedAt: true },
-  },
-  projectMembers: {
-    select: { id: true },
-  },
-  dingtalkDepartments: {
-    where: { isPrimary: true },
-    select: {
-      department: {
-        select: { id: true, name: true, parentId: true },
-      },
-    },
-  },
-} as const;
-
-function serializeUser(
-  user: any,
-  supervisorOverride?: AuthingSupervisorMatch | null,
-) {
-  const position = Array.isArray(user.positionBinding)
-    ? user.positionBinding[0] ?? null
-    : user.positionBinding ?? null;
-  const aiMembership = Array.isArray(user.aiResourceMembership)
-    ? user.aiResourceMembership[0] ?? null
-    : user.aiResourceMembership ?? null;
-  const organizationBinding = Array.isArray(user.dingtalkDepartments)
-    ? user.dingtalkDepartments[0] ?? null
-    : user.dingtalkDepartments ?? null;
-
-  const supervisor = supervisorOverride
-    ? {
-      directoryUserId: supervisorOverride.empOriginId,
-      name: supervisorOverride.displayName || supervisorOverride.username,
-    }
-    : {
-      directoryUserId: null,
-      name: null,
-    };
-
-  return {
-    ...user,
-    source: user.externalSource || (user.directoryUserId ? 'dws' : 'local'),
-    platformRole: user.platformRole ?? (user.role === 'admin' ? 'admin' : 'user'),
-    workbenchRole: user.role,
-    supervisor,
-    directoryUserId: user.directoryUserId ?? null,
-    organization: organizationBinding?.department ?? null,
-    position,
-    // 所有用户默认都是 AI 资源库成员（user 角色），仅提升（reviewer/admin）有成员行
-    aiResourceRole: aiMembership?.role ?? 'user',
-    aiResourceMembershipId: aiMembership?.id ?? null,
-    projectCount: user.projectMembers?.length ?? 0,
-    positionBinding: undefined,
-    aiResourceMembership: undefined,
-    role: undefined,
-    projectMembers: undefined,
-    dingtalkDepartments: undefined,
-  };
-}
-
-async function loadAuthingSupervisorIndex(
-  users: Array<{
-    id: string;
-    username: string;
-    displayName: string | null;
-    extendedFields: string | null;
-  }>,
-) {
-  const index = buildEmpOriginIndex(users);
-  const missingLeaderIds = Array.from(new Set(
-    users
-      .map((user) => readAuthingExtendedString(user.extendedFields, 'emp_leader_origin_id'))
-      .filter((leaderId): leaderId is string => leaderId !== null && !index.has(leaderId)),
-  ));
-
-  if (missingLeaderIds.length === 0) return index;
-
-  const candidates = await db.user.findMany({
-    where: {
-      OR: missingLeaderIds.map((leaderId) => ({
-        extendedFields: { contains: leaderId },
-      })),
-    },
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      extendedFields: true,
-    },
-  });
-
-  for (const [empOriginId, match] of buildEmpOriginIndex(candidates)) {
-    if (!index.has(empOriginId)) index.set(empOriginId, match);
-  }
-  return index;
 }
 
 async function writePermissionAudit(
@@ -221,36 +68,8 @@ export async function GET(request: NextRequest) {
   const auth = await requireSystemAdminApi();
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  const query = clean(request.nextUrl.searchParams.get('q'));
-  const where = userWhere(query);
-  const [users, platformAdminCount, workbenchAdminCount, aiAdminCount] = await Promise.all([
-    db.user.findMany({
-      where,
-      select: userSelect,
-      orderBy: { username: 'asc' },
-      take: 1000,
-    }),
-    db.user.count({ where: { platformRole: 'admin', status: 'active' } }),
-    db.user.count({ where: { role: 'admin', status: 'active' } }),
-    db.aiResourceMembership.count({ where: { role: 'admin', user: { status: 'active' } } }),
-  ]);
-
-  const supervisorIndex = await loadAuthingSupervisorIndex(users);
-
-  return NextResponse.json({
-    users: users.map((user) => serializeUser(
-      user,
-      matchAuthingSupervisor(
-        readAuthingExtendedString(user.extendedFields, 'emp_leader_origin_id'),
-        supervisorIndex,
-      ),
-    )),
-    safeguards: {
-      activePlatformAdminCount: platformAdminCount,
-      activeWorkbenchAdminCount: workbenchAdminCount,
-      activeAiResourceAdminCount: aiAdminCount,
-    },
-  });
+  const filters = parsePlatformUserListFilters(request.nextUrl.searchParams);
+  return NextResponse.json(await listPlatformUsers(filters));
 }
 
 export async function POST(request: Request) {
@@ -432,8 +251,8 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: '不支持的权限操作。' }, { status: 400 });
     }
 
-    const updated = await db.user.findUnique({ where: { id: userId }, select: userSelect });
-    return NextResponse.json(updated ? serializeUser(updated) : null);
+    const updated = await db.user.findUnique({ where: { id: userId }, select: platformUserSelect });
+    return NextResponse.json(updated ? serializePlatformUser(updated) : null);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     const knownErrors: Record<string, [string, number]> = {

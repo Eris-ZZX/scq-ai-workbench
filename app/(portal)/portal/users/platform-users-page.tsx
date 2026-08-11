@@ -51,6 +51,22 @@ type PlatformData = {
     activeWorkbenchAdminCount: number;
     activeAiResourceAdminCount: number;
   };
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+  };
+};
+
+type UserListFilterOverrides = {
+  statusFilter?: string;
+  sourceFilter?: string;
+  dingtalkBindingFilter?: string;
+  platformRoleFilter?: string;
+  workbenchRoleFilter?: string;
+  aiResourceRoleFilter?: string;
 };
 
 const emptyCreate = {
@@ -229,12 +245,34 @@ export default function PlatformUsersPage() {
 
   const selectedUser = visibleUsers.find((user) => user.id === selectedId) ?? visibleUsers[0] ?? null;
 
-  async function load(nextQuery = query) {
+  async function load(
+    nextQuery = query,
+    nextPage = 1,
+    overrides: UserListFilterOverrides = {},
+  ) {
     setLoading(true);
     setError('');
     try {
-      const params = nextQuery.trim() ? `?q=${encodeURIComponent(nextQuery.trim())}` : '';
-      const response = await fetch(`/api/admin/platform-users${params}`, { cache: 'no-store' });
+      const filters = {
+        statusFilter: overrides.statusFilter ?? statusFilter,
+        sourceFilter: overrides.sourceFilter ?? sourceFilter,
+        dingtalkBindingFilter: overrides.dingtalkBindingFilter ?? dingtalkBindingFilter,
+        platformRoleFilter: overrides.platformRoleFilter ?? platformRoleFilter,
+        workbenchRoleFilter: overrides.workbenchRoleFilter ?? workbenchRoleFilter,
+        aiResourceRoleFilter: overrides.aiResourceRoleFilter ?? aiResourceRoleFilter,
+      };
+      const params = new URLSearchParams();
+      if (nextQuery.trim()) params.set('q', nextQuery.trim());
+      params.set('page', String(nextPage));
+      params.set('pageSize', '50');
+      if (filters.statusFilter) params.set('status', filters.statusFilter);
+      if (filters.sourceFilter) params.set('source', filters.sourceFilter);
+      if (filters.dingtalkBindingFilter === 'empty') params.set('dingtalkBinding', 'empty');
+      if (filters.dingtalkBindingFilter === 'bound') params.set('dingtalkBinding', 'present');
+      if (filters.platformRoleFilter) params.set('platformRole', filters.platformRoleFilter);
+      if (filters.workbenchRoleFilter) params.set('workbenchRole', filters.workbenchRoleFilter);
+      if (filters.aiResourceRoleFilter) params.set('aiResourceRole', filters.aiResourceRoleFilter);
+      const response = await fetch(`/api/admin/platform-users?${params.toString()}`, { cache: 'no-store' });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         setError(payload?.error ?? '加载用户失败。');
@@ -253,10 +291,20 @@ export default function PlatformUsersPage() {
   }
 
   useEffect(() => {
-    void load('');
+    void load('', 1);
     // Initial load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function applyFilterChange(key: keyof UserListFilterOverrides, value: string) {
+    if (key === 'statusFilter') setStatusFilter(value);
+    if (key === 'sourceFilter') setSourceFilter(value);
+    if (key === 'dingtalkBindingFilter') setDingtalkBindingFilter(value);
+    if (key === 'platformRoleFilter') setPlatformRoleFilter(value);
+    if (key === 'workbenchRoleFilter') setWorkbenchRoleFilter(value);
+    if (key === 'aiResourceRoleFilter') setAiResourceRoleFilter(value);
+    void load(query, 1, { [key]: value });
+  }
 
   async function updatePermission(action: string, payload: Record<string, unknown>) {
     if (!selectedUser) return;
@@ -321,7 +369,7 @@ export default function PlatformUsersPage() {
           <div>
             <h2 className="font-semibold text-foreground">平台用户</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              {visibleUsers.length} / {data?.users.length ?? 0} 个用户 · 平台管理员 {data?.safeguards.activePlatformAdminCount ?? 0} · 工作台管理员 {data?.safeguards.activeWorkbenchAdminCount ?? 0} · AI 管理员 {data?.safeguards.activeAiResourceAdminCount ?? 0}
+              {visibleUsers.length} / {data?.pagination.total ?? data?.users.length ?? 0} 个用户 · 平台管理员 {data?.safeguards.activePlatformAdminCount ?? 0} · 工作台管理员 {data?.safeguards.activeWorkbenchAdminCount ?? 0} · AI 管理员 {data?.safeguards.activeAiResourceAdminCount ?? 0}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -340,35 +388,35 @@ export default function PlatformUsersPage() {
                 className="h-full w-48 bg-transparent px-2 text-sm outline-none"
               />
             </form>
-            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={statusFilter} onChange={(event) => applyFilterChange('statusFilter', event.target.value)}>
               <option value="">全部状态</option>
               <option value="active">启用</option>
               <option value="disabled">禁用</option>
             </select>
-            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={sourceFilter} onChange={(event) => applyFilterChange('sourceFilter', event.target.value)}>
               <option value="">全部来源</option>
               <option value="local">本地</option>
               <option value="authing">Authing</option>
               <option value="dws">DWS</option>
               <option value="dingtalk">钉钉（历史）</option>
             </select>
-            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={dingtalkBindingFilter} onChange={(event) => setDingtalkBindingFilter(event.target.value)}>
+            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={dingtalkBindingFilter} onChange={(event) => applyFilterChange('dingtalkBindingFilter', event.target.value)}>
               <option value="">全部钉钉绑定</option>
               <option value="bound">已绑定钉钉</option>
               <option value="unbound">未绑定钉钉</option>
             </select>
-            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={platformRoleFilter} onChange={(event) => setPlatformRoleFilter(event.target.value)}>
+            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={platformRoleFilter} onChange={(event) => applyFilterChange('platformRoleFilter', event.target.value)}>
               <option value="">全部平台角色</option>
               <option value="user">用户</option>
               <option value="admin">平台管理员</option>
             </select>
-            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={workbenchRoleFilter} onChange={(event) => setWorkbenchRoleFilter(event.target.value)}>
+            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={workbenchRoleFilter} onChange={(event) => applyFilterChange('workbenchRoleFilter', event.target.value)}>
               <option value="">全部工作台角色</option>
               <option value="user">用户</option>
               <option value="manager">项目管理者</option>
               <option value="admin">应用管理员</option>
             </select>
-            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={aiResourceRoleFilter} onChange={(event) => setAiResourceRoleFilter(event.target.value)}>
+            <select className="h-9 rounded border border-border bg-white px-2 text-xs" value={aiResourceRoleFilter} onChange={(event) => applyFilterChange('aiResourceRoleFilter', event.target.value)}>
               <option value="">全部 AI 角色</option>
               <option value="user">用户</option>
               <option value="reviewer">审批人</option>
@@ -465,6 +513,29 @@ export default function PlatformUsersPage() {
             ))}
             {visibleUsers.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">没有匹配的用户</div> : null}
           </div>
+          {(data?.pagination?.totalPages ?? 0) > 1 ? (
+            <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
+              <span>第 {data?.pagination?.page ?? 1} / {data?.pagination?.totalPages ?? 1} 页</span>
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded border border-border px-2 py-1 hover:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void load(query, (data?.pagination?.page ?? 1) - 1)}
+                  disabled={loading || (data?.pagination?.page ?? 1) <= 1}
+                >
+                  上一页
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-border px-2 py-1 hover:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void load(query, (data?.pagination?.page ?? 1) + 1)}
+                  disabled={loading || !data?.pagination?.hasNextPage}
+                >
+                  下一页
+                </button>
+              </span>
+            </div>
+          ) : null}
         </section>
 
         {selectedUser && data ? (

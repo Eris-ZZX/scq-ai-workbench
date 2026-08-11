@@ -78,6 +78,26 @@ services:
       retries: 12
       start_period: 60s
 
+  notifications-worker:
+    profiles: ["worker"]
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-qe}:${POSTGRES_PASSWORD:-dev-only-change-me}@db:5432/${POSTGRES_DB:-qe}
+      APP_BASE_URL: ${APP_BASE_URL:-http://app:3000}
+      DINGTALK_CLIENT_ID: ${DINGTALK_CLIENT_ID:-}
+      DINGTALK_CLIENT_SECRET: ${DINGTALK_CLIENT_SECRET:-}
+      DINGTALK_REDIRECT_URI: ${DINGTALK_REDIRECT_URI:-}
+      DINGTALK_AGENT_ID: ${DINGTALK_AGENT_ID:-}
+      NOTIFICATION_WORKER_BATCH: ${NOTIFICATION_WORKER_BATCH:-10}
+      NOTIFICATION_WORKER_POLL_MS: ${NOTIFICATION_WORKER_POLL_MS:-2000}
+
 volumes:
   qe_pgdata:
   qe_minio:

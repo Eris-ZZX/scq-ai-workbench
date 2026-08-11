@@ -1,14 +1,19 @@
-import { redirect } from 'next/navigation';
-import { getSession } from '@/platform/auth/auth.config';
+import type { PlatformPrincipal } from '@/platform/apps/access';
+import type { PlatformApp } from '@/platform/apps/manifest';
 import { AppShell } from '@/platform/ui/layout/app-shell';
 import { DynamicNav } from '@/platform/ui/navigation';
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
-  if (!session) redirect('/login');
-
+export default function AppLayout({
+  children,
+  app,
+  session,
+}: {
+  children: React.ReactNode;
+  app: Pick<PlatformApp, 'href' | 'title'>;
+  session: PlatformPrincipal;
+}) {
   return (
-    <AppShell session={session} nav={<DynamicNav />}>
+    <AppShell app={app} session={session} nav={<DynamicNav />}>
       {children}
     </AppShell>
   );

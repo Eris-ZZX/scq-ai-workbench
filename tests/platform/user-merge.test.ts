@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mergeUsersIntoPrimary } from '@/platform/auth/user-merge';
+import {
+  mergeUsersIntoPrimary,
+  selectSafeUserMergeCandidate,
+  type UserMergeCandidate,
+} from '@/platform/auth/user-merge';
 
 describe('user merge service', () => {
   it('migrates user relationships, keeps the stronger role, and disables duplicates', async () => {
@@ -79,4 +83,40 @@ describe('user merge service', () => {
     )).resolves.toEqual([]);
     expect(queryRaw).toHaveBeenCalledTimes(1);
   });
+
+  it('does not automatically merge an email-only or ambiguous match', () => {
+    expect(selectSafeUserMergeCandidate([
+      candidate({ email_match: true }),
+    ])).toBeNull();
+    expect(selectSafeUserMergeCandidate([
+      candidate({ unionid_match: true }),
+      candidate({ userid_match: true }),
+    ])).toBeNull();
+  });
+
+  it('prefers the unique provider identity over a weaker username match', () => {
+    expect(selectSafeUserMergeCandidate([
+      candidate({ username_match: true }),
+      candidate({ unionid_match: true }),
+    ])).toMatchObject({ id: 'user-2' });
+  });
 });
+
+function candidate(overrides: Partial<UserMergeCandidate>): UserMergeCandidate {
+  return {
+    id: 'user-1',
+    display_name: null,
+    email: null,
+    platform_role: 'user',
+    role: 'user',
+    status: 'active',
+    has_authing_identity: false,
+    username_match: false,
+    email_match: false,
+    unionid_match: false,
+    userid_match: false,
+    ...overrides,
+    ...(overrides.unionid_match ? { id: 'user-2' } : {}),
+    ...(overrides.userid_match ? { id: 'user-3' } : {}),
+  };
+}

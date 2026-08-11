@@ -15,7 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:bootstrap": "tsx db/bootstrap.ts",
-    "dws:worker": "tsx scripts/dws-worker.ts",
+    "notifications:worker": "tsx scripts/notification-worker.ts",
     "authing:migrate-identities": "tsx scripts/migrate-authing-identities.ts"
   },
   "dependencies": {

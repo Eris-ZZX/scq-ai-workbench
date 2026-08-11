@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
-import { onReworkHandled } from '@/lib/dingtalk/notify-review';
+import { scheduleReworkHandled } from '@/lib/dingtalk/notify-review';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import {
   AI_RESOURCE_AUDIT_ACTIONS,
@@ -26,8 +26,6 @@ export async function POST(
     if (!canDiscardReview(actor, existing)) {
       return NextResponse.json({ error: '仅提交人可废弃被驳回的单据。' }, { status: 403 });
     }
-
-    await onReworkHandled(id);
 
     const claimed = await db.$transaction(async (tx) => {
       const updated = await tx.aiResourceReviewRequest.updateMany({
@@ -61,6 +59,10 @@ export async function POST(
       throw new AiResourceError('单据状态已变化，无法废弃。', 409, 'CONFLICT');
     }
 
+    await scheduleReworkHandled(id, {
+      dingtalkReworkTodoId: existing.dingtalkReworkTodoId,
+      dingtalkReworkTodoUnionId: existing.dingtalkReworkTodoUnionId,
+    });
     const review = await db.aiResourceReviewRequest.findUniqueOrThrow({ where: { id } });
     return NextResponse.json({ review });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
-import { scheduleReviewSubmitted, onReworkHandled } from '@/lib/dingtalk/notify-review';
+import { scheduleReviewSubmitted, scheduleReworkHandled } from '@/lib/dingtalk/notify-review';
 import { formatZodError } from '@/modules/ai-resources/api-errors';
 import { AiResourceError, aiResourceErrorResponse } from '@/modules/ai-resources/errors';
 import { toJsonString } from '@/modules/ai-resources/json';
@@ -44,8 +44,6 @@ export async function POST(
       }
       await assertAssignableReviewer(actor, reviewerId);
 
-      await onReworkHandled(existing.id);
-
       const review = await db.$transaction(async (tx) => {
         const updatedReview = await tx.aiResourceReviewRequest.update({
           where: { id },
@@ -78,6 +76,10 @@ export async function POST(
         return updatedReview;
       });
 
+      await scheduleReworkHandled(review.id, {
+        dingtalkReworkTodoId: existing.dingtalkReworkTodoId,
+        dingtalkReworkTodoUnionId: existing.dingtalkReworkTodoUnionId,
+      });
       await scheduleReviewSubmitted(review.id);
       return NextResponse.json({ review });
     }
@@ -130,8 +132,6 @@ export async function POST(
       }
     }
 
-    await onReworkHandled(existing.id);
-
     const claimed = await db.$transaction(async (tx) => {
       const updated = await tx.aiResourceReviewRequest.updateMany({
         where: { id, status: 'REJECTED', requesterId: actor.userId },
@@ -172,6 +172,10 @@ export async function POST(
       throw new AiResourceError('单据状态已变化，无法重新提交。', 409, 'CONFLICT');
     }
 
+    await scheduleReworkHandled(existing.id, {
+      dingtalkReworkTodoId: existing.dingtalkReworkTodoId,
+      dingtalkReworkTodoUnionId: existing.dingtalkReworkTodoUnionId,
+    });
     const review = await db.aiResourceReviewRequest.findUniqueOrThrow({ where: { id } });
     await scheduleReviewSubmitted(review.id);
     return NextResponse.json({ review });

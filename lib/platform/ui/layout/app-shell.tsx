@@ -11,12 +11,19 @@ type AppShellSession = {
   role: string;
 };
 
+type AppShellApp = {
+  href: string;
+  title: string;
+};
+
 export function AppShell({
   children,
+  app,
   nav,
   session,
 }: {
   children: React.ReactNode;
+  app: AppShellApp;
   nav: React.ReactNode;
   session: AppShellSession;
 }) {
@@ -36,16 +43,16 @@ export function AppShell({
           }`}
         >
           <Link
-            href="/workbench"
+            href={app.href}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-ws-blue to-ws-green text-xs font-bold text-white"
-            title="NPQ工作台"
+            title={app.title}
           >
             SCQ
           </Link>
           {!collapsed && (
-            <Link href="/workbench" className="min-w-0 flex-1">
+            <Link href={app.href} className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-white">供应链质量部</div>
-              <div className="truncate text-xs text-ws-sidebar-text/60">NPQ工作台</div>
+              <div className="truncate text-xs text-ws-sidebar-text/60">{app.title}</div>
             </Link>
           )}
           <button
@@ -74,7 +81,7 @@ export function AppShell({
                 <Link href="/portal" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="返回应用选择">
                   应用
                 </Link>
-                <Link href="/workbench" className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title="NPQ工作台">
+                <Link href={app.href} className="rounded p-1 text-ws-sidebar-text/60 transition hover:text-white" title={app.title}>
                   首页
                 </Link>
               </>

@@ -9,7 +9,7 @@ import {
 import {
   findUserMergeCandidates,
   mergeUsersIntoPrimary,
-  type UserMergeCandidate,
+  selectSafeUserMergeCandidate,
 } from './user-merge';
 import { authingIdentityKey, type AuthingClaims } from './authing.claims';
 
@@ -88,15 +88,6 @@ async function resolveDingTalkIdentity(identity: AuthingClaims): Promise<DingTal
   return resolved;
 }
 
-function selectPrimaryCandidate(candidates: UserMergeCandidate[]) {
-  return candidates.find((candidate) => candidate.has_authing_identity)
-    ?? candidates.find((candidate) => candidate.username_match)
-    ?? candidates.find((candidate) => candidate.unionid_match || candidate.userid_match)
-    ?? candidates.find((candidate) => candidate.email_match)
-    ?? candidates[0]
-    ?? null;
-}
-
 export async function upsertAuthingUser(identity: AuthingClaims) {
   const identityKey = authingIdentityKey(identity);
   const dingTalkIdentity = await resolveDingTalkIdentity(identity);
@@ -115,7 +106,13 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
       unionid: resolvedUnionid,
       dingtalkUserId: resolvedDingTalkUserId,
     });
-    const primaryCandidate = selectPrimaryCandidate(candidates);
+    const primaryCandidate = selectSafeUserMergeCandidate(candidates);
+    if (!primaryCandidate && candidates.length > 0) {
+      throw new ExternalIdentityError(
+        'conflict',
+        '无法通过强身份标识唯一匹配本地账号，请联系管理员处理账号合并',
+      );
+    }
     let user = primaryCandidate
       ? await findUserById(transaction, primaryCandidate.id)
       : null;

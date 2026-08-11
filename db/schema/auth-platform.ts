@@ -1,6 +1,7 @@
 export {
   User,
   FeedbackLog,
+  NotificationOutbox,
   AuthLoginLog,
   UserIdentity,
   DingTalkDepartment,

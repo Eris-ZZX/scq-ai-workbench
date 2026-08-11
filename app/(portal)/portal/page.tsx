@@ -1,32 +1,10 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import {
-  Boxes,
-  ClipboardCheck,
-  FlaskConical,
-  FolderKanban,
-  Gauge,
-  Library,
-  Settings2,
-  ShieldCheck,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react';
-import { getSession } from '@/platform/auth/auth.config';
-import { isPlatformAdmin } from '@/platform/permissions/system-admin';
-
-const testApps: Array<{ href: string; title: string; icon: LucideIcon }> = [
-  { href: '/portal/coming-soon/pqm', title: 'PQM（测试）', icon: ClipboardCheck },
-  { href: '/portal/coming-soon/sqm', title: 'SQM（测试）', icon: Gauge },
-  { href: '/portal/coming-soon/qcm', title: 'QCM（测试）', icon: Wrench },
-  { href: '/portal/coming-soon/lab', title: '实验室（测试）', icon: FlaskConical },
-  { href: '/portal/coming-soon/ems', title: 'EMS（测试）', icon: Boxes },
-  { href: '/portal/coming-soon/management', title: '管理工作台（测试）', icon: Settings2 },
-];
+import { requirePlatformPrincipalPage } from '@/platform/apps/access';
+import { getPortalApps } from '@/platform/apps/manifest';
+import type { LucideIcon } from 'lucide-react';
 
 export default async function PortalPage() {
-  const session = await getSession();
-  if (!session) redirect('/login');
+  const principal = await requirePlatformPrincipalPage('/portal');
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ws-content-bg px-4">
@@ -34,34 +12,20 @@ export default async function PortalPage() {
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-foreground">选择要进入的应用</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            已登录为 {session.displayName} · 供应链质量部统一入口
+            已登录为 {principal.displayName} · 供应链质量部统一入口
           </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <PortalAppCard
-            href="/ai-resources"
-            icon={Library}
-            title="AI 资源库"
-            description="部门 AI 应用、Agent、Skill、Prompt 与规范目录"
-          />
-          <PortalAppCard
-            href="/workbench"
-            icon={FolderKanban}
-            title="NPQ工作台"
-            description="项目活动、待办与 NPQ 流程管理（测试）"
-          />
-          {testApps.map((app) => (
-            <PortalAppCard key={app.href} {...app} description="应用功能正在搭建中" />
-          ))}
-          {isPlatformAdmin(session) ? (
+          {getPortalApps(principal.isPlatformAdmin).map((app) => (
             <PortalAppCard
-              href="/portal/platform-admin"
-              icon={ShieldCheck}
-              title="平台后台管理"
-              description="统一维护平台用户、权限和组织映射"
+              key={app.id}
+              href={app.href}
+              icon={app.icon}
+              title={app.state === 'coming-soon' ? `${app.title}（测试）` : app.title}
+              description={app.description}
             />
-          ) : null}
+          ))}
         </div>
 
         <form action="/api/auth/logout" method="POST" className="mt-8 text-center">

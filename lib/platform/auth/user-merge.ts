@@ -26,6 +26,26 @@ export type UserMergeCandidate = {
   userid_match: boolean;
 };
 
+/**
+ * Select only a deterministic, strong identity match for automatic merging.
+ * Email-only matches are intentionally left for manual review.
+ */
+export function selectSafeUserMergeCandidate(candidates: UserMergeCandidate[]) {
+  const identityMatches = candidates.filter((candidate) => candidate.has_authing_identity);
+  if (identityMatches.length === 1) return identityMatches[0] ?? null;
+  if (identityMatches.length > 1) return null;
+
+  const providerMatches = candidates.filter((candidate) => (
+    candidate.unionid_match || candidate.userid_match
+  ));
+  if (providerMatches.length === 1) return providerMatches[0] ?? null;
+  if (providerMatches.length > 1) return null;
+
+  const usernameMatches = candidates.filter((candidate) => candidate.username_match);
+  if (usernameMatches.length === 1) return usernameMatches[0] ?? null;
+  return null;
+}
+
 export async function findUserMergeCandidates(
   transaction: DatabaseClient,
   identity: UserMergeIdentity,

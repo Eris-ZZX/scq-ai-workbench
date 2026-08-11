@@ -78,6 +78,28 @@ export const FeedbackLog = pgTable('feedback_logs', {
 	'feedback_logs_application_idx': index('feedback_logs_application_idx').on(FeedbackLog.application)
 }));
 
+export const NotificationOutbox = pgTable('notification_outbox', {
+	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
+	eventType: text('event_type').notNull(),
+	payload: text('payload').notNull(),
+	idempotencyKey: text('idempotency_key').notNull(),
+	status: text('status').notNull().default("pending"),
+	attempts: integer('attempts').notNull().default(0),
+	availableAt: timestamp('available_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
+	lockedAt: timestamp('locked_at', { precision: 3, withTimezone: true }),
+	lockedBy: text('locked_by'),
+	lastError: text('last_error'),
+	createdAt: timestamp('created_at', { precision: 3, withTimezone: true }).notNull().defaultNow(),
+	updatedAt: timestamp('updated_at', { precision: 3, withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (NotificationOutbox) => ({
+	'notification_outbox_idempotency_key_key': uniqueIndex('notification_outbox_idempotency_key_key')
+		.on(NotificationOutbox.idempotencyKey),
+	'notification_outbox_status_available_idx': index('notification_outbox_status_available_idx')
+		.on(NotificationOutbox.status, NotificationOutbox.availableAt),
+	'notification_outbox_locked_at_idx': index('notification_outbox_locked_at_idx')
+		.on(NotificationOutbox.lockedAt),
+}));
+
 export const AuthLoginLog = pgTable('auth_login_logs', {
 	id: text('id').notNull().primaryKey().$defaultFn(() => randomUUID()),
 	userId: text('user_id'),
