@@ -19,7 +19,6 @@ export const User = pgTable('users', {
 	externalSource: text('external_source'),
 	externalId: text('external_id'),
 	dingtalkUserId: text('dingtalk_user_id'),
-	dingtalkBindingStatus: text('dingtalk_binding_status').notNull().default("unbound"),
 	supervisorDingtalkUserId: text('supervisor_dingtalk_user_id'),
 	supervisorName: text('supervisor_name'),
 	directoryUserId: text('directory_user_id'),

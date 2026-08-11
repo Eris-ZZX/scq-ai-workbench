@@ -85,7 +85,6 @@ describe('Authing external user DingTalk binding', () => {
         username: '314265',
         dingtalkUserId: null,
         unionid: null,
-        dingtalkBindingStatus: 'unbound',
       }),
     });
     expect(mockTransaction.userDingTalkDepartment.deleteMany).toHaveBeenCalledWith({

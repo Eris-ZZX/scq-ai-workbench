@@ -103,7 +103,6 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
   const resolvedUnionid = dingTalkIdentity?.unionid ?? null;
   const resolvedDingTalkUserId = dingTalkIdentity?.userid ?? null;
   const authingUsername = identity.username.trim();
-  const dingtalkBindingStatus = dingTalkIdentity ? 'bound' : 'unbound';
 
   const result = await db.$transaction(async (transaction) => {
     const candidates = await findUserMergeCandidates(transaction, {
@@ -141,7 +140,6 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           externalSource: 'authing',
           externalId: identityKey,
           dingtalkUserId: resolvedDingTalkUserId,
-          dingtalkBindingStatus,
           unionid: resolvedUnionid,
           phoneNumber: identity.phoneNumber,
           phoneNumberVerified: identity.phoneNumberVerified,
@@ -199,7 +197,6 @@ export async function upsertAuthingUser(identity: AuthingClaims) {
           external_id = ${identityKey},
           unionid = ${resolvedUnionid},
           dingtalk_user_id = ${resolvedDingTalkUserId},
-          dingtalk_binding_status = ${dingtalkBindingStatus},
           phone_number = COALESCE(${identity.phoneNumber}::text, phone_number),
           phone_number_verified = COALESCE(${identity.phoneNumberVerified}, phone_number_verified),
           email_verified = COALESCE(${identity.emailVerified}, email_verified),
