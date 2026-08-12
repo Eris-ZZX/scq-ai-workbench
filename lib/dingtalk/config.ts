@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { buildDingTalkBrowserUrl } from '@/platform/auth/dingtalk-browser';
 import { sanitizeReturnPath } from '@/platform/auth/return-path';
 
 export function getDingTalkAppCredentials() {
@@ -46,7 +47,7 @@ export function buildAuthEntryUrl(path: string): string | null {
  * @see https://open.dingtalk.com/document/isvapp/unified-routing-protocol
  */
 export function buildDingTalkPcBrowserUrl(httpsUrl: string): string {
-  return `dingtalk://dingtalkclient/page/link?url=${encodeURIComponent(httpsUrl)}&pc_slide=false`;
+  return buildDingTalkBrowserUrl(httpsUrl);
 }
 
 /** PC: system browser; App: HTTPS entry (in-app WebView + SSO). */
