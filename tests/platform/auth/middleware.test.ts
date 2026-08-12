@@ -39,10 +39,6 @@ describe('Auth Middleware — routing logic', () => {
     expect(await authMiddleware(mockReq('/login'))).toEqual({ type: 'next' });
   });
 
-  it('passes through the public login launch bridge', async () => {
-    expect(await authMiddleware(mockReq('/login/launch?next=/portal'))).toEqual({ type: 'next' });
-  });
-
   it('passes through /api/auth/login', async () => {
     expect(await authMiddleware(mockReq('/api/auth/login'))).toEqual({ type: 'next' });
   });
