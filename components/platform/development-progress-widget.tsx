@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { Loader2, TrendingUp, X } from 'lucide-react';
 import type {
+  DevelopmentProgressCategory,
   DevelopmentProgressData,
-  PlatformDevelopmentItem,
+  DevelopmentProgressProject,
 } from '@/lib/platform/development-progress';
 
 export default function DevelopmentProgressWidget({ enabled }: { enabled: boolean }) {
@@ -81,12 +82,16 @@ export default function DevelopmentProgressWidget({ enabled }: { enabled: boolea
               <div className="space-y-5 pt-5">
                 <section>
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-900">平台与应用</h3>
-                    <span className="text-xs text-slate-400">{data.platform.length} 项</span>
+                    <h3 className="text-sm font-semibold text-slate-900">开发项目</h3>
+                    <span className="text-xs text-slate-400">{data.projects.length} 项</span>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {data.platform.map((item) => (
-                      <ProgressCard key={item.id} item={item} />
+                  <div className="space-y-4">
+                    {data.categories.map((category) => (
+                      <ProgressGroup
+                        key={category.id}
+                        category={category}
+                        projects={data.projects.filter((project) => project.categoryId === category.id)}
+                      />
                     ))}
                   </div>
                 </section>
@@ -99,49 +104,72 @@ export default function DevelopmentProgressWidget({ enabled }: { enabled: boolea
   );
 }
 
-function ProgressCard({ item }: { item: PlatformDevelopmentItem }) {
-  const status = item.progressPercent >= 100
-    ? '已上线'
-    : item.progressPercent <= 0
-      ? '规划中'
+function ProgressGroup({
+  category,
+  projects,
+}: {
+  category: DevelopmentProgressCategory;
+  projects: DevelopmentProgressProject[];
+}) {
+  return (
+    <section className="overflow-hidden rounded-md border border-slate-200">
+      <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-800">{category.title}</h4>
+          <span className="text-xs text-slate-400">{projects.length} 个项目</span>
+        </div>
+        <p className="mt-0.5 text-xs text-slate-500">{category.description}</p>
+      </div>
+      {projects.length === 0 ? (
+        <div className="px-3 py-4 text-xs text-slate-400">该分类暂未配置开发项目</div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {projects.map((project) => <ProgressRow key={project.id} project={project} />)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ProgressRow({ project }: { project: DevelopmentProgressProject }) {
+  const status = project.progressPercent >= 100
+    ? '已完成'
+    : project.progressPercent <= 0
+      ? '待开始'
       : '开发中';
-  const owner = item.owner?.displayName || item.owner?.username || '待定';
+  const owner = project.owner?.displayName || project.owner?.username || '待定';
 
   return (
-    <article className="rounded-md border border-slate-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
+    <article className="px-3 py-3">
+      <div className="grid gap-2 md:grid-cols-[minmax(180px,1.2fr)_minmax(180px,2fr)_80px_100px] md:items-center">
         <div className="min-w-0">
-          <h4 className="truncate text-sm font-semibold text-slate-900">{item.title}</h4>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.description}</p>
+          <h5 className="truncate text-sm font-medium text-slate-800">{project.name}</h5>
+          {project.note && <p className="mt-0.5 truncate text-xs text-slate-500">{project.note}</p>}
         </div>
-        <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${
-          status === '已上线'
+        <div>
+        <div className="flex items-center justify-between text-xs text-slate-500">
+          <span>开发进度</span>
+          <span>{project.progressPercent}%</span>
+        </div>
+        <div className="mt-1.5 h-1.5 rounded-full bg-slate-100">
+          <div
+            className="h-full rounded-full bg-slate-700 transition-[width]"
+            style={{ width: `${project.progressPercent}%` }}
+          />
+        </div>
+        </div>
+        <span className={`rounded px-2 py-0.5 text-center text-xs font-medium ${
+          status === '已完成'
             ? 'bg-emerald-50 text-emerald-700'
-            : status === '规划中'
+            : status === '待开始'
               ? 'bg-slate-100 text-slate-600'
               : 'bg-blue-50 text-blue-700'
         }`}
         >
           {status}
         </span>
+        <span className="truncate text-xs text-slate-600" title={owner}>负责人：{owner}</span>
       </div>
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-xs text-slate-500">
-          <span>开发进度</span>
-          <span>{item.progressPercent}%</span>
-        </div>
-        <div className="mt-1.5 h-1.5 rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-slate-700 transition-[width]"
-            style={{ width: `${item.progressPercent}%` }}
-          />
-        </div>
-      </div>
-      <div className="mt-3 flex items-start justify-between gap-3 text-xs">
-        <span className="text-slate-500">负责人</span>
-        <span className="text-right font-medium text-slate-700">{owner}</span>
-      </div>
-      {item.note && <p className="mt-2 border-t border-slate-100 pt-2 text-xs leading-5 text-slate-500">{item.note}</p>}
     </article>
   );
 }

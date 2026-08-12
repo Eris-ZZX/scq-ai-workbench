@@ -21,31 +21,39 @@ export async function PUT(request: Request) {
   }
 
   const body = await request.json().catch(() => null) as {
-    items?: Array<{
-      id?: unknown;
-      progressPercent?: unknown;
-      ownerId?: unknown;
-      note?: unknown;
-    }>;
+    projects?: unknown[];
   } | null;
-  if (!Array.isArray(body?.items)) {
-    return NextResponse.json({ error: '缺少平台开发进度配置。' }, { status: 400 });
+  if (!Array.isArray(body?.projects)) {
+    return NextResponse.json({ error: '缺少开发项目配置。' }, { status: 400 });
   }
 
-  const items = body.items.map((item) => ({
-    id: typeof item.id === 'string' ? item.id.trim() : '',
-    progressPercent: item.progressPercent,
-    ownerId: item.ownerId,
-    note: item.note,
-  }));
+  const items = body.projects.map((item) => {
+    const value = item && typeof item === 'object'
+      ? item as Record<string, unknown>
+      : {};
+    return {
+      id: value.id,
+      categoryId: value.categoryId,
+      name: value.name,
+      progressPercent: value.progressPercent,
+      ownerId: value.ownerId,
+      note: value.note,
+    };
+  });
 
   try {
     return NextResponse.json(
       await savePlatformDevelopmentSettings(items, auth.session.sub),
     );
   } catch (error) {
-    if (error instanceof Error && error.message === 'INVALID_PLATFORM_PROGRESS_ITEM') {
-      return NextResponse.json({ error: '平台开发进度项目无效。' }, { status: 400 });
+    if (error instanceof Error && error.message === 'INVALID_PLATFORM_PROGRESS_CATEGORY') {
+      return NextResponse.json({ error: '平台开发进度分类无效。' }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === 'EMPTY_PLATFORM_PROGRESS_PROJECT') {
+      return NextResponse.json({ error: '开发项目名称不能为空。' }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === 'DUPLICATE_PLATFORM_PROGRESS_PROJECT') {
+      return NextResponse.json({ error: '开发项目 ID 重复。' }, { status: 400 });
     }
     if (error instanceof Error && error.message === 'INVALID_PLATFORM_PROGRESS_OWNER') {
       return NextResponse.json({ error: '平台开发进度负责人无效。' }, { status: 400 });
