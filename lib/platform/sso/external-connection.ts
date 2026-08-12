@@ -126,13 +126,6 @@ export function validateExternalAppLaunchUrl(raw: string) {
       '外挂应用地址不能包含账号、密码、查询参数或片段。',
     );
   }
-  if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
-    throw new ExternalConnectionError(
-      'INVALID_EXTERNAL_APP_URL',
-      '外挂应用地址 must use https in production。',
-    );
-  }
-
   return url.toString();
 }
 

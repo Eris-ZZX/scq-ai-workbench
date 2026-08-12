@@ -11,8 +11,8 @@ export const DRAWING_RELIABILITY_APP_ID = DRAWING_RELIABILITY_CONNECTION_APP_ID;
 export const PLATFORM_LAUNCH_CODE_TTL_SECONDS = 60;
 
 function configuredDrawingReliabilityUrl(rawValue?: string) {
-  // Local development can use the default single-port drawing app. Production
-  // still fails closed below unless an explicit HTTPS deployment URL is set.
+  // Local development can use the default single-port drawing app. HTTP and
+  // HTTPS are both accepted; production deployments should still prefer HTTPS.
   const raw = rawValue?.trim()
     || process.env.SQM_DRAWING_RELIABILITY_URL?.trim()
     || 'http://127.0.0.1:8001';

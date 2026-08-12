@@ -25,10 +25,12 @@ describe('drawing reliability launch-code configuration', () => {
     );
   });
 
-  it('rejects unsafe production target configuration', () => {
+  it('allows HTTP target configuration in production', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('SQM_DRAWING_RELIABILITY_URL', 'http://drawing.example.test');
 
-    expect(() => getDrawingReliabilityLaunchEndpoint()).toThrow('https');
+    expect(getDrawingReliabilityLaunchEndpoint()).toBe(
+      'http://drawing.example.test/api/auth/sso/launch',
+    );
   });
 });

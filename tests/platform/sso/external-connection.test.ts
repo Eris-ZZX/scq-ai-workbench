@@ -25,10 +25,10 @@ describe('platform external connection configuration', () => {
     )).toThrow();
   });
 
-  it('requires HTTPS for production target URLs', () => {
+  it('allows HTTP target URLs in production', () => {
     vi.stubEnv('NODE_ENV', 'production');
 
-    expect(() => validateExternalAppLaunchUrl('http://drawing.example.test'))
-      .toThrow('https');
+    expect(validateExternalAppLaunchUrl('http://drawing.example.test'))
+      .toBe('http://drawing.example.test/');
   });
 });

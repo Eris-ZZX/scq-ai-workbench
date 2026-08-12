@@ -90,7 +90,7 @@ SQM 子应用 `sqm-drawing-reliability` 的注册入口固定为 `/sqm/drawing-r
 
 外部仓库服务端使用固定客户端 ID `sqm-drawing-reliability` 和图纸仓库设置页中保存的密钥调用本工作台的 `/api/platform/sso/launch-code/exchange`，兑换后由外部仓库创建自己的 `HttpOnly` session cookie。两端不共享 `qe-session`、数据库、文件存储、worker 或模型密钥；外部仓库不可用时工作台仍可正常登录和使用其他应用。
 
-两端密钥均以本应用密钥派生的加密密文保存，只显示掩码；连接配置变更写入审计。旧环境变量仍作为迁移 fallback，数据库配置优先。生产部署应使用 HTTPS、独立随机兑换密钥和独立域名；入口与外部仓库可分别灰度和回滚。
+两端密钥均以本应用密钥派生的加密密文保存，只显示掩码；连接配置变更写入审计。旧环境变量仍作为迁移 fallback，数据库配置优先。HTTP、HTTPS 地址均可配置，生产部署仍建议使用 HTTPS、独立随机兑换密钥和独立域名；入口与外部仓库可分别灰度和回滚。
 
 ## 通知 Outbox
 

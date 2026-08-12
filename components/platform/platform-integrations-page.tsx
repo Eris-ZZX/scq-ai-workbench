@@ -160,7 +160,7 @@ export default function PlatformIntegrationsPage() {
             placeholder="https://drawing-test.example.com"
           />
           <span className="mt-1 block text-xs text-muted-foreground">
-            浏览器将通过该地址向图纸仓库提交一次性 launch code。生产环境必须使用 HTTPS。
+            浏览器将通过该地址向图纸仓库提交一次性 launch code。HTTP、HTTPS 均可使用，生产环境建议 HTTPS。
           </span>
         </label>
 
