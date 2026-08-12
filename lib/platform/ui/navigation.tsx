@@ -1,12 +1,12 @@
 import Link from 'next/link';
-import { getPlatformApp } from '@/platform/apps/manifest';
+import { getPlatformApp } from '@/platform/apps/registry';
 import { getEnabledComponents } from '@/platform/permissions/component-guard';
 import { getSession } from '@/platform/auth/auth.config';
 import { getProjectAdminAccess } from '@/lib/db/project-admin-access';
 
 export async function DynamicNav() {
   const session = await getSession();
-  const npqApp = getPlatformApp('npq');
+  const npqApp = await getPlatformApp('npq');
   const components = await getEnabledComponents();
   const isAdmin = session?.role === 'admin';
   const projectAdminAccess = session ? await getProjectAdminAccess(session) : { kind: 'none' as const };

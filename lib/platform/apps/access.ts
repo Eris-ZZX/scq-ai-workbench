@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/platform/auth/auth.config';
-import { canAccessPlatformApp, getPlatformApp, type PlatformApp } from './manifest';
+import { canAccessPlatformApp, type PlatformApp } from './manifest';
+import { getPlatformApp } from './registry';
 import { isPlatformAdmin } from '@/platform/permissions/system-admin';
 
 export type PlatformPrincipal = NonNullable<Awaited<ReturnType<typeof getSession>>> & {
@@ -37,7 +38,7 @@ export async function requirePlatformAppPage(
   appId: string,
   nextPath = '/portal',
 ): Promise<{ app: PlatformApp; principal: PlatformPrincipal }> {
-  const app = getPlatformApp(appId);
+  const app = await getPlatformApp(appId);
   if (!app) notFound();
 
   const principal = await requirePlatformPrincipalPage(nextPath);
@@ -49,7 +50,7 @@ export async function requirePlatformAppPage(
 export async function requirePlatformAppApi(
   appId: string,
 ): Promise<{ app: PlatformApp; principal: PlatformPrincipal } | PlatformApiError> {
-  const app = getPlatformApp(appId);
+  const app = await getPlatformApp(appId);
   if (!app) return { error: '应用不存在', status: 404 };
 
   const result = await requirePlatformPrincipalApi();

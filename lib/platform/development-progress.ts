@@ -1,23 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '@/lib/database';
-import { platformApps } from './apps/manifest';
+import { getPlatformApps } from './apps/registry';
 
 const PLATFORM_PROJECTS_SETTING_KEY = 'platform.development.projects';
-
-const PLATFORM_DEVELOPMENT_CATEGORIES = [
-  {
-    id: 'platform-core',
-    title: '平台基础设施',
-    description: '统一身份、权限、应用入口和通知基础能力',
-    state: 'active' as const,
-  },
-  ...platformApps.map((app) => ({
-    id: app.id,
-    title: app.title,
-    description: app.description,
-    state: app.state,
-  })),
-];
 
 export type DevelopmentProgressOwner = {
   id: string;
@@ -68,9 +53,23 @@ type StoredProjectsConfig = {
   projects?: unknown;
 };
 
-const PLATFORM_DEVELOPMENT_CATEGORY_IDS = new Set(
-  PLATFORM_DEVELOPMENT_CATEGORIES.map((category) => category.id),
-);
+async function getDevelopmentCategories(): Promise<DevelopmentProgressCategory[]> {
+  const apps = await getPlatformApps();
+  return [
+    {
+      id: 'platform-core',
+      title: '平台基础设施',
+      description: '统一身份、权限、应用入口和通知基础能力',
+      state: 'active',
+    },
+    ...apps.map((app) => ({
+      id: app.id,
+      title: app.title,
+      description: app.description,
+      state: app.state,
+    })),
+  ];
+}
 
 function clampPercent(value: unknown, fallback: number) {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -82,7 +81,7 @@ function cleanText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-async function readPlatformProjects(): Promise<StoredProject[]> {
+async function readPlatformProjects(validCategoryIds: ReadonlySet<string>): Promise<StoredProject[]> {
   const setting = await db.appSetting.findUnique({
     where: { key: PLATFORM_PROJECTS_SETTING_KEY },
     select: { value: true },
@@ -98,7 +97,7 @@ async function readPlatformProjects(): Promise<StoredProject[]> {
       const id = cleanText(value.id);
       const categoryId = cleanText(value.categoryId);
       const name = cleanText(value.name);
-      if (!id || !PLATFORM_DEVELOPMENT_CATEGORY_IDS.has(categoryId) || !name) return [];
+      if (!id || !validCategoryIds.has(categoryId) || !name) return [];
       return [{
         id,
         categoryId,
@@ -130,14 +129,15 @@ async function findOwners(userIds: string[]) {
 }
 
 export async function getDevelopmentProgress(): Promise<DevelopmentProgressData> {
-  const projects = await readPlatformProjects();
+  const categories = await getDevelopmentCategories();
+  const projects = await readPlatformProjects(new Set(categories.map((category) => category.id)));
   const ownerIds = projects
     .map((project) => project.ownerId)
     .filter((ownerId): ownerId is string => typeof ownerId === 'string' && ownerId.length > 0);
   const ownerMap = await findOwners(Array.from(new Set(ownerIds)));
 
   return {
-    categories: PLATFORM_DEVELOPMENT_CATEGORIES,
+    categories,
     projects: projects.map((project) => ({
       id: project.id,
       categoryId: project.categoryId,
@@ -152,7 +152,8 @@ export async function getDevelopmentProgress(): Promise<DevelopmentProgressData>
 }
 
 export async function getPlatformDevelopmentSettings() {
-  const projects = await readPlatformProjects();
+  const categories = await getDevelopmentCategories();
+  const projects = await readPlatformProjects(new Set(categories.map((category) => category.id)));
   const users = await db.user.findMany({
     where: { status: 'active' },
     orderBy: { username: 'asc' },
@@ -160,7 +161,7 @@ export async function getPlatformDevelopmentSettings() {
   });
 
   return {
-    categories: PLATFORM_DEVELOPMENT_CATEGORIES,
+    categories,
     projects: projects.map((project) => ({
       id: project.id,
       categoryId: project.categoryId,
@@ -188,7 +189,8 @@ export async function savePlatformDevelopmentSettings(
   }>,
   updatedById: string,
 ) {
-  const validCategoryIds = new Set(PLATFORM_DEVELOPMENT_CATEGORIES.map((category) => category.id));
+  const categories = await getDevelopmentCategories();
+  const validCategoryIds = new Set(categories.map((category) => category.id));
   const users = await db.user.findMany({
     where: { status: 'active' },
     select: { id: true },

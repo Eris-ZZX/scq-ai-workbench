@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockGetSession, mockIsPlatformAdmin } = vi.hoisted(() => ({
+const { mockGetSession, mockIsPlatformAdmin, mockFindUnique } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockIsPlatformAdmin: vi.fn(),
+  mockFindUnique: vi.fn(),
 }));
 
 vi.mock('@/platform/auth/auth.config', () => ({
@@ -11,12 +12,20 @@ vi.mock('@/platform/auth/auth.config', () => ({
 vi.mock('@/platform/permissions/system-admin', () => ({
   isPlatformAdmin: mockIsPlatformAdmin,
 }));
+vi.mock('@/lib/database', () => ({
+  db: {
+    appSetting: {
+      findUnique: mockFindUnique,
+    },
+  },
+}));
 
 import { requirePlatformAppApi } from '@/platform/apps/access';
 
 describe('platform app access', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFindUnique.mockResolvedValue(null);
   });
 
   it('returns 401 before checking application permissions', async () => {
