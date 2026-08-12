@@ -131,14 +131,19 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) close();
+          }}
+        >
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="feedback-title"
-            className="max-h-[calc(100vh-3rem)] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-2xl"
+            className="flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-white px-6 py-5">
               <div>
                 <h2 id="feedback-title" className="text-lg font-semibold text-slate-900">反馈</h2>
                 <p className="mt-1 text-sm text-slate-600">说说平台本身的问题或建议,我们会有人看</p>
@@ -153,116 +158,118 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
               </button>
             </div>
 
-            {submitted ? (
-              <div className="py-12 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                  <Send className="h-5 w-5" />
-                </div>
-                <h3 className="mt-4 text-base font-semibold text-slate-900">反馈已提交</h3>
-                <p className="mt-1 text-sm text-slate-500">感谢你的建议，我们会及时查看。</p>
-                <button
-                  type="button"
-                  onClick={close}
-                  className="mt-6 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                >
-                  完成
-                </button>
-              </div>
-            ) : (
-              <>
-                <label className="mt-5 block text-sm text-slate-700">
-                  <span className="mb-1.5 block">反馈类型</span>
-                  <select
-                    value={category}
-                    onChange={(event) => setCategory(event.target.value as FeedbackCategory | '')}
-                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="">请选择反馈类型</option>
-                    {FEEDBACK_CATEGORIES.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <textarea
-                  value={content}
-                  onChange={(event) => setContent(event.target.value)}
-                  onPaste={(event) => {
-                    const pastedImages = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith('image/'));
-                    if (pastedImages.length > 0) {
-                      addImages(pastedImages);
-                    }
-                  }}
-                  maxLength={FEEDBACK_MAX_CONTENT_LENGTH}
-                  placeholder="说说你遇到的问题或建议,截图可直接粘贴进来"
-                  className="mt-4 min-h-28 w-full resize-y rounded-md border border-blue-500 px-3 py-3 text-sm text-slate-900 outline-none ring-2 ring-blue-100 placeholder:text-slate-400"
-                />
-
-                <div className="mt-3 flex items-center gap-3">
-                  <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-md border border-dashed border-slate-300 text-slate-500 transition hover:border-blue-500 hover:text-blue-600">
-                    <input
-                      ref={inputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/gif,image/webp"
-                      multiple
-                      className="sr-only"
-                      onChange={(event) => {
-                        addImages(event.target.files);
-                        event.target.value = '';
-                      }}
-                    />
-                    <ImagePlus className="h-5 w-5" />
-                  </label>
-                  <span className="text-sm text-slate-500">
-                    最多 {FEEDBACK_MAX_ATTACHMENTS} 张，单张 {FEEDBACK_MAX_FILE_SIZE_LABEL}
-                  </span>
-                </div>
-
-                {images.length > 0 && (
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {images.map((image, index) => (
-                      <div key={`${image.file.name}-${image.file.lastModified}`} className="group relative aspect-video overflow-hidden rounded-md bg-slate-100">
-                        <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          aria-label={`删除${image.file.name}`}
-                          onClick={() => removeImage(index)}
-                          className="absolute right-1 top-1 rounded-full bg-slate-900/70 p-1 text-white opacity-0 transition group-hover:opacity-100"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
+            <div className="min-h-0 overflow-y-auto px-6 pb-6">
+              {submitted ? (
+                <div className="py-12 text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <Send className="h-5 w-5" />
                   </div>
-                )}
-
-                <label className="mt-4 block text-sm text-slate-700">
-                  <span className="mb-1.5 block">关联应用(可选)</span>
-                  <select
-                    value={application}
-                    onChange={(event) => setApplication(event.target.value)}
-                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  <h3 className="mt-4 text-base font-semibold text-slate-900">反馈已提交</h3>
+                  <p className="mt-1 text-sm text-slate-500">感谢你的建议，我们会及时查看。</p>
+                  <button
+                    type="button"
+                    onClick={close}
+                    className="mt-6 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                   >
-                    <option value="">不关联</option>
-                    {FEEDBACK_APPLICATIONS.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
-                </label>
+                    完成
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <label className="mt-5 block text-sm text-slate-700">
+                    <span className="mb-1.5 block">反馈类型</span>
+                    <select
+                      value={category}
+                      onChange={(event) => setCategory(event.target.value as FeedbackCategory | '')}
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value="">请选择反馈类型</option>
+                      {FEEDBACK_CATEGORIES.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
 
-                {error && <p className="mt-3 text-sm text-red-600" role="alert">{error}</p>}
+                  <textarea
+                    value={content}
+                    onChange={(event) => setContent(event.target.value)}
+                    onPaste={(event) => {
+                      const pastedImages = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith('image/'));
+                      if (pastedImages.length > 0) {
+                        addImages(pastedImages);
+                      }
+                    }}
+                    maxLength={FEEDBACK_MAX_CONTENT_LENGTH}
+                    placeholder="说说你遇到的问题或建议,截图可直接粘贴进来"
+                    className="mt-4 min-h-28 w-full resize-y rounded-md border border-blue-500 px-3 py-3 text-sm text-slate-900 outline-none ring-2 ring-blue-100 placeholder:text-slate-400"
+                  />
 
-                <button
-                  type="button"
-                  onClick={() => void submit()}
-                  disabled={submitting}
-                  className="mt-6 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  提交
-                </button>
-              </>
-            )}
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-md border border-dashed border-slate-300 text-slate-500 transition hover:border-blue-500 hover:text-blue-600">
+                      <input
+                        ref={inputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        multiple
+                        className="sr-only"
+                        onChange={(event) => {
+                          addImages(event.target.files);
+                          event.target.value = '';
+                        }}
+                      />
+                      <ImagePlus className="h-5 w-5" />
+                    </label>
+                    <span className="text-sm text-slate-500">
+                      最多 {FEEDBACK_MAX_ATTACHMENTS} 张，单张 {FEEDBACK_MAX_FILE_SIZE_LABEL}
+                    </span>
+                  </div>
+
+                  {images.length > 0 && (
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {images.map((image, index) => (
+                        <div key={`${image.file.name}-${image.file.lastModified}`} className="group relative aspect-video overflow-hidden rounded-md bg-slate-100">
+                          <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            aria-label={`删除${image.file.name}`}
+                            onClick={() => removeImage(index)}
+                            className="absolute right-1 top-1 rounded-full bg-slate-900/70 p-1 text-white opacity-0 transition group-hover:opacity-100"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <label className="mt-4 block text-sm text-slate-700">
+                    <span className="mb-1.5 block">关联应用(可选)</span>
+                    <select
+                      value={application}
+                      onChange={(event) => setApplication(event.target.value)}
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value="">不关联</option>
+                      {FEEDBACK_APPLICATIONS.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {error && <p className="mt-3 text-sm text-red-600" role="alert">{error}</p>}
+
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={submitting}
+                    className="mt-6 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                    提交
+                  </button>
+                </>
+              )}
+            </div>
           </section>
         </div>
       )}

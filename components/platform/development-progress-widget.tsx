@@ -45,14 +45,19 @@ export default function DevelopmentProgressWidget({ enabled }: { enabled: boolea
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="development-progress-title"
-            className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-y-auto rounded-md border border-slate-200 bg-white p-5 shadow-2xl"
+            className="flex max-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xl"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4">
               <div>
                 <h2 id="development-progress-title" className="text-lg font-semibold text-slate-900">
                   平台应用开发进度
@@ -71,32 +76,34 @@ export default function DevelopmentProgressWidget({ enabled }: { enabled: boolea
               </button>
             </div>
 
-            {loading ? (
-              <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                加载开发进度...
-              </div>
-            ) : error ? (
-              <div className="py-12 text-center text-sm text-red-600">{error}</div>
-            ) : data ? (
-              <div className="space-y-5 pt-5">
-                <section>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-900">开发项目</h3>
-                    <span className="text-xs text-slate-400">{data.projects.length} 项</span>
-                  </div>
-                  <div className="space-y-4">
-                    {data.categories.map((category) => (
-                      <ProgressGroup
-                        key={category.id}
-                        category={category}
-                        projects={data.projects.filter((project) => project.categoryId === category.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              </div>
-            ) : null}
+            <div className="min-h-0 overflow-y-auto px-5 pb-5">
+              {loading ? (
+                <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  加载开发进度...
+                </div>
+              ) : error ? (
+                <div className="py-12 text-center text-sm text-red-600">{error}</div>
+              ) : data ? (
+                <div className="space-y-5 pt-5">
+                  <section>
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-slate-900">开发项目</h3>
+                      <span className="text-xs text-slate-400">{data.projects.length} 项</span>
+                    </div>
+                    <div className="space-y-4">
+                      {data.categories.map((category) => (
+                        <ProgressGroup
+                          key={category.id}
+                          category={category}
+                          projects={data.projects.filter((project) => project.categoryId === category.id)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              ) : null}
+            </div>
           </section>
         </div>
       )}
