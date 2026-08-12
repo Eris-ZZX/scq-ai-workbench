@@ -42,7 +42,6 @@ function request(body: unknown, headers: Record<string, string> = validHeaders) 
 describe('platform launch-code exchange', () => {
   beforeEach(() => {
     vi.stubEnv('SQM_LAUNCH_EXCHANGE_SECRET', 'exchange-secret');
-    vi.stubEnv('SQM_LAUNCH_CLIENT_ID', 'sqm-drawing-reliability');
     mockConsume.mockReset();
     mockFindUnique.mockReset();
     mockAudit.mockReset();

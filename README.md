@@ -86,11 +86,11 @@ Authing claims 只用于身份识别和资料同步，不直接授予平台管�
 
 ## SQM 独立图纸可靠性应用
 
-SQM 子应用 `sqm-drawing-reliability` 的注册入口固定为 `/sqm/drawing-reliability`；独立仓库地址由 `SQM_DRAWING_RELIABILITY_URL` 部署变量提供，不进入可编辑应用链接，也不接受用户输入。工作台生成的 launch code 存在 `platform_launch_tokens` 中，只保存 SHA-256，默认 60 秒有效并通过条件更新原子消费。
+SQM 子应用 `sqm-drawing-reliability` 的注册入口固定为 `/sqm/drawing-reliability`；平台管理员可在「平台后台管理 → 外挂应用连接」维护独立仓库地址、启用状态和兑换密钥。工作台生成的 launch code 存在 `platform_launch_tokens` 中，只保存 SHA-256，默认 60 秒有效并通过条件更新原子消费。
 
-外部仓库服务端使用 `SQM_LAUNCH_CLIENT_ID` 和 `SQM_LAUNCH_EXCHANGE_SECRET` 调用本工作台的 `/api/platform/sso/launch-code/exchange`，兑换后由外部仓库创建自己的 `HttpOnly` session cookie。两端不共享 `qe-session`、数据库、文件存储、worker 或模型密钥；外部仓库不可用时工作台仍可正常登录和使用其他应用。
+外部仓库服务端使用固定客户端 ID `sqm-drawing-reliability` 和图纸仓库设置页中保存的密钥调用本工作台的 `/api/platform/sso/launch-code/exchange`，兑换后由外部仓库创建自己的 `HttpOnly` session cookie。两端不共享 `qe-session`、数据库、文件存储、worker 或模型密钥；外部仓库不可用时工作台仍可正常登录和使用其他应用。
 
-生产部署应使用 HTTPS、独立随机兑换密钥和独立域名；入口与外部仓库可分别灰度和回滚。关闭 `SQM_DRAWING_RELIABILITY_URL` 后入口显示不可用提示，旧独立入口仍可保留作为回滚路径。
+两端密钥均以本应用密钥派生的加密密文保存，只显示掩码；连接配置变更写入审计。旧环境变量仍作为迁移 fallback，数据库配置优先。生产部署应使用 HTTPS、独立随机兑换密钥和独立域名；入口与外部仓库可分别灰度和回滚。
 
 ## 通知 Outbox
 

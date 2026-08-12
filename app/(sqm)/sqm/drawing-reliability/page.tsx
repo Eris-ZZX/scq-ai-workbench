@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requirePlatformAppPage } from '@/platform/apps/access';
+import { getDrawingReliabilityConnection } from '@/platform/sso/external-connection';
 import {
   getDrawingReliabilityLaunchEndpoint,
   issueLaunchCode,
@@ -19,7 +20,11 @@ export default async function DrawingReliabilityLauncherPage() {
   let launchEndpoint: string;
   let code: string;
   try {
-    launchEndpoint = getDrawingReliabilityLaunchEndpoint();
+    const connection = await getDrawingReliabilityConnection();
+    if (!connection.enabled) {
+      throw new Error('drawing reliability connection is disabled');
+    }
+    launchEndpoint = getDrawingReliabilityLaunchEndpoint(connection.launchUrl);
     code = await issueLaunchCode(principal.sub);
   } catch (error) {
     console.error('[platform-sso] drawing reliability launch unavailable', error);

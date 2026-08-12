@@ -2,31 +2,25 @@ import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull, lt } from 'drizzle-orm';
 import { getDatabase } from '@/db/client';
 import { PlatformLaunchToken } from '@/db/schema';
+import {
+  DRAWING_RELIABILITY_APP_ID as DRAWING_RELIABILITY_CONNECTION_APP_ID,
+  validateExternalAppLaunchUrl,
+} from './external-connection';
 
-export const DRAWING_RELIABILITY_APP_ID = 'sqm-drawing-reliability';
+export const DRAWING_RELIABILITY_APP_ID = DRAWING_RELIABILITY_CONNECTION_APP_ID;
 export const PLATFORM_LAUNCH_CODE_TTL_SECONDS = 60;
 
-function configuredDrawingReliabilityUrl() {
-  const raw = process.env.SQM_DRAWING_RELIABILITY_URL?.trim();
-  if (!raw) {
-    throw new Error('SQM_DRAWING_RELIABILITY_URL is not configured');
-  }
-
-  const url = new URL(raw);
-  if (!['http:', 'https:'].includes(url.protocol)) {
-    throw new Error('SQM_DRAWING_RELIABILITY_URL must use http or https');
-  }
-  if (url.username || url.password || url.search || url.hash) {
-    throw new Error('SQM_DRAWING_RELIABILITY_URL must not contain credentials or query parameters');
-  }
-  if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
-    throw new Error('SQM_DRAWING_RELIABILITY_URL must use https in production');
-  }
-  return url;
+function configuredDrawingReliabilityUrl(rawValue?: string) {
+  // Local development can use the default single-port drawing app. Production
+  // still fails closed below unless an explicit HTTPS deployment URL is set.
+  const raw = rawValue?.trim()
+    || process.env.SQM_DRAWING_RELIABILITY_URL?.trim()
+    || 'http://127.0.0.1:8001';
+  return new URL(validateExternalAppLaunchUrl(raw));
 }
 
-export function getDrawingReliabilityLaunchEndpoint() {
-  const base = configuredDrawingReliabilityUrl();
+export function getDrawingReliabilityLaunchEndpoint(launchUrl?: string) {
+  const base = configuredDrawingReliabilityUrl(launchUrl);
   const path = base.pathname.endsWith('/') ? base.pathname : `${base.pathname}/`;
   base.pathname = path;
   return new URL('api/auth/sso/launch', base).toString();

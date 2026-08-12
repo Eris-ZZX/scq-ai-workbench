@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 import { recordAuthLoginEvent } from '@/platform/auth/login-audit';
+import { getDrawingReliabilityConnection } from '@/platform/sso/external-connection';
 import {
   consumeLaunchCode,
   DRAWING_RELIABILITY_APP_ID,
@@ -48,13 +49,22 @@ async function auditExchange(
 }
 
 export async function POST(request: Request) {
-  const configuredSecret = process.env.SQM_LAUNCH_EXCHANGE_SECRET?.trim();
-  if (!configuredSecret) {
+  let connection;
+  try {
+    connection = await getDrawingReliabilityConnection();
+  } catch (error) {
+    console.error('[platform-sso] external connection configuration cannot be read', error);
     await auditExchange(request, 'failure', { errorCode: 'sso_not_configured' });
     return json({ error: 'SSO exchange is not configured' }, 503);
   }
 
-  const clientId = process.env.SQM_LAUNCH_CLIENT_ID?.trim() || DRAWING_RELIABILITY_APP_ID;
+  const configuredSecret = connection.exchangeSecret.trim();
+  if (!connection.enabled || !configuredSecret) {
+    await auditExchange(request, 'failure', { errorCode: 'sso_not_configured' });
+    return json({ error: 'SSO exchange is not configured' }, 503);
+  }
+
+  const clientId = DRAWING_RELIABILITY_APP_ID;
   if (
     request.headers.get('x-qe-sso-client-id') !== clientId ||
     !safeSecretEquals(bearerSecret(request), configuredSecret)
@@ -122,5 +132,34 @@ export async function POST(request: Request) {
     email: user.email || null,
     role: user.role,
     platformRole: user.platformRole,
+  }, 200);
+}
+
+export async function GET(request: Request) {
+  let connection;
+  try {
+    connection = await getDrawingReliabilityConnection();
+  } catch (error) {
+    console.error('[platform-sso] external connection configuration cannot be read', error);
+    await auditExchange(request, 'failure', { errorCode: 'sso_not_configured' });
+    return json({ error: 'SSO exchange is not configured' }, 503);
+  }
+
+  const configuredSecret = connection.exchangeSecret.trim();
+  if (!connection.enabled || !configuredSecret) {
+    await auditExchange(request, 'failure', { errorCode: 'sso_not_configured' });
+    return json({ error: 'SSO exchange is not configured' }, 503);
+  }
+  if (
+    request.headers.get('x-qe-sso-client-id') !== DRAWING_RELIABILITY_APP_ID
+    || !safeSecretEquals(bearerSecret(request), configuredSecret)
+  ) {
+    await auditExchange(request, 'failure', { errorCode: 'invalid_client_credentials' });
+    return json({ error: 'invalid client credentials' }, 401);
+  }
+
+  return json({
+    ok: true,
+    appId: DRAWING_RELIABILITY_APP_ID,
   }, 200);
 }
