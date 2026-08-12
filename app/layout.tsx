@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import FeedbackWidget from "@/components/feedback/feedback-widget";
+import DevelopmentProgressWidget from "@/components/platform/development-progress-widget";
 import { getSession } from "@/platform/auth/auth.config";
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
+        <DevelopmentProgressWidget enabled={Boolean(session)} />
         <FeedbackWidget enabled={Boolean(session)} />
       </body>
     </html>

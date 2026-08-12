@@ -125,9 +125,9 @@ export default function FeedbackWidget({ enabled }: { enabled: boolean }) {
         type="button"
         aria-label="提交反馈"
         onClick={() => { setOpen(true); setSubmitted(false); }}
-        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
+        className="fixed bottom-5 right-5 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
       >
-        <MessageSquarePlus className="h-6 w-6" />
+        <MessageSquarePlus className="h-5 w-5" />
       </button>
 
       {open && (
