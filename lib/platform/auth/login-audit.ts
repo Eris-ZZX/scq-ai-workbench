@@ -1,6 +1,6 @@
 import { db } from '@/lib/database';
 
-export type AuthLoginProvider = 'authing' | 'dingtalk' | 'password';
+export type AuthLoginProvider = 'authing' | 'dingtalk' | 'password' | 'sqm-sso';
 export type AuthLoginStage =
   | 'initiation'
   | 'callback'

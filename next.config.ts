@@ -52,6 +52,14 @@ const nextConfig: NextConfig = {
           { key: 'X-XSS-Protection', value: '0' },
         ],
       },
+      {
+        // Launch-code 页面跨站 POST 时不向独立应用发送工作台来源。
+        source: '/sqm/drawing-reliability',
+        headers: [
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'Cache-Control', value: 'no-store' },
+        ],
+      },
     ];
   },
 };

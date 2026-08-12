@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { canAccessPlatformApp, platformApps } from '@/platform/apps/manifest';
-import { getPlatformApp, getPortalApps } from '@/platform/apps/registry';
+import { getPlatformApp, getPortalAppGroups, getPortalApps } from '@/platform/apps/registry';
 import {
   buildPlatformUserWhere,
   parsePlatformUserListFilters,
@@ -46,6 +46,22 @@ describe('platform app manifest', () => {
   });
 
   it('supports a child application under a root application', async () => {
+    await expect(getPlatformApp('sqm-drawing-reliability')).resolves.toMatchObject({
+      id: 'sqm-drawing-reliability',
+      parentId: 'sqm',
+      href: '/sqm/drawing-reliability',
+      state: 'active',
+      builtin: true,
+    });
+    await expect(getPortalAppGroups(false)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        app: expect.objectContaining({ id: 'sqm' }),
+        children: expect.arrayContaining([
+          expect.objectContaining({ id: 'sqm-drawing-reliability' }),
+        ]),
+      }),
+    ]));
+
     mockFindUnique.mockResolvedValueOnce({
       value: JSON.stringify({
         apps: [{

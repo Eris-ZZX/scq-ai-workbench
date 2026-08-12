@@ -84,6 +84,14 @@ pnpm db:bootstrap
 
 Authing claims 只用于身份识别和资料同步，不直接授予平台管理员、工作台或 AI 资源权限。账号 `status`、本地角色、项目成员关系和禁用状态继续由本地数据库决定。开发环境在未配置 Authing 时保留本地登录，生产环境不提供匿名或静默降级。
 
+## SQM 独立图纸可靠性应用
+
+SQM 子应用 `sqm-drawing-reliability` 的注册入口固定为 `/sqm/drawing-reliability`；独立仓库地址由 `SQM_DRAWING_RELIABILITY_URL` 部署变量提供，不进入可编辑应用链接，也不接受用户输入。工作台生成的 launch code 存在 `platform_launch_tokens` 中，只保存 SHA-256，默认 60 秒有效并通过条件更新原子消费。
+
+外部仓库服务端使用 `SQM_LAUNCH_CLIENT_ID` 和 `SQM_LAUNCH_EXCHANGE_SECRET` 调用本工作台的 `/api/platform/sso/launch-code/exchange`，兑换后由外部仓库创建自己的 `HttpOnly` session cookie。两端不共享 `qe-session`、数据库、文件存储、worker 或模型密钥；外部仓库不可用时工作台仍可正常登录和使用其他应用。
+
+生产部署应使用 HTTPS、独立随机兑换密钥和独立域名；入口与外部仓库可分别灰度和回滚。关闭 `SQM_DRAWING_RELIABILITY_URL` 后入口显示不可用提示，旧独立入口仍可保留作为回滚路径。
+
 ## 通知 Outbox
 
 Web 服务只把审批待办、审批结果和资源发布广播写入 `notification_outbox`，不会在 HTTP 请求中直接调用钉钉外部 API。独立 Worker 运行：
