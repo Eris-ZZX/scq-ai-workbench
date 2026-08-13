@@ -76,6 +76,9 @@ jobs:
 
           if [ ! -d "$SOURCE/.git" ]; then
             git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$SOURCE"
+          else
+            git -C "$SOURCE" fetch origin "$BRANCH"
+            git -C "$SOURCE" reset --hard "origin/$BRANCH"
           fi
 
           bash "$SOURCE/scripts/deploy-test-server.sh"
