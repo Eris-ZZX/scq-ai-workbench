@@ -4,5 +4,10 @@ import AppLayout from '@/platform/ui/layout/app-layout';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { app, principal } = await requirePlatformAppPage('npq', '/workbench');
-  return <AppLayout app={app} session={principal}>{children}</AppLayout>;
+  // Strip Lucide `icon` (a function) before crossing into Client Components.
+  return (
+    <AppLayout app={{ href: app.href, title: app.title }} session={principal}>
+      {children}
+    </AppLayout>
+  );
 }
