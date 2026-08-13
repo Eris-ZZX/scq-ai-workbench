@@ -51,6 +51,7 @@ describe('platform app manifest', () => {
       parentId: 'sqm',
       href: '/sqm/drawing-reliability',
       state: 'active',
+      launchMode: 'external-sso',
       builtin: true,
     });
     await expect(getPortalAppGroups(false)).resolves.toEqual(expect.arrayContaining([

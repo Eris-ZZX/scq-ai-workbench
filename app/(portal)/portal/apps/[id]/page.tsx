@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requirePlatformPrincipalPage } from '@/platform/apps/access';
+import { getPlatformAppLaunch } from '@/platform/apps/launch';
 import { getPortalAppGroups } from '@/platform/apps/registry';
 import { PortalAppCard } from '@/components/platform/portal-app-card';
 
@@ -15,7 +16,15 @@ export default async function PortalAppChildrenPage({
     .find((item) => item.app.id === id);
 
   if (!group) notFound();
-  if (group.children.length === 0) redirect(group.app.href);
+  if (group.children.length === 0) {
+    const launch = await getPlatformAppLaunch(group.app);
+    redirect(launch.enabled ? launch.href : '/portal');
+  }
+  const children = await Promise.all(group.children.map(async (child) => ({
+    child,
+    launch: await getPlatformAppLaunch(child),
+  })));
+  const parentLaunch = await getPlatformAppLaunch(group.app);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ws-content-bg px-4">
@@ -33,25 +42,42 @@ export default async function PortalAppChildrenPage({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {group.children.map((child) => (
+          {children.map(({ child, launch }) => (
             <PortalAppCard
               key={child.id}
-              href={child.href}
+              href={launch.href}
               icon={child.icon}
               title={child.state === 'coming-soon' ? `${child.title}（测试）` : child.title}
               description={child.description}
               compact
+              external={launch.external}
+              disabled={!launch.enabled}
             />
           ))}
         </div>
 
         <div className="mt-6 text-center">
-          <Link
-            href={group.app.href}
-            className="text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
-          >
-            进入主应用
-          </Link>
+          {parentLaunch.enabled ? (
+            parentLaunch.external ? (
+              <a
+                href={parentLaunch.href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+              >
+                进入主应用
+              </a>
+            ) : (
+              <Link
+                href={parentLaunch.href}
+                className="text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+              >
+                进入主应用
+              </Link>
+            )
+          ) : (
+            <span className="text-sm text-muted-foreground">主应用暂不可用</span>
+          )}
         </div>
       </div>
     </div>

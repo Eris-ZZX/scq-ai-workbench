@@ -1,9 +1,18 @@
 import { requirePlatformPrincipalPage } from '@/platform/apps/access';
+import { getPlatformAppLaunch } from '@/platform/apps/launch';
 import { getPortalAppGroups } from '@/platform/apps/registry';
 import { PortalAppCard } from '@/components/platform/portal-app-card';
 
 export default async function PortalPage() {
   const principal = await requirePlatformPrincipalPage('/portal');
+  const groups = await getPortalAppGroups(principal.isPlatformAdmin);
+  const cards = await Promise.all(groups.map(async ({ app, children }) => ({
+    app,
+    children,
+    launch: children.length > 0
+      ? { href: `/portal/apps/${app.id}`, external: false, enabled: true }
+      : await getPlatformAppLaunch(app),
+  })));
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ws-content-bg px-4">
@@ -16,13 +25,15 @@ export default async function PortalPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(await getPortalAppGroups(principal.isPlatformAdmin)).map(({ app, children }) => (
+          {cards.map(({ app, launch }) => (
             <PortalAppCard
               key={app.id}
-              href={children.length > 0 ? `/portal/apps/${app.id}` : app.href}
+              href={launch.href}
               icon={app.icon}
               title={app.state === 'coming-soon' ? `${app.title}（测试）` : app.title}
               description={app.description}
+              external={launch.external}
+              disabled={!launch.enabled}
             />
           ))}
         </div>

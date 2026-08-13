@@ -1,12 +1,10 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
+import { getPlatformApp } from '@/lib/platform/apps/registry';
 import { recordAuthLoginEvent } from '@/platform/auth/login-audit';
-import { getDrawingReliabilityConnection } from '@/platform/sso/external-connection';
-import {
-  consumeLaunchCode,
-  DRAWING_RELIABILITY_APP_ID,
-} from '@/platform/sso/launch-code';
+import { getExternalAppConnection } from '@/platform/sso/external-connection';
+import { consumeLaunchCode } from '@/platform/sso/launch-code';
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store',
@@ -49,9 +47,25 @@ async function auditExchange(
 }
 
 export async function POST(request: Request) {
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    await auditExchange(request, 'failure', { errorCode: 'invalid_request_body' });
+    return json({ error: 'invalid request body' }, 400);
+  }
+
+  const appId = typeof body.appId === 'string' ? body.appId.trim() : '';
+  const code = typeof body.code === 'string' ? body.code.trim() : '';
+  const app = appId ? await getPlatformApp(appId) : undefined;
+  if (!app || app.launchMode !== 'external-sso' || app.state !== 'active' || !code) {
+    await auditExchange(request, 'failure', { errorCode: 'invalid_launch_request' });
+    return json({ error: 'invalid launch request' }, 400);
+  }
+
   let connection;
   try {
-    connection = await getDrawingReliabilityConnection();
+    connection = await getExternalAppConnection(appId);
   } catch (error) {
     console.error('[platform-sso] external connection configuration cannot be read', error);
     await auditExchange(request, 'failure', { errorCode: 'sso_not_configured' });
@@ -64,28 +78,12 @@ export async function POST(request: Request) {
     return json({ error: 'SSO exchange is not configured' }, 503);
   }
 
-  const clientId = DRAWING_RELIABILITY_APP_ID;
   if (
-    request.headers.get('x-qe-sso-client-id') !== clientId ||
+    request.headers.get('x-qe-sso-client-id') !== appId ||
     !safeSecretEquals(bearerSecret(request), configuredSecret)
   ) {
     await auditExchange(request, 'failure', { errorCode: 'invalid_client_credentials' });
     return json({ error: 'invalid client credentials' }, 401);
-  }
-
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    await auditExchange(request, 'failure', { errorCode: 'invalid_request_body' });
-    return json({ error: 'invalid request body' }, 400);
-  }
-
-  const appId = typeof body.appId === 'string' ? body.appId.trim() : '';
-  const code = typeof body.code === 'string' ? body.code.trim() : '';
-  if (appId !== DRAWING_RELIABILITY_APP_ID || !code) {
-    await auditExchange(request, 'failure', { errorCode: 'invalid_launch_request' });
-    return json({ error: 'invalid launch request' }, 400);
   }
 
   const consumed = await consumeLaunchCode(code, appId);
@@ -136,9 +134,16 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const appId = request.headers.get('x-qe-sso-client-id')?.trim() || '';
+  const app = appId ? await getPlatformApp(appId) : undefined;
+  if (!app || app.launchMode !== 'external-sso' || app.state !== 'active') {
+    await auditExchange(request, 'failure', { errorCode: 'invalid_client_credentials' });
+    return json({ error: 'invalid client credentials' }, 401);
+  }
+
   let connection;
   try {
-    connection = await getDrawingReliabilityConnection();
+    connection = await getExternalAppConnection(appId);
   } catch (error) {
     console.error('[platform-sso] external connection configuration cannot be read', error);
     await auditExchange(request, 'failure', { errorCode: 'sso_not_configured' });
@@ -151,8 +156,7 @@ export async function GET(request: Request) {
     return json({ error: 'SSO exchange is not configured' }, 503);
   }
   if (
-    request.headers.get('x-qe-sso-client-id') !== DRAWING_RELIABILITY_APP_ID
-    || !safeSecretEquals(bearerSecret(request), configuredSecret)
+    !safeSecretEquals(bearerSecret(request), configuredSecret)
   ) {
     await auditExchange(request, 'failure', { errorCode: 'invalid_client_credentials' });
     return json({ error: 'invalid client credentials' }, 401);
@@ -160,6 +164,6 @@ export async function GET(request: Request) {
 
   return json({
     ok: true,
-    appId: DRAWING_RELIABILITY_APP_ID,
+    appId,
   }, 200);
 }

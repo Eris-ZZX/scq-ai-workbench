@@ -60,6 +60,14 @@ const nextConfig: NextConfig = {
           { key: 'Cache-Control', value: 'no-store' },
         ],
       },
+      {
+        // 通用外挂 SSO launcher 同样不缓存，也不发送工作台来源。
+        source: '/portal/external-apps/:id',
+        headers: [
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'Cache-Control', value: 'no-store' },
+        ],
+      },
     ];
   },
 };

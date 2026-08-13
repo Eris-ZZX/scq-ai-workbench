@@ -7,6 +7,7 @@ import {
   type PlatformApp,
   type PlatformAppAccess,
   type PlatformAppIconKey,
+  type PlatformAppLaunchMode,
   type PlatformAppRecord,
   type PlatformAppState,
 } from './manifest';
@@ -26,6 +27,7 @@ export type PlatformAppRegistryInput = {
   iconKey?: unknown;
   state?: unknown;
   access?: unknown;
+  launchMode?: unknown;
   sortOrder?: unknown;
 };
 
@@ -43,6 +45,7 @@ const DEFAULT_APP_RECORDS: PlatformAppRecord[] = platformApps.map((app) => ({
   iconKey: app.iconKey,
   state: app.state,
   access: app.access,
+  launchMode: app.launchMode,
   sortOrder: app.sortOrder,
   builtin: true,
 }));
@@ -59,6 +62,16 @@ const APP_ICON_KEYS = new Set<PlatformAppIconKey>([
   'shield-check',
   'wrench',
 ]);
+
+const PLATFORM_APP_LAUNCH_MODES = new Set<PlatformAppLaunchMode>([
+  'internal',
+  'external-link',
+  'external-sso',
+]);
+
+type ParsedStoredApp = Omit<PlatformAppRecord, 'launchMode'> & {
+  launchMode?: PlatformAppLaunchMode;
+};
 
 function cleanText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -81,7 +94,12 @@ function isPlatformAppIconKey(value: unknown): value is PlatformAppIconKey {
   return typeof value === 'string' && APP_ICON_KEYS.has(value as PlatformAppIconKey);
 }
 
-function parseStoredApp(value: unknown): PlatformAppRecord | null {
+function isPlatformAppLaunchMode(value: unknown): value is PlatformAppLaunchMode {
+  return typeof value === 'string'
+    && PLATFORM_APP_LAUNCH_MODES.has(value as PlatformAppLaunchMode);
+}
+
+function parseStoredApp(value: unknown): ParsedStoredApp | null {
   if (!value || typeof value !== 'object') return null;
   const raw = value as Record<string, unknown>;
   const id = cleanText(raw.id);
@@ -90,6 +108,7 @@ function parseStoredApp(value: unknown): PlatformAppRecord | null {
   const iconKey = raw.iconKey;
   const state = raw.state;
   const access = raw.access;
+  const launchMode = raw.launchMode;
 
   if (
     !id
@@ -111,6 +130,7 @@ function parseStoredApp(value: unknown): PlatformAppRecord | null {
     iconKey,
     state,
     access,
+    ...(isPlatformAppLaunchMode(launchMode) ? { launchMode } : {}),
     sortOrder: parseSortOrder(raw.sortOrder),
     builtin: raw.builtin === true,
   };
@@ -146,7 +166,7 @@ function sortRecords(records: PlatformAppRecord[]) {
   ));
 }
 
-function mergeWithDefaults(stored: PlatformAppRecord[] | null) {
+function mergeWithDefaults(stored: ParsedStoredApp[] | null) {
   if (!stored) return sortRecords(DEFAULT_APP_RECORDS);
 
   const storedById = new Map(stored.map((app) => [app.id, app]));
@@ -162,7 +182,10 @@ function mergeWithDefaults(stored: PlatformAppRecord[] | null) {
 
   for (const app of stored) {
     if (!DEFAULT_APP_IDS.has(app.id) && !app.builtin) {
-      records.push(app);
+      records.push({
+        ...app,
+        launchMode: app.launchMode ?? 'internal',
+      });
     }
   }
 
@@ -212,7 +235,10 @@ export async function getPortalAppGroups(isPlatformAdmin: boolean): Promise<Plat
   }));
 }
 
-function normalizeInput(item: PlatformAppRegistryInput): PlatformAppRecord {
+function normalizeInput(
+  item: PlatformAppRegistryInput,
+  fallbackLaunchMode: PlatformAppLaunchMode = 'internal',
+): PlatformAppRecord {
   const id = cleanText(item.id) || `custom-${randomUUID()}`;
   const parentId = cleanText(item.parentId) || null;
   const href = cleanText(item.href);
@@ -221,6 +247,7 @@ function normalizeInput(item: PlatformAppRegistryInput): PlatformAppRecord {
   const iconKey = item.iconKey;
   const state = item.state;
   const access = item.access;
+  const launchMode = item.launchMode ?? fallbackLaunchMode;
   const sortOrder = parseSortOrder(item.sortOrder);
 
   if (!/^[a-z0-9][a-z0-9-]{1,79}$/.test(id)) {
@@ -244,6 +271,9 @@ function normalizeInput(item: PlatformAppRegistryInput): PlatformAppRecord {
   if (!isPlatformAppAccess(access)) {
     throw new Error('INVALID_PLATFORM_APP_ACCESS');
   }
+  if (!isPlatformAppLaunchMode(launchMode)) {
+    throw new Error('INVALID_PLATFORM_APP_LAUNCH_MODE');
+  }
 
   return {
     id,
@@ -254,6 +284,7 @@ function normalizeInput(item: PlatformAppRegistryInput): PlatformAppRecord {
     iconKey,
     state,
     access,
+    launchMode,
     sortOrder,
     builtin: DEFAULT_APP_IDS.has(id),
   };
@@ -289,9 +320,16 @@ export async function savePlatformAppSettings(
   updatedById: string,
 ) {
   const nextById = new Map<string, PlatformAppRecord>();
+  const existingById = new Map(
+    (await getPlatformAppRecords()).map((app) => [app.id, app]),
+  );
 
   for (const item of items) {
-    const app = normalizeInput(item);
+    const candidateId = cleanText(item.id);
+    const app = normalizeInput(
+      item,
+      existingById.get(candidateId)?.launchMode ?? 'internal',
+    );
     if (nextById.has(app.id)) throw new Error('DUPLICATE_PLATFORM_APP_ID');
     nextById.set(app.id, app);
   }

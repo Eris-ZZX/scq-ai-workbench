@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getPlatformAppAdminSettings } from '@/lib/platform/apps/admin';
 import {
-  getPlatformAppSettings,
   savePlatformAppSettings,
 } from '@/lib/platform/apps/registry';
 import { requireSystemAdminApi } from '@/platform/permissions/system-admin';
@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  return NextResponse.json(await getPlatformAppSettings());
+  return NextResponse.json(await getPlatformAppAdminSettings());
 }
 
 export async function PUT(request: Request) {
@@ -42,8 +42,9 @@ export async function PUT(request: Request) {
       INVALID_PLATFORM_APP_ICON: '应用图标无效。',
       INVALID_PLATFORM_APP_STATE: '应用状态无效。',
       INVALID_PLATFORM_APP_ACCESS: '应用访问范围无效。',
+      INVALID_PLATFORM_APP_LAUNCH_MODE: '应用启动方式无效。',
       DUPLICATE_PLATFORM_APP_ID: '应用 ID 重复。',
-      DUPLICATE_PLATFORM_APP_HREF: '应用地址重复。',
+      DUPLICATE_PLATFORM_APP_HREF: '应用内部入口重复。',
       INVALID_PLATFORM_APP_PARENT: '应用父级无效。',
       NESTED_PLATFORM_APP: '只支持一级父应用和一级子应用。',
     };

@@ -3,8 +3,14 @@ import { AppWindow, ArrowLeft } from 'lucide-react';
 import PlatformAppsPage from '@/components/platform/platform-apps-page';
 import { requireSystemAdminPage } from '@/platform/permissions/system-admin';
 
-export default async function PlatformAppsRoute() {
+export default async function PlatformAppsRoute({
+  searchParams,
+}: {
+  searchParams?: Promise<{ app?: string | string[] }>;
+}) {
   await requireSystemAdminPage('/portal/platform-admin/apps');
+  const params = searchParams ? await searchParams : {};
+  const initialAppId = typeof params.app === 'string' ? params.app : undefined;
 
   return (
     <div className="min-h-screen bg-ws-content-bg">
@@ -23,10 +29,10 @@ export default async function PlatformAppsRoute() {
           </div>
           <h1 className="mt-1 text-2xl font-semibold text-foreground">应用管理</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            管理门户应用、父子层级、入口地址和访问范围。
+            管理门户应用、父子层级、访问范围，以及外挂链接和 SSO 入口。
           </p>
         </header>
-        <PlatformAppsPage />
+        <PlatformAppsPage initialAppId={initialAppId} />
       </div>
     </div>
   );

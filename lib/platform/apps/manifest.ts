@@ -13,6 +13,7 @@ import {
 
 export type PlatformAppState = 'active' | 'coming-soon';
 export type PlatformAppAccess = 'authenticated' | 'platform-admin';
+export type PlatformAppLaunchMode = 'internal' | 'external-link' | 'external-sso';
 
 export type PlatformAppIconKey =
   | 'boxes'
@@ -34,6 +35,7 @@ export type PlatformAppRecord = {
   iconKey: PlatformAppIconKey;
   state: PlatformAppState;
   access: PlatformAppAccess;
+  launchMode: PlatformAppLaunchMode;
   sortOrder: number;
   builtin: boolean;
 };
@@ -48,6 +50,7 @@ export type PlatformApp = {
   iconKey: PlatformAppIconKey;
   state: PlatformAppState;
   access: PlatformAppAccess;
+  launchMode: PlatformAppLaunchMode;
   sortOrder: number;
   builtin: boolean;
 };
@@ -63,6 +66,7 @@ export const platformApps = [
     iconKey: 'library',
     state: 'active',
     access: 'authenticated',
+    launchMode: 'internal',
     sortOrder: 10,
     builtin: true,
   },
@@ -76,6 +80,7 @@ export const platformApps = [
     iconKey: 'folder-kanban',
     state: 'active',
     access: 'authenticated',
+    launchMode: 'internal',
     sortOrder: 20,
     builtin: true,
   },
@@ -89,6 +94,7 @@ export const platformApps = [
     iconKey: 'clipboard-check',
     state: 'coming-soon',
     access: 'authenticated',
+    launchMode: 'internal',
     sortOrder: 30,
     builtin: true,
   },
@@ -102,6 +108,7 @@ export const platformApps = [
     iconKey: 'gauge',
     state: 'coming-soon',
     access: 'authenticated',
+    launchMode: 'internal',
     sortOrder: 40,
     builtin: true,
   },
@@ -115,6 +122,7 @@ export const platformApps = [
     iconKey: 'clipboard-check',
     state: 'active',
     access: 'authenticated',
+    launchMode: 'external-sso',
     sortOrder: 41,
     builtin: true,
   },
@@ -128,6 +136,7 @@ export const platformApps = [
     iconKey: 'wrench',
     state: 'coming-soon',
     access: 'authenticated',
+    launchMode: 'internal',
     sortOrder: 50,
     builtin: true,
   },
@@ -141,6 +150,7 @@ export const platformApps = [
     iconKey: 'flask-conical',
     state: 'coming-soon',
     access: 'authenticated',
+    launchMode: 'internal',
     sortOrder: 60,
     builtin: true,
   },
@@ -154,6 +164,7 @@ export const platformApps = [
     iconKey: 'boxes',
     state: 'coming-soon',
     access: 'authenticated',
+    launchMode: 'internal',
     sortOrder: 70,
     builtin: true,
   },
@@ -167,6 +178,7 @@ export const platformApps = [
     iconKey: 'settings',
     state: 'coming-soon',
     access: 'authenticated',
+    launchMode: 'internal',
     sortOrder: 80,
     builtin: true,
   },
@@ -180,6 +192,7 @@ export const platformApps = [
     iconKey: 'shield-check',
     state: 'active',
     access: 'platform-admin',
+    launchMode: 'internal',
     sortOrder: 90,
     builtin: true,
   },

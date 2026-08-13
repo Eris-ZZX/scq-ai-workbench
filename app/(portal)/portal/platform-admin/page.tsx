@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   LogIn,
   MessageSquareText,
-  PlugZap,
   TrendingUp,
   UsersRound,
 } from 'lucide-react';
@@ -53,19 +52,7 @@ export default async function PlatformAdminPage() {
             </div>
             <div className="text-base font-semibold text-foreground">应用管理</div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              管理门户应用、父子层级、入口地址和访问范围。
-            </p>
-          </Link>
-          <Link
-            href="/portal/platform-admin/integrations"
-            className="rounded-md border border-border bg-white p-4 shadow-sm transition hover:border-primary"
-          >
-            <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <PlugZap className="h-4 w-4" />
-            </div>
-            <div className="text-base font-semibold text-foreground">外挂应用连接</div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              管理独立部署应用地址、兑换密钥和启用状态。
+              管理门户应用、父子层级、访问范围，以及外挂链接和 SSO 入口。
             </p>
           </Link>
           <Link

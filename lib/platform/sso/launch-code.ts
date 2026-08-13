@@ -4,6 +4,7 @@ import { getDatabase } from '@/db/client';
 import { PlatformLaunchToken } from '@/db/schema';
 import {
   DRAWING_RELIABILITY_APP_ID as DRAWING_RELIABILITY_CONNECTION_APP_ID,
+  getExternalAppLaunchEndpoint,
   validateExternalAppLaunchUrl,
 } from './external-connection';
 
@@ -20,11 +21,10 @@ function configuredDrawingReliabilityUrl(rawValue?: string) {
 }
 
 export function getDrawingReliabilityLaunchEndpoint(launchUrl?: string) {
-  const base = configuredDrawingReliabilityUrl(launchUrl);
-  const path = base.pathname.endsWith('/') ? base.pathname : `${base.pathname}/`;
-  base.pathname = path;
-  return new URL('api/auth/sso/launch', base).toString();
+  return getExternalAppLaunchEndpoint(configuredDrawingReliabilityUrl(launchUrl).toString());
 }
+
+export { getExternalAppLaunchEndpoint };
 
 export function hashLaunchCode(code: string) {
   return createHash('sha256').update(code, 'utf8').digest('hex');
