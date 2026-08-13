@@ -29,8 +29,9 @@ if [ ! -d "$SOURCE/.git" ]; then
   git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$SOURCE"
 else
   git -C "$SOURCE" fetch origin "$BRANCH"
-  git -C "$SOURCE" checkout "$BRANCH"
-  git -C "$SOURCE" pull --ff-only origin "$BRANCH"
+  # SOURCE is a deployment mirror. Discard hot patches or other local edits
+  # so the release always matches the remote branch exactly.
+  git -C "$SOURCE" reset --hard "origin/$BRANCH"
 fi
 
 COMMIT=$(git -C "$SOURCE" rev-parse --short HEAD)
