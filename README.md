@@ -92,7 +92,7 @@ Authing claims 只用于身份识别和资料同步，不直接授予平台管�
 
 SSO 外部仓库使用各自的应用 ID和兑换密钥调用本工作台的 `/api/platform/sso/launch-code/exchange`，兑换后由外部仓库创建自己的 `HttpOnly` session cookie。工作台只保存 launch code 的 SHA-256，默认 60 秒有效并通过条件更新原子消费；两端不共享 `qe-session`、数据库、文件存储、worker 或模型密钥。
 
-当前图纸可靠性应用 `sqm-drawing-reliability` 继续兼容 `/sqm/drawing-reliability` 入口和旧管理 API。外挂 SSO 地址支持 HTTP 和 HTTPS；生产环境的服务端连接测试仍禁止指向本机或内网地址，用户实际跳转地址仍需禁止账号、密码、查询参数和片段。
+当前图纸可靠性应用 `sqm-drawing-reliability` 继续兼容 `/sqm/drawing-reliability` 入口和旧管理 API。外挂 SSO 地址支持 HTTP 和 HTTPS，生产环境的服务端连接测试也允许本机及内网地址；用户实际跳转地址仍需禁止账号、密码、查询参数和片段。该配置会扩大服务端请求范围并带来 SSRF 风险，仅应在受信任的管理员可配置环境中使用。
 
 ## 通知 Outbox
 

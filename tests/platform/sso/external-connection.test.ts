@@ -33,11 +33,11 @@ describe('platform external connection configuration', () => {
       .toBe('http://drawing.example.test/');
   });
 
-  it('allows HTTP probes but blocks private production targets', () => {
+  it('allows HTTP and private targets for production probes', () => {
     vi.stubEnv('NODE_ENV', 'production');
 
-    expect(() => validateExternalAppProbeUrl('http://127.0.0.1:8001'))
-      .toThrow('生产环境');
+    expect(validateExternalAppProbeUrl('http://127.0.0.1:8001'))
+      .toBe('http://127.0.0.1:8001/');
     expect(validateExternalAppProbeUrl('http://drawing.example.test'))
       .toBe('http://drawing.example.test/');
   });

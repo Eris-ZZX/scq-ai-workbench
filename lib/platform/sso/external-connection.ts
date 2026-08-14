@@ -132,39 +132,8 @@ export function validateExternalAppLaunchUrl(raw: string) {
   return url.toString();
 }
 
-function isPrivateProbeHostname(hostname: string) {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (
-    normalized === 'localhost'
-    || normalized.endsWith('.localhost')
-    || normalized === '::1'
-    || normalized === '0.0.0.0'
-    || /^f[cd][0-9a-f]{2}:/i.test(normalized)
-    || /^fe[89ab][0-9a-f]:/i.test(normalized)
-  ) {
-    return true;
-  }
-
-  const octets = normalized.split('.');
-  if (octets.length !== 4 || octets.some((octet) => !/^\d+$/.test(octet))) return false;
-  const [first = 0, second = 0] = octets.map(Number);
-  return first === 10
-    || first === 127
-    || first === 169 && second === 254
-    || first === 172 && second >= 16 && second <= 31
-    || first === 192 && second === 168;
-}
-
 export function validateExternalAppProbeUrl(raw: string) {
-  const normalized = validateExternalAppLaunchUrl(raw);
-  const url = new URL(normalized);
-  if (process.env.NODE_ENV === 'production' && isPrivateProbeHostname(url.hostname)) {
-    throw new ExternalConnectionError(
-      'UNSAFE_EXTERNAL_APP_URL',
-      '生产环境禁止对内网地址执行服务端连接测试。',
-    );
-  }
-  return normalized;
+  return validateExternalAppLaunchUrl(raw);
 }
 
 async function findConnection(appId: string) {
