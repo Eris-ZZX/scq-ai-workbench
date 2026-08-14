@@ -158,12 +158,6 @@ function isPrivateProbeHostname(hostname: string) {
 export function validateExternalAppProbeUrl(raw: string) {
   const normalized = validateExternalAppLaunchUrl(raw);
   const url = new URL(normalized);
-  if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
-    throw new ExternalConnectionError(
-      'UNSAFE_EXTERNAL_APP_URL',
-      '生产环境的服务端连接测试必须使用 HTTPS。',
-    );
-  }
   if (process.env.NODE_ENV === 'production' && isPrivateProbeHostname(url.hostname)) {
     throw new ExternalConnectionError(
       'UNSAFE_EXTERNAL_APP_URL',
